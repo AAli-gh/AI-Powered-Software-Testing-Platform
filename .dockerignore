@@ -1,0 +1,23 @@
+# Keep the build context small and never ship secrets or local state into images.
+.git
+.github
+.env
+.env.*
+!.env.example
+.venv
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+coverage.xml
+htmlcov
+docs
+tests
+examples
+scripts
+*.md
+!README.md
+docker-compose*.yml
+Makefile
