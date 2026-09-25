@@ -1,10 +1,16 @@
 # Example repositories
 
-Small, self-contained projects used to exercise TestMind end to end. By default this directory
-is mounted read-only at `/repos` inside the API and worker containers
-(`TESTMIND_HOST_REPOS_DIR` in `.env`), so a project can be registered with
-`"source_location": "discount_service"`.
+Small, self-contained projects used to exercise TestMind end to end and as golden fixtures for
+the repository analyzer tests (`tests/integration/test_repository_analyzer_examples.py`). By
+default this directory is mounted read-only at `/repos` inside the API and worker containers
+(`TESTMIND_HOST_REPOS_DIR` in `.env`), so a project can be registered with, for example,
+`"source_location": "fastapi_todo"`.
 
-| Directory | What it is |
-|---|---|
-| `discount_service/` | Tiny pure-Python package with a pytest suite (the example from the project brief). |
+These are fixtures, not part of TestMind itself: they are excluded from TestMind's linting.
+
+| Directory | Stack | What it exercises |
+|---|---|---|
+| `discount_service/` | Pure Python, pytest, `pyproject.toml` | The `calculate_discount` example from the project brief |
+| `django_blog/` | Django, `requirements*.txt` with `-r` include, Django `TestCase` | `manage.py`, `settings.INSTALLED_APPS`, WSGI/ASGI apps, Dockerfile with `ARG` |
+| `fastapi_todo/` | FastAPI, `src/` layout, PEP 621 + PEP 735 groups, pytest | App instance, console script, Docker Compose, GitHub Actions |
+| `flask_notes/` | Flask app factory, `setup.cfg`, unittest | `create_app()` factory, `console_scripts`, GitLab CI |

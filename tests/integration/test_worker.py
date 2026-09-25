@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from testmind.core.config import Settings
 from testmind.db.models import AnalysisRun
 from testmind.domain.enums import RunStatus
+from testmind.repositories.analysis_repository import AnalysisRepository
 from testmind.schemas.project import ProjectCreate
 from testmind.services.project_service import ProjectService
 from testmind.services.run_service import RunService
@@ -70,6 +71,8 @@ async def test_run_succeeds_through_the_real_queue(
     assert run.status is RunStatus.SUCCEEDED
     assert run.started_at is not None
     assert run.finished_at is not None
+    async with session_factory() as session:
+        assert await AnalysisRepository(session).get_for_run(run_id) is not None
 
 
 @pytest.mark.usefixtures("worker")

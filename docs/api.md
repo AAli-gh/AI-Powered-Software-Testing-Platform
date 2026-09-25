@@ -93,5 +93,37 @@ Run object:
 }
 ```
 
-> In Phase 1 a run verifies that the project's source is still available and confined to the
-> repositories root. Repository analysis is attached to this same run pipeline in Phase 2.
+A run re-validates that the project's source is still available and confined to the
+repositories root, then performs the [repository analysis](repository-analyzer.md). The run
+becomes `succeeded` in the same transaction that stores the analysis.
+
+### Repository analysis
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/runs/{run_id}/analysis` | Profile summary: languages, dependencies, frameworks, test frameworks, test files, entry points, config files, Docker, CI, issues. `404` if the run is unknown or has no analysis (queued, running, failed or cancelled) |
+| `GET` | `/api/v1/runs/{run_id}/analysis/files` | File inventory, sorted by path. Query: `limit` (1–500, default 100), `offset`, `language` (e.g. `Python`), `is_test` (`true`/`false`) |
+
+Detection object:
+
+```json
+{
+  "name": "FastAPI",
+  "category": "web_framework",
+  "confidence": 1.0,
+  "evidence": [
+    "'fastapi' declared in pyproject.toml",
+    "'fastapi' imported in 3 file(s): src/todo/main.py, src/todo/routers/items.py, tests/conftest.py",
+    "fastapi app instance in src/todo/main.py:5"
+  ]
+}
+```
+
+File entry:
+
+```json
+{"path": "src/todo/main.py", "size_bytes": 213, "language": "Python", "lines": 11, "is_test": false}
+```
+
+`lines` is `null` for binary files, files larger than the read limit and files of unknown
+language. The complete field reference is the OpenAPI schema (`RepositorySummary`, `FileEntry`).

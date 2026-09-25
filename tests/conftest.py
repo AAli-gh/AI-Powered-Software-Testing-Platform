@@ -77,7 +77,9 @@ def migrated_database() -> None:
 async def engine(migrated_database: None, settings: Settings) -> AsyncIterator[AsyncEngine]:
     engine = create_engine(settings, pooled=False)
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE analysis_runs, projects CASCADE"))
+        await connection.execute(
+            text("TRUNCATE repository_analyses, analysis_runs, projects CASCADE")
+        )
     yield engine
     await engine.dispose()
 

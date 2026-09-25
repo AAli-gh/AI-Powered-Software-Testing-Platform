@@ -9,13 +9,18 @@ A platform about software testing needs a trustworthy test suite of its own. The
    a recording `TaskDispatcher` (`tests/doubles.py`) so they can assert *what* was enqueued
    without a worker. The real Celery dispatcher is covered by `tests/integration/test_worker.py`.
 3. **Every bug fix gets a regression test** that fails without the fix.
-4. **Coverage is a floor, not a goal.** CI enforces ≥ 85 % (line + branch). Phase 1 is at 100 %.
+4. **Coverage is a floor, not a goal.** CI enforces ≥ 85 % (line + branch). The suite is at
+   100 % in CI. Locally, as root, a few permission tests are skipped because root bypasses file
+   permissions.
+5. **Dogfooding.** The analyzer is also run on TestMind itself. That found a Django false
+   positive (a string mentioning `DJANGO_SETTINGS_MODULE`), which is now a regression test.
 
 ## Suites
 
 | Suite | Path | Needs | What it covers |
 |---|---|---|---|
 | Unit | `tests/unit/` | nothing | Settings validation, logging, run state machine, path confinement (traversal, symlinks, permissions), Celery configuration, error mapping |
+| Analyzer | `tests/unit/analyzers/` | nothing | Every detector in isolation (hostile and malformed inputs included), plus **golden tests** against the real repositories in `examples/` (Django, FastAPI, Flask, plain pytest) |
 | Integration | `tests/integration/` | PostgreSQL + Redis | Repositories and services, row-lock races, migrations (drift + reversibility), run executor, full queue path with a real worker |
 | API | `tests/api/` | PostgreSQL (+ Redis for `/ready`) | Every endpoint over HTTP: status codes, error bodies, pagination, request IDs, readiness with dependencies down |
 | Smoke | `scripts/smoke_test.sh` | running stack | Containers wired together: readiness, create project, traversal rejected, run completes, cleanup |

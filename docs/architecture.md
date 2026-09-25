@@ -30,7 +30,7 @@ flowchart LR
 | `redis` | `redis:7-alpine` | Celery broker |
 | `migrate` | `api` | Applies Alembic migrations, then exits. `api` and `worker` start only after it succeeds |
 | `api` | `api` | HTTP API. Never does heavy work in the request path |
-| `worker` | `worker` | Executes queued jobs (Phase 1: run lifecycle; later: analysis, test execution, mutation testing) |
+| `worker` | `worker` | Executes queued jobs (today: repository analysis; later: test execution, mutation testing) |
 
 ## Code layout
 
@@ -44,12 +44,13 @@ src/testmind/
 ├── schemas/       Pydantic API contracts (request/response bodies, error model, pagination)
 ├── repositories/  data access. The only place that builds SQL
 ├── services/      use cases shared by API and worker (+ the TaskDispatcher port)
+├── analyzers/     deterministic analysers (repository/: see repository-analyzer.md)
 ├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
 └── workers/       Celery app, tasks, Celery-backed TaskDispatcher
 ```
 
-Later phases add sibling packages (`analyzers/`, `test_engine/`, `ai_engine/`,
-`integrations/github/`) when they are implemented. Empty placeholder packages are deliberately
+Later phases add sibling packages (`test_engine/`, `ai_engine/`, `integrations/github/`)
+and more analysers (`analyzers/code/`) when they are implemented. Empty placeholder packages are deliberately
 not created ahead of time.
 
 ### Dependency rule
@@ -81,8 +82,8 @@ sequenceDiagram
     A-->>C: 202 {status: queued}
     R->>W: deliver task
     W->>P: SELECT … FOR UPDATE; queued→running; COMMIT
-    W->>W: do the work (no lock held)
-    W->>P: SELECT … FOR UPDATE; running→succeeded|failed; COMMIT
+    W->>W: analyse the repository (no lock held, in a thread)
+    W->>P: SELECT … FOR UPDATE; running→succeeded + INSERT analysis (or →failed); COMMIT
     C->>A: GET /api/v1/runs/{id}
     A-->>C: 200 {status: succeeded}
 ```
@@ -121,11 +122,12 @@ stateDiagram-v2
 
 `started_at` is set on `running`; `finished_at` is set on every terminal state.
 
-## Data model (Phase 1)
+## Data model
 
 ```mermaid
 erDiagram
     projects ||--o{ analysis_runs : has
+    analysis_runs ||--o| repository_analyses : produces
     projects {
         uuid id PK
         varchar name UK
@@ -144,12 +146,23 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    repository_analyses {
+        uuid id PK
+        uuid run_id FK,UK "ON DELETE CASCADE"
+        varchar analyzer_version
+        jsonb profile "RepositoryProfile"
+        timestamptz created_at
+        timestamptz updated_at
+    }
 ```
 
 - Enumerations are stored as `VARCHAR` + a named `CHECK` constraint instead of native PostgreSQL
   enums, so adding a value is an ordinary transactional migration.
 - `source_location` is stored **relative** to the repositories root, so the same row is valid in
   every container regardless of where the root is mounted.
+- `repository_analyses.profile` is a JSONB document (schema: `RepositoryProfile`). It is
+  written once, in the same transaction that marks the run `succeeded`, so a succeeded run
+  always has its analysis and a failed run never has a partial one.
 - Tables for test results, coverage, findings, mutation results and so on are added by the
   phases that produce that data.
 - `tests/integration/test_migrations.py` fails if the ORM models and the migrations drift apart.

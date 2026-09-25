@@ -13,9 +13,10 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phase 1 of 14 is complete: the platform foundation.**
-> Repository analysis, test generation and the rest of the pipeline are **not implemented yet**.
-> The [roadmap](#roadmap) shows exactly what exists today and what is planned.
+> **Status: Phases 1–2 of 14 are complete: the platform foundation and the deterministic
+> repository analyzer.** Code analysis, test generation and the rest of the pipeline are
+> **not implemented yet**. The [roadmap](#roadmap) shows exactly what exists today and what is
+> planned.
 
 ---
 
@@ -72,7 +73,7 @@ Details: [docs/architecture.md](docs/architecture.md). Design decisions are reco
 
 ## What works today
 
-Phase 1 is the foundation that every later phase plugs into. All of it is implemented and tested:
+Everything listed here is implemented and tested.
 
 - **Projects API**: register a local repository and list, get or delete projects. Paths are
   resolved and confined to a configured root, so `../`, absolute paths and symlinks that
@@ -80,14 +81,28 @@ Phase 1 is the foundation that every later phase plugs into. All of it is implem
 - **Analysis runs**: queued through **Celery + Redis** and executed by a separate worker. They
   follow an explicit state machine (`queued → running → succeeded | failed`, `queued → cancelled`)
   enforced with row locks, and the worker is idempotent under at-least-once delivery.
-  *In Phase 1 a run only re-validates the project's source; the analysis itself is added in Phase 2.*
+- **Repository analysis** (every run): a deterministic profile of the repository, computed
+  without an LLM and without executing any repository code
+  ([details](docs/repository-analyzer.md)):
+  - languages and line counts, and the file inventory (respecting `.gitignore`, never
+    following symlinks);
+  - dependencies from `pyproject.toml` (PEP 621, PEP 735, Poetry), `requirements*.txt` (with
+    `-r` includes), `setup.cfg`, static `setup.py` and `Pipfile`, grouped into runtime,
+    development and optional;
+  - **Django, FastAPI, Flask, pytest and unittest** detection. Each detection has a
+    **confidence** score and the **evidence** behind it, taken from the AST, never from text
+    matching;
+  - test files, entry points (console scripts, `manage.py`, `__main__`, ASGI/WSGI apps
+    including app factories), config files, Docker (base images, compose services) and CI/CD
+    (GitHub Actions, GitLab CI, CircleCI, …).
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
   structured JSON logs with request-ID correlation, uniform error responses and OpenAPI docs.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 167 tests, **100 % line and branch coverage**, against real PostgreSQL and
-  Redis (no database mocks), plus an end-to-end smoke test of the running containers.
+- **Test suite**: 346 tests with 100 % line and branch coverage in CI. They run against real
+  PostgreSQL and Redis (no database mocks) and against golden example repositories for
+  Django, FastAPI and Flask, plus an end-to-end smoke test of the running containers.
 
 ## Tech stack
 
@@ -137,20 +152,55 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 
 ## Usage
 
-Register the bundled example repository ([`examples/discount_service`](examples/discount_service))
-and start a run:
+Register one of the bundled [example repositories](examples/), queue a run and read the
+analysis:
 
 ```bash
 curl -s -X POST localhost:8000/api/v1/projects \
   -H 'Content-Type: application/json' \
-  -d '{"name": "discount-service", "source_location": "discount_service"}'
-# → 201 {"id": "…", "name": "discount-service", "source_type": "local", "source_location": "discount_service", …}
+  -d '{"name": "blog", "source_location": "django_blog"}'
+# → 201 {"id": "…", "name": "blog", "source_type": "local", "source_location": "django_blog", …}
 
 curl -s -X POST localhost:8000/api/v1/projects/<project-id>/runs
 # → 202 {"id": "…", "status": "queued", …}
 
 curl -s localhost:8000/api/v1/runs/<run-id>
 # → 200 {"status": "succeeded", "started_at": "…", "finished_at": "…", …}
+
+curl -s localhost:8000/api/v1/runs/<run-id>/analysis
+```
+
+Output for `examples/django_blog` (abridged, real output):
+
+```json
+{
+  "file_count": 15,
+  "primary_language": "Python",
+  "frameworks": [
+    {"name": "Django", "category": "web_framework", "confidence": 1.0, "evidence": [
+      "'django' declared in requirements.txt",
+      "'django' imported in 7 file(s): blog_project/asgi.py, blog_project/urls.py, blog_project/wsgi.py (+4 more)",
+      "DJANGO_SETTINGS_MODULE set in blog_project/asgi.py, blog_project/wsgi.py, manage.py; INSTALLED_APPS defined in blog_project/settings.py; …"
+    ]}
+  ],
+  "test_frameworks": [
+    {"name": "unittest", "confidence": 0.7, "evidence": ["1 TestCase subclass(es) in posts/tests.py"]},
+    {"name": "pytest", "confidence": 0.5, "evidence": ["'pytest' declared in requirements-dev.txt"]}
+  ],
+  "dependencies": [
+    {"name": "pytest", "specifier": ">=8", "group": "development", "source": "requirements-dev.txt"},
+    {"name": "django", "specifier": "<6,>=5.0", "group": "runtime", "source": "requirements.txt"}
+  ],
+  "test_files": ["posts/tests.py"],
+  "entry_points": [
+    {"kind": "asgi_app", "path": "blog_project/asgi.py", "target": "blog_project.asgi:application"},
+    {"kind": "django_manage", "path": "manage.py", "target": null},
+    {"kind": "wsgi_app", "path": "blog_project/wsgi.py", "target": "blog_project.wsgi:application"}
+  ],
+  "docker": {"dockerfiles": ["Dockerfile"], "base_images": ["python:3.12-slim"], "compose_files": [], "compose_services": []},
+  "ci": [],
+  "issues": []
+}
 ```
 
 Errors always have the same shape:
@@ -173,6 +223,8 @@ Errors always have the same shape:
 | `GET` | `/api/v1/projects/{id}/runs` | List a project's runs |
 | `GET` | `/api/v1/runs/{id}` | Get a run |
 | `POST` | `/api/v1/runs/{id}/cancel` | Cancel a queued run (`409` once started) |
+| `GET` | `/api/v1/runs/{id}/analysis` | Repository analysis summary of a succeeded run |
+| `GET` | `/api/v1/runs/{id}/analysis/files` | Analysed files (`limit` ≤ 500, `offset`, `language`, `is_test`) |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -187,7 +239,7 @@ make help            # all targets
 
 | Suite | Location | Runs against |
 |---|---|---|
-| Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config |
+| Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector, golden tests on `examples/` |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
@@ -232,7 +284,7 @@ CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Architecture: stack, structure, Docker, PostgreSQL, Redis, backend skeleton, CI | ✅ Done |
-| 2 | Repository analyzer: languages, frameworks, file tree, dependencies, metadata | Planned |
+| 2 | Repository analyzer: languages, frameworks, file tree, dependencies, metadata | ✅ Done |
 | 3 | Code analyzer: AST, functions/classes, complexity, static analysis | Planned |
 | 4 | Test generator: unit / edge / negative tests, bounded validation loop | Planned |
 | 5 | Test runner: sandboxed pytest, structured results, tracebacks | Planned |
@@ -249,6 +301,7 @@ CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
 ## Documentation
 
 - [Architecture](docs/architecture.md): layers, run lifecycle, data model, known limitations
+- [Repository analyzer](docs/repository-analyzer.md): detectors, confidence model, safety limits
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

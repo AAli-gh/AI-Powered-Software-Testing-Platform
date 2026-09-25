@@ -41,6 +41,16 @@ while (( SECONDS < deadline )); do
 done
 [[ "${run_status:-}" == "succeeded" ]] || fail "run did not finish within ${TIMEOUT_SECONDS}s"
 
+echo "→ repository analysis"
+analysis=$(curl -fsS "$API/api/v1/runs/$run_id/analysis")
+echo "$analysis" | json "['primary_language']" | grep -qx Python || fail "primary language"
+echo "$analysis" | json "[\"test_frameworks\"][0][\"name\"]" | grep -qx pytest \
+  || fail "pytest not detected"
+echo "$analysis" | json "['test_files']" | grep -q "tests/test_pricing.py" || fail "test files"
+tests_total=$(curl -fsS "$API/api/v1/runs/$run_id/analysis/files?is_test=true" | json "['total']")
+[[ "$tests_total" == "1" ]] || fail "expected 1 test file, got $tests_total"
+echo "  python project, pytest detected, 1 test file"
+
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
 echo "SMOKE OK"
