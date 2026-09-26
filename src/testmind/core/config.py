@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     sandbox_timeout_seconds: int = Field(default=120, ge=5, le=3600)
     sandbox_memory: str = Field(default="512m", pattern=r"^[0-9]+[kmg]$")
     sandbox_cpus: float = Field(default=1.0, gt=0, le=16)
+    sandbox_build_timeout_seconds: int = Field(default=900, ge=30, le=7200)
 
     @field_validator("log_level", mode="before")
     @classmethod

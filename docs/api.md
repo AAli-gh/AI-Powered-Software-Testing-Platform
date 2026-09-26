@@ -203,3 +203,29 @@ Result shape (illustrative values; the field structure is exactly what is stored
 ```
 
 File `status` values and their meaning are listed in [ai-engine.md](ai-engine.md#file-statuses).
+
+### Test execution
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/v1/runs/{run_id}/test-executions` | Body (optional): `{"generation_id": "<uuid>"}` to add that generation's test modules. `202`. `404` unknown run, or a generation that does not belong to it. `409` run or generation not succeeded. `503 dispatch_failed` |
+| `GET` | `/api/v1/runs/{run_id}/test-executions` | Paginated summaries, newest first |
+| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict) and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment) |
+| `GET` | `/api/v1/test-executions/{id}/tests` | Per-test results, filterable by `outcome` (`passed`, `failed`, `error`, `skipped`, `xfailed`) and `generated`. `limit` ≤ 500. `404` until a report exists |
+| `GET` | `/api/v1/test-executions/{id}/logs` | `{"output": pytest console tail, "install_log": pip/docker build tail}` |
+
+Test entry:
+
+```json
+{
+  "nodeid": "tests/testmind/test_inventory_stock.py::test_average_of_zero_items",
+  "file": "tests/testmind/test_inventory_stock.py",
+  "line": 3,
+  "name": "test_average_of_zero_items",
+  "outcome": "failed",
+  "duration_seconds": 0.001,
+  "message": "ZeroDivisionError: division by zero",
+  "traceback": "def test_average_of_zero_items():\n>       assert average_price(10, 0) == 0\n…",
+  "generated": true
+}
+```

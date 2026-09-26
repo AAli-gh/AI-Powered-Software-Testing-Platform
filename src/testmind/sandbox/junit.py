@@ -39,9 +39,12 @@ def _case(case: Element) -> TestCaseResult:
             outcome = Outcome.XFAILED if is_xfail else Outcome.SKIPPED
             message = child.get("message")
             break
+    line = case.get("line")
     return TestCaseResult(
         name=case.get("name", ""),
         classname=case.get("classname", ""),
+        file=case.get("file"),
+        line=int(line) + 1 if line and line.isdigit() else None,  # xunit1 lines are 0-based
         outcome=outcome,
         message=message[:MAX_MESSAGE] if message else None,
         details=details[:MAX_DETAILS] if details else None,

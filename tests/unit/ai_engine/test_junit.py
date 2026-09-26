@@ -52,3 +52,16 @@ def test_long_messages_are_truncated() -> None:
     assert len(case.message) == 500
     assert case.details is not None
     assert len(case.details) == 4000
+
+
+def test_xunit1_file_and_line() -> None:
+    xml = (
+        '<testsuite><testcase classname="c" name="t" file="tests/test_a.py" line="9"/></testsuite>'
+    )
+    [case] = parse_junit(xml)
+    assert (case.file, case.line) == ("tests/test_a.py", 10)
+
+
+def test_missing_or_invalid_line() -> None:
+    xml = '<testsuite><testcase name="a"/><testcase name="b" line="x"/></testsuite>'
+    assert [(c.file, c.line) for c in parse_junit(xml)] == [(None, None), (None, None)]

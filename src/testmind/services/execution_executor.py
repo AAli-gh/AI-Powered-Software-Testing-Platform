@@ -1,0 +1,100 @@
+"""Executes a queued test execution (background worker)."""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from pathlib import Path
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from testmind.ai_engine.test_generator.models import GenerationResult
+from testmind.analyzers.repository.models import RepositoryProfile
+from testmind.core.errors import AppError
+from testmind.core.logging import get_logger
+from testmind.domain.enums import RunStatus
+from testmind.repositories.analysis_repository import AnalysisRepository
+from testmind.repositories.execution_repository import ExecutionRepository
+from testmind.repositories.generation_repository import GenerationRepository
+from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE
+from testmind.services.run_service import apply_transition
+from testmind.services.source_locator import resolve_local_source
+from testmind.test_engine.models import TestRunReport
+from testmind.test_engine.runner import TestSuiteRunner
+
+logger = get_logger(__name__)
+
+NO_REPOSITORY_ANALYSIS = "The run has no repository analysis to execute tests from"
+
+
+class ExecutionExecutor:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        repos_root: Path,
+        runner: TestSuiteRunner,
+    ) -> None:
+        self._session_factory = session_factory
+        self._repos_root = repos_root
+        self._runner = runner
+
+    async def execute(self, execution_id: uuid.UUID) -> RunStatus | None:
+        async with self._session_factory() as session:
+            execution = await ExecutionRepository(session).get_for_update(execution_id)
+            if execution is None:
+                logger.warning("execution_not_found", execution_id=str(execution_id))
+                return None
+            if execution.status is not RunStatus.QUEUED:
+                return execution.status
+            generations = GenerationRepository(session)
+            location = await generations.source_location(execution.run_id)
+            analysis = await AnalysisRepository(session).get_for_run(execution.run_id)
+            profile = RepositoryProfile.model_validate(analysis.profile) if analysis else None
+            generated = await _generated_files(generations, execution.generation_id)
+            apply_transition(execution, RunStatus.RUNNING)
+            await session.commit()
+
+        try:
+            if profile is None or location is None:
+                return await self._finish(execution_id, RunStatus.FAILED, NO_REPOSITORY_ANALYSIS)
+            root = resolve_local_source(self._repos_root, location)
+            report = await asyncio.to_thread(self._runner.run, root, profile, generated)
+        except AppError as exc:
+            return await self._finish(execution_id, RunStatus.FAILED, exc.message)
+        except Exception:
+            logger.exception("execution_crashed", execution_id=str(execution_id))
+            await self._finish(execution_id, RunStatus.FAILED, UNEXPECTED_ERROR_MESSAGE)
+            raise
+        return await self._finish(execution_id, RunStatus.SUCCEEDED, None, report)
+
+    async def _finish(
+        self,
+        execution_id: uuid.UUID,
+        status: RunStatus,
+        error_message: str | None,
+        report: TestRunReport | None = None,
+    ) -> RunStatus:
+        async with self._session_factory() as session:
+            execution = await ExecutionRepository(session).get_for_update(execution_id)
+            if execution is None:
+                return status
+            apply_transition(execution, status, error_message=error_message)
+            if report is not None:
+                execution.report = report.model_dump(mode="json")
+                execution.outcome = report.outcome
+            await session.commit()
+        logger.info("execution_finished", execution_id=str(execution_id), status=status.value)
+        return status
+
+
+async def _generated_files(
+    generations: GenerationRepository, generation_id: uuid.UUID | None
+) -> dict[str, str]:
+    """Generated test modules (sandbox path -> source) of an included generation."""
+    if generation_id is None:
+        return {}
+    generation = await generations.get(generation_id)
+    if generation is None or generation.result is None:
+        return {}
+    result = GenerationResult.model_validate(generation.result)
+    return {f.path.removeprefix("tests/"): f.code for f in result.files if f.code}

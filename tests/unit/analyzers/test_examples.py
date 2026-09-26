@@ -50,11 +50,13 @@ def test_django_blog(profiles: dict[str, RepositoryProfile]) -> None:
     }
     assert profile.docker.base_images == ["python:3.12-slim"]
     assert "db.sqlite3" not in {f.path for f in profile.files}  # would be .gitignored anyway
+    assert profile.django_settings_module == "blog_project.settings"
 
 
 def test_fastapi_todo(profiles: dict[str, RepositoryProfile]) -> None:
     profile = profiles["fastapi_todo"]
     assert detections(profile) == {"FastAPI": 1.0, "pytest": 1.0}
+    assert profile.django_settings_module is None
     assert deps(profile, DependencyGroup.RUNTIME) == {"fastapi", "uvicorn", "pydantic"}
     assert deps(profile, DependencyGroup.OPTIONAL) == {"asyncpg"}
     assert deps(profile, DependencyGroup.DEVELOPMENT) == {"pytest", "httpx"}

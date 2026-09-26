@@ -13,8 +13,9 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–4 of 14 are complete: the platform foundation, the deterministic
-> repository and code analyzers, and AI test generation with sandboxed validation.**
+> **Status: Phases 1–5 of 14 are complete: the platform foundation, the deterministic
+> repository and code analyzers, AI test generation with sandboxed validation, and the
+> sandboxed test runner.**
 > The AI stage has been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
@@ -120,12 +121,22 @@ Everything listed here is implemented and tested.
     reported as **suspected bugs** instead of being weakened;
   - without an API key the endpoint answers `503 llm_not_configured`. It never pretends to
     generate anything.
+- **Test execution** ([details](docs/test-engine.md)): runs the repository's own test suite,
+  optionally plus generated tests, in the sandbox:
+  - the project's dependencies are installed into a cached **runner image**, **wheels
+    only**, so no third-party `setup.py` ever runs;
+  - Django projects get `DJANGO_SETTINGS_MODULE`, detected from the AST;
+  - a structured report: outcome, pytest exit code and its meaning, totals, duration, and
+    every test with file, line, message and traceback, plus logs;
+  - verified green on the Django, FastAPI, Flask and plain-pytest example repositories.
+- **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
+  starts.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
   structured JSON logs with request-ID correlation, uniform error responses and OpenAPI docs.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 611 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 670 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -259,6 +270,8 @@ Errors always have the same shape:
 | `GET` | `/api/v1/code-rules` | Catalog of code-analysis rules |
 | `POST` | `/api/v1/runs/{id}/test-generations` | Queue AI test generation (`202`; `409` if the run has not succeeded; `503` if no LLM is configured) |
 | `GET` | `/api/v1/runs/{id}/test-generations` · `/api/v1/test-generations/{id}` | Generation status and result (generated code, statuses, suspected bugs) |
+| `POST` | `/api/v1/runs/{id}/test-executions` | Queue a sandboxed run of the test suite (`{"generation_id": …}` adds generated tests) |
+| `GET` | `/api/v1/test-executions/{id}` · `/tests` · `/logs` | Summary; per-test results (`outcome`, `generated` filters); pytest and install logs |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -317,10 +330,14 @@ In place today:
 - LLM output is never trusted: static checks and a sandboxed pytest run decide
   ([ADR-0006](docs/adr/0006-llm-proposes-tools-decide.md)).
 
+- Project dependencies are installed **wheels only** (`pip --only-binary=:all:`), so no
+  third-party build scripts run.
+
 Still open: giving the **containerised** worker access to Docker for the sandbox. It needs a
-socket proxy or rootless runtime, not the raw Docker socket; until then generated tests from
-the compose stack are stored as `unverified`. This is planned for Phases 5 and 13
-([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
+socket proxy or rootless runtime, not the raw Docker socket. Until then, the compose stack
+reports `sandbox_unavailable` for executions and `unverified` for generated tests, while a
+worker on a Docker host (`make worker`, CI) runs them for real. This is planned for
+Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 
 ## Roadmap
 
@@ -330,7 +347,7 @@ the compose stack are stored as `unverified`. This is planned for Phases 5 and 1
 | 2 | Repository analyzer: languages, frameworks, file tree, dependencies, metadata | ✅ Done |
 | 3 | Code analyzer: AST, functions/classes, complexity, static analysis | ✅ Done |
 | 4 | Test generator: unit / edge / negative tests, bounded validation loop | ✅ Done (live Anthropic call not yet verified: no API key available) |
-| 5 | Test runner: sandboxed pytest, structured results, tracebacks | Planned |
+| 5 | Test runner: sandboxed pytest, structured results, tracebacks | ✅ Done |
 | 6 | Coverage: coverage.py, file/function/branch coverage, weak areas | Planned |
 | 7 | AI failure analyzer: evidence, root-cause hypothesis, confidence | Planned |
 | 8 | Regression engine: git diff, affected tests, test selection | Planned |
@@ -347,6 +364,7 @@ the compose stack are stored as `unverified`. This is planned for Phases 5 and 1
 - [Repository analyzer](docs/repository-analyzer.md): detectors, confidence model, safety limits
 - [Code analyzer](docs/code-analyzer.md): symbols, complexity, rule catalog, suppression
 - [AI engine](docs/ai-engine.md): test generation pipeline, providers, prompts, sandbox validation
+- [Test engine](docs/test-engine.md): runner images, sandboxed execution, reports, orphaned jobs
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

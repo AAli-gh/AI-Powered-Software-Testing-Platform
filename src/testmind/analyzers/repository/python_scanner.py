@@ -34,6 +34,7 @@ class PythonFileFacts:
     pytest_style_tests: int = 0  # module-level `def test_*` functions
     sets_django_settings_module: bool = False  # os.environ[.setdefault]("DJANGO_SETTINGS_MODULE")
     defines_installed_apps: bool = False  # module-level INSTALLED_APPS = [...] (Django settings)
+    django_settings_value: str | None = None  # "site.settings" when set to a string literal
     syntax_error: str | None = None
 
 
@@ -48,6 +49,7 @@ def scan_python(path: str, source: str) -> PythonFileFacts:
     for node in ast.walk(tree):
         if _sets_django_settings_module(node):
             facts.sets_django_settings_module = True
+            facts.django_settings_value = facts.django_settings_value or _settings_value(node)
         if isinstance(node, ast.Import):
             facts.imports.update(alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
@@ -87,6 +89,17 @@ def _sets_django_settings_module(node: ast.AST) -> bool:
     if isinstance(node, ast.Assign):
         return any(isinstance(t, ast.Subscript) and _is_key(t.slice) for t in node.targets)
     return False
+
+
+def _settings_value(node: ast.AST) -> str | None:
+    value: ast.expr | None = None
+    if isinstance(node, ast.Call) and len(node.args) > 1:
+        value = node.args[1]
+    elif isinstance(node, ast.Assign):
+        value = node.value
+    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return value.value
+    return None
 
 
 def _assigns_name(stmt: ast.stmt, name: str) -> bool:

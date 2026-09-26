@@ -153,3 +153,18 @@ def test_app_assigned_to_non_name_target_has_no_variable() -> None:
         ("flask", None),
         ("fastapi", None),
     ]
+
+
+@pytest.mark.parametrize(
+    ("source", "value"),
+    [
+        ('os.environ.setdefault("DJANGO_SETTINGS_MODULE", "site.settings")', "site.settings"),
+        ('os.environ["DJANGO_SETTINGS_MODULE"] = "site.prod"', "site.prod"),
+        ('os.environ.setdefault("DJANGO_SETTINGS_MODULE", compute())', None),
+        ('os.environ.setdefault("DJANGO_SETTINGS_MODULE")', None),
+    ],
+)
+def test_django_settings_value(source: str, value: str | None) -> None:
+    facts = scan(source)
+    assert facts.sets_django_settings_module
+    assert facts.django_settings_value == value

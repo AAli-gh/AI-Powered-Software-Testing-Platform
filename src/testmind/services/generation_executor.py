@@ -13,14 +13,17 @@ from testmind.ai_engine.llm import LLMError, LLMProvider
 from testmind.ai_engine.test_generator.generator import TestGenerator, TestSandbox
 from testmind.ai_engine.test_generator.models import GenerationOptions, GenerationResult
 from testmind.analyzers.code import CodeProfile
+from testmind.analyzers.repository.models import Dependency, RepositoryProfile
 from testmind.core.errors import AppError
 from testmind.core.logging import get_logger
 from testmind.domain.enums import RunStatus
 from testmind.repositories.analysis_repository import AnalysisRepository
 from testmind.repositories.generation_repository import GenerationRepository
+from testmind.sandbox.runner_image import DependencyInstallError
 from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE
 from testmind.services.run_service import apply_transition
 from testmind.services.source_locator import resolve_local_source
+from testmind.test_engine.runner import ImageBuilder
 
 logger = get_logger(__name__)
 
@@ -38,11 +41,13 @@ class GenerationExecutor:
         max_iterations: int,
         max_tokens: int,
         max_targets: int,
+        images: ImageBuilder | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
         self._provider_factory = provider_factory
         self._sandbox = sandbox
+        self._images = images
         self._max_iterations = max_iterations
         self._max_tokens = max_tokens
         self._max_targets = max_targets
@@ -59,8 +64,15 @@ class GenerationExecutor:
             run_id = generation.run_id
             options = GenerationOptions.model_validate(generation.options)
             location = await repo.source_location(run_id)
-            code = await AnalysisRepository(session).get_code_for_run(run_id)
+            analyses = AnalysisRepository(session)
+            code = await analyses.get_code_for_run(run_id)
+            repository = await analyses.get_for_run(run_id)
             profile = CodeProfile.model_validate(code.profile) if code else None
+            dependencies = (
+                RepositoryProfile.model_validate(repository.profile).dependencies
+                if repository
+                else []
+            )
             apply_transition(generation, RunStatus.RUNNING)
             await session.commit()
 
@@ -68,14 +80,9 @@ class GenerationExecutor:
             if profile is None or location is None:
                 return await self._finish(generation_id, RunStatus.FAILED, NO_CODE_ANALYSIS)
             root = resolve_local_source(self._repos_root, location)
-            generator = TestGenerator(
-                self._provider_factory(),
-                self._sandbox,
-                max_iterations=self._max_iterations,
-                max_tokens=self._max_tokens,
-            )
+            provider = self._provider_factory()
             result = await asyncio.to_thread(
-                generator.generate, root, profile, options, max_targets=self._max_targets
+                self._generate, root, profile, options, provider, dependencies
             )
         except (AppError, LLMError) as exc:
             return await self._finish(generation_id, RunStatus.FAILED, str(exc))
@@ -84,6 +91,35 @@ class GenerationExecutor:
             await self._finish(generation_id, RunStatus.FAILED, UNEXPECTED_ERROR_MESSAGE)
             raise
         return await self._finish(generation_id, RunStatus.SUCCEEDED, None, result)
+
+    def _generate(
+        self,
+        root: Path,
+        profile: CodeProfile,
+        options: GenerationOptions,
+        provider: LLMProvider,
+        dependencies: list[Dependency],
+    ) -> GenerationResult:
+        generator = TestGenerator(
+            provider,
+            self._sandbox,
+            max_iterations=self._max_iterations,
+            max_tokens=self._max_tokens,
+            image=self._runner_image(dependencies),
+        )
+        return generator.generate(root, profile, options, max_targets=self._max_targets)
+
+    def _runner_image(self, dependencies: list[Dependency]) -> str | None:
+        """The project's dependencies are installed so generated tests can import its code.
+        If that fails, the base image is used and missing imports surface as
+        `environment_error` for the affected files."""
+        if self._images is None or self._sandbox is None or not self._sandbox.available():
+            return None
+        try:
+            return self._images.ensure(dependencies).tag
+        except DependencyInstallError:
+            logger.warning("runner_image_unavailable_for_generation")
+            return None
 
     async def _finish(
         self,

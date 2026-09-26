@@ -19,6 +19,8 @@ class TestCaseResult(BaseModel):
 
     name: str
     classname: str
+    file: str | None = None
+    line: int | None = None
     outcome: Outcome
     message: str | None = None
     details: str | None = Field(default=None, description="Truncated traceback / output")

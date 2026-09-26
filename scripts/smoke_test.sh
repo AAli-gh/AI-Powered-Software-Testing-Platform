@@ -85,6 +85,23 @@ case "$generation_status" in
 esac
 rm -f /tmp/testmind-smoke-generation.json
 
+echo "→ test execution"
+execution_id=$(curl -fsS -X POST "$API/api/v1/runs/$run_id/test-executions" | json "['id']")
+deadline=$((SECONDS + TIMEOUT_SECONDS))
+while (( SECONDS < deadline )); do
+  execution=$(curl -fsS "$API/api/v1/test-executions/$execution_id")
+  execution_status=$(echo "$execution" | json "['status']")
+  [[ "$execution_status" == "succeeded" || "$execution_status" == "failed" ]] && break
+  sleep 1
+done
+[[ "$execution_status" == "succeeded" ]] || fail "test execution ended as $execution_status"
+outcome=$(echo "$execution" | json "['outcome']")
+case "$outcome" in
+  passed) echo "  project tests passed in the sandbox" ;;
+  sandbox_unavailable) echo "  no Docker access for the containerised worker: honest sandbox_unavailable" ;;
+  *) fail "unexpected test execution outcome: $outcome" ;;
+esac
+
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
 curl -fsS -X DELETE "$API/api/v1/projects/$buggy_id" -o /dev/null

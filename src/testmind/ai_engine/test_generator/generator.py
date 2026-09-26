@@ -58,7 +58,9 @@ class TestSandbox(Protocol):
 
     def available(self) -> bool: ...
 
-    def run_pytest(self, repo_root: Path, test_files: dict[str, str]) -> SandboxResult: ...
+    def run_pytest(
+        self, repo_root: Path, test_files: dict[str, str], *, image: str | None = None
+    ) -> SandboxResult: ...
 
 
 @dataclass(slots=True)
@@ -87,9 +89,11 @@ class TestGenerator:
         max_tokens: int,
         limits: AnalysisLimits | None = None,
         on_progress: Callable[[str], None] | None = None,
+        image: str | None = None,
     ) -> None:
         self._provider = provider
         self._sandbox = sandbox
+        self._image = image  # runner image with the project's dependencies, if built
         self._max_iterations = max_iterations
         self._max_tokens = max_tokens
         self._limits = limits or AnalysisLimits()
@@ -220,7 +224,9 @@ class TestGenerator:
             state.attempts.append(Attempt(iteration=iteration, outcome="unverified"))
             return FileStatus.UNVERIFIED, ""
         try:
-            result = self._sandbox.run_pytest(root, {test_path.removeprefix("tests/"): code})
+            result = self._sandbox.run_pytest(
+                root, {test_path.removeprefix("tests/"): code}, image=self._image
+            )
         except SandboxUnavailableError as exc:
             state.attempts.append(
                 Attempt(iteration=iteration, outcome="unverified", feedback=str(exc))

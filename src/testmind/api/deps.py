@@ -9,6 +9,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from testmind.core.config import Settings
+from testmind.services.execution_service import ExecutionService
 from testmind.services.generation_service import GenerationService
 from testmind.services.project_service import ProjectService
 from testmind.services.run_service import RunService
@@ -47,3 +48,10 @@ def get_generation_service(
 
 
 GenerationServiceDep = Annotated[GenerationService, Depends(get_generation_service)]
+
+
+def get_execution_service(request: Request, session: SessionDep) -> ExecutionService:
+    return ExecutionService(session, request.app.state.dispatcher)
+
+
+ExecutionServiceDep = Annotated[ExecutionService, Depends(get_execution_service)]

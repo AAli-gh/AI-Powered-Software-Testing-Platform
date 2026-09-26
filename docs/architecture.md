@@ -30,7 +30,7 @@ flowchart LR
 | `redis` | `redis:7-alpine` | Celery broker |
 | `migrate` | `api` | Applies Alembic migrations, then exits. `api` and `worker` start only after it succeeds |
 | `api` | `api` | HTTP API. Never does heavy work in the request path |
-| `worker` | `worker` | Executes queued jobs: analysis runs and AI test generations (later: test execution, mutation testing) |
+| `worker` | `worker` | Executes queued jobs: analysis runs, AI test generations, test executions (later: mutation testing) |
 
 ## Code layout
 
@@ -46,12 +46,13 @@ src/testmind/
 ├── services/      use cases shared by API and worker (+ the TaskDispatcher port)
 ├── analyzers/     deterministic analysers: repository/ (repository-analyzer.md), code/ (code-analyzer.md)
 ├── ai_engine/     LLM interface + providers, versioned prompts, test_generator/ (ai-engine.md)
-├── sandbox/       isolated execution of untrusted code (Docker)
+├── sandbox/       isolated execution of untrusted code (Docker), runner images
+├── test_engine/   test-suite runner and structured reports (test-engine.md)
 ├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
 └── workers/       Celery app, tasks, Celery-backed TaskDispatcher
 ```
 
-Later phases add sibling packages (`test_engine/`, `integrations/github/`)
+Later phases add sibling packages (`integrations/github/`, …)
 when they are implemented. Empty placeholder packages are deliberately
 not created ahead of time.
 
@@ -132,6 +133,8 @@ erDiagram
     analysis_runs ||--o| repository_analyses : produces
     analysis_runs ||--o| code_analyses : produces
     analysis_runs ||--o{ test_generations : "AI tests for"
+    analysis_runs ||--o{ test_executions : "suite runs for"
+    test_generations |o--o{ test_executions : "included in"
     projects {
         uuid id PK
         varchar name UK
@@ -191,11 +194,12 @@ erDiagram
 
 ## Known limitations (tracked, not hidden)
 
-- **Runs orphaned by a hard worker crash.** If a worker dies *after* moving a run to `running`
-  (for example OOM-kill), the re-delivered message is skipped by design, so the run stays
-  `running`. A reaper that fails runs stuck past the task time limit will be added in Phase 5,
-  when runs become long-running.
-- **Cancellation** is supported only before a run starts. Cooperative cancellation of running
-  jobs comes with the test runner (Phase 5).
+- **Cancellation** is supported only before a run starts. Running jobs are bounded by the
+  Celery time limit and the sandbox timeout.
+- **Docker access for the containerised worker** is not configured (see
+  [test-engine.md](test-engine.md#running-the-sandbox-from-the-worker)).
+
+Resolved: runs orphaned by a hard worker crash are now failed at worker start-up
+([test-engine.md](test-engine.md#orphaned-jobs)).
 - **Authentication** is not implemented yet. The API is bound to `127.0.0.1` by default and
   must not be exposed publicly until user management lands.

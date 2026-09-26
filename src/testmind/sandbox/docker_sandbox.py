@@ -10,11 +10,13 @@ Only /out (a fresh temporary directory) is writable, and only the JUnit report i
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess  # nosec B404 - only fixed argument lists, never a shell
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from testmind.core.logging import get_logger
@@ -44,13 +46,17 @@ class DockerSandbox:
         self._cpus = cpus
         self._docker = docker_binary
 
-    def available(self) -> bool:
-        """Docker CLI present, daemon reachable and the sandbox image built."""
+    @property
+    def image(self) -> str:
+        return self._image
+
+    def available(self, image: str | None = None) -> bool:
+        """Docker CLI present, daemon reachable and the image built."""
         if shutil.which(self._docker) is None:
             return False
         try:
             probe = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
-                [self._docker, "image", "inspect", self._image],
+                [self._docker, "image", "inspect", image or self._image],
                 capture_output=True,
                 timeout=DOCKER_CHECK_TIMEOUT,
                 check=False,
@@ -59,26 +65,44 @@ class DockerSandbox:
             return False
         return probe.returncode == 0
 
-    def run_pytest(self, repo_root: Path, test_files: dict[str, str]) -> SandboxResult:
-        """Run pytest on `test_files` (relative path -> source) against the repository."""
-        if not self.available():
-            raise SandboxUnavailableError(f"Docker sandbox image '{self._image}' is not available")
-        for relative in test_files:
+    def run_pytest(
+        self, repo_root: Path, test_files: dict[str, str], *, image: str | None = None
+    ) -> SandboxResult:
+        """Run only the given test files (relative path -> source) against the repository."""
+        return self.run(repo_root, PytestJob(test_files=test_files, image=image))
+
+    def run(self, repo_root: Path, job: PytestJob) -> SandboxResult:
+        image = job.image or self._image
+        if not self.available(image):
+            raise SandboxUnavailableError(f"Docker sandbox image '{image}' is not available")
+        for relative in job.test_files:
             _check_relative(relative)
+        for relative in job.project_tests:
+            _check_relative(relative)
+        for key, value in job.env.items():
+            _check_env(key, value)
 
         with tempfile.TemporaryDirectory(prefix="testmind-sandbox-") as scratch:
             tests_dir = Path(scratch) / "tests"
             out_dir = Path(scratch) / "out"
+            tests_dir.mkdir()
             out_dir.mkdir()
             out_dir.chmod(0o777)  # written by the unprivileged container user
-            for relative, source in test_files.items():
+            for relative, source in job.test_files.items():
                 target = tests_dir / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(source, encoding="utf-8")
             tests_dir.chmod(0o755)
 
             name = f"testmind-sandbox-{uuid.uuid4().hex[:12]}"
-            command = self._command(name, repo_root.resolve(), tests_dir, out_dir, test_files)
+            command = self._command(
+                name,
+                image,
+                repo_root=repo_root.resolve(),
+                tests_dir=tests_dir,
+                out_dir=out_dir,
+                job=job,
+            )
             started = time.monotonic()
             timed_out = False
             try:
@@ -111,12 +135,21 @@ class DockerSandbox:
     def _command(
         self,
         name: str,
+        image: str,
+        *,
         repo_root: Path,
         tests_dir: Path,
         out_dir: Path,
-        test_files: dict[str, str],
+        job: PytestJob,
     ) -> list[str]:
-        targets = [f"/workspace/tests/{relative}" for relative in sorted(test_files)]
+        # The project's own tests run from the repository root with its conftest files;
+        # generated tests live in a separate read-only directory.
+        targets = [f"/workspace/src/{relative}" for relative in job.project_tests]
+        targets += [f"/workspace/tests/{relative}" for relative in sorted(job.test_files)]
+        rootdir = "/workspace/src" if job.project_tests else "/workspace/tests"
+        env: list[str] = []
+        for key, value in sorted(job.env.items()):
+            env += ["--env", f"{key}={value}"]
         return [
             self._docker, "run", "--rm", "--name", name,
             "--network", "none",
@@ -129,17 +162,22 @@ class DockerSandbox:
             "--memory-swap", self._memory,
             "--cpus", str(self._cpus),
             "--pids-limit", str(PIDS_LIMIT),
+            "--workdir", rootdir,
             "--env", "PYTHONPATH=/workspace/src:/workspace/src/src",
             "--env", "PYTHONDONTWRITEBYTECODE=1",
             "--env", "HOME=/tmp",
+            *env,
             "--mount", f"type=bind,source={repo_root},target=/workspace/src,readonly",
             "--mount", f"type=bind,source={tests_dir},target=/workspace/tests,readonly",
             "--mount", f"type=bind,source={out_dir},target=/out",
-            self._image,
+            image,
             "python", "-m", "pytest",
             "-p", "no:cacheprovider",
-            "--rootdir", "/workspace/tests",
+            "--rootdir", rootdir,
+            # The project's addopts may need plugins or write files (e.g. --cov); coverage is
+            # measured separately (Phase 6).
             "-o", "addopts=",
+            "-o", "junit_family=xunit1",  # adds file and line to each test case
             "--junitxml", "/out/report.xml",
             "-q", *targets,
         ]  # fmt: skip
@@ -151,6 +189,25 @@ class DockerSandbox:
             timeout=DOCKER_CHECK_TIMEOUT,
             check=False,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class PytestJob:
+    """What to run: generated test files and/or the project's own test files."""
+
+    test_files: dict[str, str] = field(default_factory=dict)  # extra files, relative -> source
+    project_tests: tuple[str, ...] = ()  # repository test files, relative to the root
+    image: str | None = None  # defaults to the sandbox base image
+    env: dict[str, str] = field(default_factory=dict)
+
+
+_ENV_KEY = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+_ENV_VALUE = re.compile(r"^[A-Za-z0-9_.:/-]{0,256}$")
+
+
+def _check_env(key: str, value: str) -> None:
+    if not _ENV_KEY.match(key) or not _ENV_VALUE.match(value):
+        raise ValueError(f"Invalid sandbox environment variable: {key!r}")
 
 
 def _check_relative(relative: str) -> None:

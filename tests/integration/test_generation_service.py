@@ -6,10 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.ai_engine.llm import LLMNotConfiguredError
 from testmind.ai_engine.test_generator.models import FileStatus, GenerationOptions, TestKind
+from testmind.analyzers.repository.models import Dependency
 from testmind.core.config import Settings
 from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableError, NotFoundError
 from testmind.db.models import AnalysisRun, TestGeneration
 from testmind.domain.enums import RunStatus
+from testmind.sandbox.models import Outcome
+from testmind.sandbox.runner_image import DependencyInstallError, RunnerImage
 from testmind.schemas.project import ProjectCreate
 from testmind.services.generation_executor import NO_CODE_ANALYSIS, GenerationExecutor
 from testmind.services.generation_service import GenerationService
@@ -17,6 +20,8 @@ from testmind.services.project_service import ProjectService
 from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE, RunExecutor
 from testmind.services.run_service import DISPATCH_FAILED_MESSAGE, RunService
 from tests.doubles import FailingDispatcher, RecordingDispatcher, ScriptedLLM
+from tests.unit.ai_engine.test_generator_loop import CannedSandbox
+from tests.unit.ai_engine.test_generator_loop import result as sandbox_result
 
 REPLY = "```python\nfrom main import greet\n\ndef test_greet():\n    assert greet() == 'hi'\n```"
 
@@ -277,3 +282,38 @@ async def test_dispatch_failure_after_concurrent_delete(
             await GenerationService(session, DeleteThenFail(), settings).create(
                 run_id, GenerationOptions()
             )
+
+
+class RecordingImages:
+    def __init__(self, error: bool = False) -> None:
+        self.error = error
+        self.calls: list[list[str]] = []
+
+    def ensure(self, dependencies: list[Dependency]) -> RunnerImage:
+        self.calls.append([d.name for d in dependencies])
+        if self.error:
+            raise DependencyInstallError("no wheel", "log", ())
+        return RunnerImage("testmind-runner:deps", (), False, "", ())
+
+
+@pytest.mark.parametrize(
+    ("fails", "expected_image"), [(False, "testmind-runner:deps"), (True, None)]
+)
+async def test_generated_tests_run_in_the_projects_runner_image(
+    session_factory: async_sessionmaker[AsyncSession],
+    repos_root: Path,
+    fails: bool,
+    expected_image: str | None,
+) -> None:
+    (repos_root / "sample" / "requirements.txt").write_text("attrs\n")
+    run_id = await analysed_run(session_factory, repos_root)
+    generation_id = await add_generation(session_factory, run_id)
+    images = RecordingImages(error=fails)
+    sandbox = CannedSandbox([sandbox_result(Outcome.PASSED)])
+    gen_executor = GenerationExecutor(
+        session_factory, repos_root, provider_factory=lambda: ScriptedLLM([REPLY]), sandbox=sandbox,
+        max_iterations=1, max_tokens=10, max_targets=1, images=images,
+    )  # fmt: skip
+    assert await gen_executor.execute(generation_id) is RunStatus.SUCCEEDED
+    assert images.calls == [["attrs"]]
+    assert sandbox.images == [expected_image]

@@ -31,8 +31,12 @@ Point the `TESTMIND_*` variables in `.env` at reachable services (for example
 ```bash
 uv run alembic upgrade head
 uv run uvicorn --factory testmind.api.app:create_app --reload
-uv run celery -A testmind.workers.main worker --loglevel=INFO
+uv run celery -A testmind.workers.main worker --loglevel=INFO   # or: make worker
 ```
+
+A worker on the host can use the local Docker daemon, so test executions and AI test
+validation run in the real sandbox (build it once with `make sandbox-image`). The worker
+inside docker-compose cannot, by design (see [test-engine.md](test-engine.md)).
 
 ## Database migrations
 

@@ -27,12 +27,16 @@ class CannedSandbox:
         self._results = results
         self._available = available
         self.calls: list[dict[str, str]] = []
+        self.images: list[str | None] = []
 
     def available(self) -> bool:
         return self._available
 
-    def run_pytest(self, repo_root: Path, test_files: dict[str, str]) -> SandboxResult:
+    def run_pytest(
+        self, repo_root: Path, test_files: dict[str, str], *, image: str | None = None
+    ) -> SandboxResult:
         self.calls.append(test_files)
+        self.images.append(image)
         result = self._results.pop(0)
         if isinstance(result, Exception):
             raise result

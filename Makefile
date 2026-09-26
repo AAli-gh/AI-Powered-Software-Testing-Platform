@@ -74,6 +74,10 @@ down: ## Stop the stack (keeps volumes)
 logs: ## Follow logs of all services
 	$(COMPOSE) logs -f
 
+.PHONY: worker
+worker: ## Run a worker on the host (it can use Docker for the sandbox; see docs/test-engine.md)
+	uv run celery -A testmind.workers.main worker --loglevel=INFO --concurrency=2
+
 .PHONY: smoke
 smoke: ## End-to-end smoke test against the running stack
 	./scripts/smoke_test.sh

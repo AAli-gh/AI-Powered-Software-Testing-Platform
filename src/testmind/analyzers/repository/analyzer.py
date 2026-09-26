@@ -27,7 +27,7 @@ from testmind.analyzers.repository.python_scanner import PythonFileFacts, scan_p
 from testmind.analyzers.repository.walker import WalkedFile, read_text, walk_repository
 
 # Bump when the output changes meaningfully; stored with every analysis.
-ANALYZER_VERSION = "1.0.0"
+ANALYZER_VERSION = "1.1.0"
 
 
 class RepositoryAnalyzer:
@@ -93,6 +93,7 @@ class RepositoryAnalyzer:
             ci=analyse_ci(paths, read, issues),
             files=files,
             issues=sorted(issues, key=lambda i: (i.path, i.message)),
+            django_settings_module=_django_settings(python_facts),
         )
 
     def _scan_python(
@@ -150,3 +151,13 @@ def _pytest_config_sections(paths: list[str], read: ReadFile) -> list[str]:
             if parser.has_section(section):
                 sections.append(f"{path} [{section}]")
     return sections
+
+
+def _django_settings(python_facts: list[PythonFileFacts]) -> str | None:
+    """manage.py is authoritative; otherwise the first module that sets the variable."""
+    values = sorted(
+        (PurePosixPath(f.path).name != "manage.py", f.path, f.django_settings_value)
+        for f in python_facts
+        if f.django_settings_value
+    )
+    return values[0][2] if values else None

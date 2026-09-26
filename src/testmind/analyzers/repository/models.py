@@ -106,6 +106,9 @@ class RepositorySummary(_Model):
     docker: DockerInfo
     ci: list[CIConfig]
     issues: list[Issue]
+    django_settings_module: str | None = Field(
+        default=None, description="Value of DJANGO_SETTINGS_MODULE set by the project, if any"
+    )
 
 
 class RepositoryProfile(RepositorySummary):

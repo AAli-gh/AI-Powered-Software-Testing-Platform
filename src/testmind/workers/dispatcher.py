@@ -5,7 +5,7 @@ import uuid
 
 from celery import Celery
 
-from testmind.workers.tasks import EXECUTE_ANALYSIS_RUN, GENERATE_TESTS
+from testmind.workers.tasks import EXECUTE_ANALYSIS_RUN, EXECUTE_TESTS, GENERATE_TESTS
 
 
 class CeleryTaskDispatcher:
@@ -19,3 +19,6 @@ class CeleryTaskDispatcher:
 
     async def dispatch_test_generation(self, generation_id: uuid.UUID) -> None:
         await asyncio.to_thread(self._app.send_task, GENERATE_TESTS, args=[str(generation_id)])
+
+    async def dispatch_test_execution(self, execution_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._app.send_task, EXECUTE_TESTS, args=[str(execution_id)])
