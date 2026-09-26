@@ -48,6 +48,22 @@ class Settings(BaseSettings):
 
     celery_task_time_limit_seconds: int = Field(default=3600, ge=10)
 
+    # --- AI test generation. The API key itself is NOT a TestMind setting: the Anthropic SDK
+    # reads ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile) directly,
+    # so the secret never passes through TestMind's configuration or logs.
+    llm_provider: Literal["anthropic", "disabled"] = "anthropic"
+    llm_model: str = Field(default="claude-opus-5", min_length=1, max_length=100)
+    llm_max_tokens: int = Field(default=16000, ge=1024, le=128000)
+    llm_timeout_seconds: float = Field(default=600.0, gt=0)
+    generation_max_iterations: int = Field(default=3, ge=1, le=10)
+    generation_max_targets: int = Field(default=10, ge=1, le=200)
+
+    # --- Sandbox for running untrusted code (generated tests). See ADR-0003.
+    sandbox_image: str = Field(default="testmind-sandbox:local", min_length=1, max_length=200)
+    sandbox_timeout_seconds: int = Field(default=120, ge=5, le=3600)
+    sandbox_memory: str = Field(default="512m", pattern=r"^[0-9]+[kmg]$")
+    sandbox_cpus: float = Field(default=1.0, gt=0, le=16)
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalise_log_level(cls, value: object) -> object:

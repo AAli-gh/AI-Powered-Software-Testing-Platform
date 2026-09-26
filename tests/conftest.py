@@ -35,6 +35,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if any(f"tests/{name}/" in item.nodeid for name in INTEGRATION_DIRS):
             item.add_marker(pytest.mark.integration)
+        if "tests/sandbox/" in item.nodeid:
+            item.add_marker(pytest.mark.sandbox)
 
 
 @pytest.fixture
@@ -78,7 +80,10 @@ async def engine(migrated_database: None, settings: Settings) -> AsyncIterator[A
     engine = create_engine(settings, pooled=False)
     async with engine.begin() as connection:
         await connection.execute(
-            text("TRUNCATE code_analyses, repository_analyses, analysis_runs, projects CASCADE")
+            text(
+                "TRUNCATE test_generations, code_analyses, repository_analyses, "
+                "analysis_runs, projects CASCADE"
+            )
         )
     yield engine
     await engine.dispose()

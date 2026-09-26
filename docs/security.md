@@ -10,7 +10,9 @@ write. The platform must assume that code is hostile.
 | Reading files outside the intended repositories (path traversal, symlinks) | Paths resolved with symlinks followed and required to be strictly inside `TESTMIND_REPOS_ROOT`, checked at registration and again at execution. Covered by unit and API tests | — |
 | Hostile repository content during analysis | The analyzers never import or run repository code: `ast` parsing, `ast.literal_eval` for `setup.py`, `yaml.safe_load`, `tomllib`. Symlinks are never followed (`O_NOFOLLOW` on open), `-r` includes cannot leave the repository, and file count, size and depth are bounded ([details](repository-analyzer.md#safety-and-limits)) | — |
 | Modifying analysed repositories | Repositories root mounted **read-only** in `api` and `worker` | Test execution works on a disposable copy |
-| Executing untrusted repository code on the platform host | Not applicable yet: nothing is executed | Sandboxed runner containers with CPU, memory, pids, timeout, network and filesystem limits ([ADR-0003](adr/0003-sandboxed-execution.md)) |
+| Executing untrusted code (the repository plus LLM-written tests) on the platform host | Only inside `DockerSandbox`: `--network none`, `--cap-drop ALL`, `no-new-privileges`, user 65534, `--read-only` root with a small `noexec` `/tmp`, repository and tests mounted read-only, memory/CPU/pids limits, wall-clock timeout with forced removal, no host environment variables. Only the JUnit file is read back, with `defusedxml`. Covered by `tests/sandbox/test_docker_sandbox.py` | Per-project dependency installation (Phase 5), seccomp profile / gVisor (Phase 13) |
+| Prompt injection via analysed code | The code is framed as data in the prompt. Acceptance never depends on the model's words (static checks plus sandbox run). Forbidden imports/calls are rejected before execution | — |
+| Leaking the LLM API key | Read only by the Anthropic SDK from its own environment variable; not part of `Settings`, never logged; not passed into the sandbox (tested) | Secret manager integration (Phase 14) |
 | Container breakout / privilege escalation | Non-root user (uid 10001), read-only root FS, `no-new-privileges`, all capabilities dropped | Sandboxes: seccomp profile, optional gVisor runtime |
 | Leaking secrets | Secrets only in environment variables. `.env` git-ignored. `SecretStr` for connection URLs. Generic `500` bodies. gitleaks in pre-commit and CI | LLM/GitHub tokens handled the same way |
 | Vulnerable dependencies | Locked dependencies (`uv.lock`) audited with pip-audit in CI | — |
@@ -31,7 +33,11 @@ write. The platform must assume that code is hostile.
 
 - **Authentication/authorisation.** Do not expose the API beyond localhost or a trusted network
   until it exists.
-- **Sandboxed execution.** Required before any repository code is run (Phase 5).
+- **Docker access for the containerised worker.** The sandbox works wherever the worker can
+  reach Docker (local runs, CI). The compose stack deliberately does **not** mount the
+  Docker socket (it would give the worker root on the host), so generated tests from that
+  stack are stored as `unverified` until a socket proxy or rootless runtime is added
+  (Phases 5 and 13).
 - **Rate limiting.**
 
 ## Reporting

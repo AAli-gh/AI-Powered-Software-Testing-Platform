@@ -11,8 +11,9 @@ from celery import Celery
 from celery.contrib.testing.worker import start_worker
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from testmind.ai_engine.test_generator.models import GenerationOptions
 from testmind.core.config import Settings
-from testmind.db.models import AnalysisRun
+from testmind.db.models import AnalysisRun, TestGeneration
 from testmind.domain.enums import RunStatus
 from testmind.repositories.analysis_repository import AnalysisRepository
 from testmind.schemas.project import ProjectCreate
@@ -109,3 +110,39 @@ async def test_run_cancelled_before_pickup_is_skipped_by_worker(
         assert run is not None
         assert run.status is RunStatus.CANCELLED
         assert run.started_at is None
+
+
+async def test_generation_without_llm_fails_cleanly_in_the_real_worker(
+    session_factory: async_sessionmaker[AsyncSession],
+    celery_app: Celery,
+    repos_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No doubles at all: the real worker, the real provider factory, no API key."""
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    run_id = await queue_run(session_factory, celery_app, repos_root)
+    with start_worker(celery_app, pool="solo", perform_ping_check=False, loglevel="WARNING"):
+        await wait_for_terminal(session_factory, run_id)
+        async with session_factory() as session:
+            generation = TestGeneration(
+                run_id=run_id,
+                status=RunStatus.QUEUED,
+                options=GenerationOptions().model_dump(mode="json"),
+                provider="anthropic",
+            )
+            session.add(generation)
+            await session.commit()
+        await CeleryTaskDispatcher(celery_app).dispatch_test_generation(generation.id)
+
+        async with asyncio.timeout(WAIT_SECONDS):
+            while True:
+                async with session_factory() as session:
+                    stored = await session.get(TestGeneration, generation.id)
+                    if stored is not None and stored.status.is_terminal:
+                        break
+                await asyncio.sleep(0.1)
+
+    assert stored.status is RunStatus.FAILED
+    assert stored.error_message is not None
+    assert stored.error_message.startswith("No LLM provider is configured")

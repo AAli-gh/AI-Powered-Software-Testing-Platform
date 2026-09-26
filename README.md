@@ -13,9 +13,11 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–3 of 14 are complete: the platform foundation and the deterministic
-> repository and code analyzers.** Test generation and the rest of the pipeline are
-> **not implemented yet**. The [roadmap](#roadmap) shows exactly what exists today and what is
+> **Status: Phases 1–4 of 14 are complete: the platform foundation, the deterministic
+> repository and code analyzers, and AI test generation with sandboxed validation.**
+> The AI stage has been verified end to end with a scripted model. A live call to the
+> Anthropic API has not been run yet because no API key was available (see
+> [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
 > planned.
 
 ---
@@ -106,12 +108,24 @@ Everything listed here is implemented and tested.
     missing-validation checks (clearly marked with low confidence);
   - suppression per line with `# testmind: ignore[TM0xx]`, and `# noqa` for the equivalent
     flake8 codes.
+- **AI test generation** ([details](docs/ai-engine.md)), requested per run:
+  - deterministic target selection (public functions, prioritised by findings and
+    complexity) and one pytest module per source module;
+  - versioned prompt files; a provider-neutral LLM interface with an **Anthropic**
+    implementation (`claude-opus-5`, server-side refusal fallback);
+  - a **bounded validate → run → fix loop**: static checks, then a real pytest run in a
+    **Docker sandbox** (no network, read-only, non-root, CPU/memory/pids limits, timeout),
+    with concrete failures fed back to the model;
+  - tests that fail because of a real defect are kept as `xfail(strict=True)` and
+    reported as **suspected bugs** instead of being weakened;
+  - without an API key the endpoint answers `503 llm_not_configured`. It never pretends to
+    generate anything.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
   structured JSON logs with request-ID correlation, uniform error responses and OpenAPI docs.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 517 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 611 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -126,7 +140,8 @@ Everything listed here is implemented and tested.
 | Background jobs | Celery, Redis |
 | Observability | structlog (JSON), request IDs, health/readiness probes |
 | Quality | pytest, pytest-asyncio, coverage.py, ruff, mypy (strict) |
-| Security | bandit, pip-audit, gitleaks, non-root read-only containers |
+| AI | Anthropic SDK (Claude), versioned prompt files, provider-neutral interface |
+| Security | bandit, pip-audit, gitleaks, non-root read-only containers, Docker sandbox for untrusted code |
 | Packaging / infra | uv, Docker (multi-stage), docker compose, GitHub Actions |
 | Planned | coverage.py & mutation testing engines, LLM providers (pluggable), Playwright, GitHub API, React dashboard |
 
@@ -242,6 +257,8 @@ Errors always have the same shape:
 | `GET` | `/api/v1/runs/{id}/code/functions` | Functions/methods (`sort=complexity`, `min_complexity`, `public_only`, `path_prefix`) |
 | `GET` | `/api/v1/runs/{id}/code/classes` · `/code/modules` | Classes; modules with resolved imports |
 | `GET` | `/api/v1/code-rules` | Catalog of code-analysis rules |
+| `POST` | `/api/v1/runs/{id}/test-generations` | Queue AI test generation (`202`; `409` if the run has not succeeded; `503` if no LLM is configured) |
+| `GET` | `/api/v1/runs/{id}/test-generations` · `/api/v1/test-generations/{id}` | Generation status and result (generated code, statuses, suspected bugs) |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -250,13 +267,15 @@ Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs
 ```bash
 make setup           # uv sync + .env + pre-commit hooks
 make test-services   # throw-away PostgreSQL + Redis on localhost:55432 / 56379
+make sandbox-image   # Docker image in which generated tests are executed
 make check           # ruff + mypy --strict + full test suite with coverage (gate: 85 %)
 make help            # all targets
 ```
 
 | Suite | Location | Runs against |
 |---|---|---|
-| Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/` |
+| Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/`, the generator loop and prompt handling |
+| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, and the full generate → run → fix loop |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
@@ -292,9 +311,16 @@ In place today:
 - The Celery broker accepts JSON only (no pickle).
 - CI runs bandit, pip-audit and gitleaks.
 
-Planned: running repository code (tests, mutation testing) in dedicated sandbox containers with
-CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
-[ADR-0003](docs/adr/0003-sandboxed-execution.md) (Phases 5 and 13).
+- **Untrusted code runs only in a Docker sandbox** with no network, all capabilities dropped,
+  `no-new-privileges`, user `nobody`, a read-only root filesystem and a read-only repository,
+  CPU/memory/pids limits and a hard timeout. The JUnit output is parsed with `defusedxml`.
+- LLM output is never trusted: static checks and a sandboxed pytest run decide
+  ([ADR-0006](docs/adr/0006-llm-proposes-tools-decide.md)).
+
+Still open: giving the **containerised** worker access to Docker for the sandbox. It needs a
+socket proxy or rootless runtime, not the raw Docker socket; until then generated tests from
+the compose stack are stored as `unverified`. This is planned for Phases 5 and 13
+([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 
 ## Roadmap
 
@@ -303,7 +329,7 @@ CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
 | 1 | Architecture: stack, structure, Docker, PostgreSQL, Redis, backend skeleton, CI | ✅ Done |
 | 2 | Repository analyzer: languages, frameworks, file tree, dependencies, metadata | ✅ Done |
 | 3 | Code analyzer: AST, functions/classes, complexity, static analysis | ✅ Done |
-| 4 | Test generator: unit / edge / negative tests, bounded validation loop | Planned |
+| 4 | Test generator: unit / edge / negative tests, bounded validation loop | ✅ Done (live Anthropic call not yet verified: no API key available) |
 | 5 | Test runner: sandboxed pytest, structured results, tracebacks | Planned |
 | 6 | Coverage: coverage.py, file/function/branch coverage, weak areas | Planned |
 | 7 | AI failure analyzer: evidence, root-cause hypothesis, confidence | Planned |
@@ -320,6 +346,7 @@ CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
 - [Architecture](docs/architecture.md): layers, run lifecycle, data model, known limitations
 - [Repository analyzer](docs/repository-analyzer.md): detectors, confidence model, safety limits
 - [Code analyzer](docs/code-analyzer.md): symbols, complexity, rule catalog, suppression
+- [AI engine](docs/ai-engine.md): test generation pipeline, providers, prompts, sandbox validation
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

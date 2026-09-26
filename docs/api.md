@@ -157,3 +157,49 @@ Finding object:
   "evidence": "return total / count"
 }
 ```
+
+### AI test generation
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/v1/runs/{run_id}/test-generations` | Body (optional): `{"kinds": ["unit", "edge_cases", "negative"], "max_targets": 10, "path_prefix": "src/"}`. `202` queued. `404` unknown run. `409` run not succeeded. `422` invalid options. `503 llm_not_configured` if no LLM credentials. `503 dispatch_failed` if the queue is down |
+| `GET` | `/api/v1/runs/{run_id}/test-generations` | Paginated, newest first |
+| `GET` | `/api/v1/test-generations/{generation_id}` | Status plus `result` once succeeded |
+
+Result shape (illustrative values; the field structure is exactly what is stored):
+
+```json
+{
+  "status": "succeeded",
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "prompt_version": "v1",
+  "result": {
+    "targets_selected": 3,
+    "targets_available": 12,
+    "input_tokens": 5120,
+    "output_tokens": 1830,
+    "files": [
+      {
+        "path": "tests/testmind/test_inventory_stock.py",
+        "module": "inventory.stock",
+        "targets": ["average_price", "add_item", "parse_quantity"],
+        "status": "passed",
+        "test_count": 9,
+        "iterations": 2,
+        "run": {"passed": 7, "failed": 0, "errors": 0, "xfailed": 2, "skipped": 0},
+        "suspected_bugs": [
+          {"test": "test_average_price_zero_count", "reason": "possible bug: count=0 raises ZeroDivisionError"}
+        ],
+        "attempts": [
+          {"iteration": 1, "outcome": "failed", "feedback": "test_add_item_isolated: failed: …"},
+          {"iteration": 2, "outcome": "passed", "feedback": null}
+        ],
+        "code": "import pytest\nfrom inventory.stock import …"
+      }
+    ]
+  }
+}
+```
+
+File `status` values and their meaning are listed in [ai-engine.md](ai-engine.md#file-statuses).

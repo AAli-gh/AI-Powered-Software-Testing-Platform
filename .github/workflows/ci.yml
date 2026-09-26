@@ -75,10 +75,14 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: true
       - run: uv sync --locked
+      - name: Build the sandbox image (runs generated tests in isolation)
+        run: docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
       - name: Unit tests
-        run: uv run pytest -m "not integration" --cov --cov-report= --cov-fail-under=0
-      - name: Integration + API tests (with coverage gate over the whole suite)
-        run: uv run pytest -m integration --cov --cov-append --cov-report=term-missing --cov-report=xml
+        run: uv run pytest -m "not integration and not sandbox" --cov --cov-report= --cov-fail-under=0
+      - name: Integration, API and sandbox tests (with coverage gate over the whole suite)
+        run: >-
+          uv run pytest -m "integration or sandbox"
+          --cov --cov-append --cov-report=term-missing --cov-report=xml
       - uses: actions/upload-artifact@v4
         if: always() && matrix.python == '3.12'
         with:

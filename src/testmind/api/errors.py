@@ -15,6 +15,7 @@ from testmind.core.errors import (
     ConflictError,
     DispatchError,
     InvalidSourceError,
+    LLMUnavailableError,
     NotFoundError,
 )
 from testmind.core.logging import get_logger
@@ -27,6 +28,7 @@ STATUS_BY_ERROR: dict[type[AppError], int] = {
     ConflictError: status.HTTP_409_CONFLICT,
     InvalidSourceError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     DispatchError: status.HTTP_503_SERVICE_UNAVAILABLE,
+    LLMUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 HTTP_ERROR_CODES: dict[int, str] = {

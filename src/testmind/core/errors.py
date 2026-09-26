@@ -39,3 +39,9 @@ class DispatchError(AppError):
     """A background job could not be handed to the task queue."""
 
     code = "dispatch_failed"
+
+
+class LLMUnavailableError(AppError):
+    """AI features were requested but no LLM provider is configured."""
+
+    code = "llm_not_configured"

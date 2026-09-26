@@ -73,6 +73,18 @@ total=$(curl -fsS "$API/api/v1/runs/$buggy_run/code/findings" | json "['total']"
 [[ "$total" == "17" ]] || fail "expected 17 findings in buggy_inventory, got $total"
 echo "  17 findings, eval() reported as critical"
 
+echo "→ AI test generation"
+generation_status=$(curl -s -o /tmp/testmind-smoke-generation.json -w '%{http_code}' \
+  -X POST "$API/api/v1/runs/$run_id/test-generations")
+case "$generation_status" in
+  202) echo "  queued (LLM configured)" ;;
+  503) grep -q llm_not_configured /tmp/testmind-smoke-generation.json \
+         || fail "unexpected 503 body"
+       echo "  no LLM configured: honest 503 llm_not_configured" ;;
+  *) fail "unexpected status $generation_status for test generation" ;;
+esac
+rm -f /tmp/testmind-smoke-generation.json
+
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
 curl -fsS -X DELETE "$API/api/v1/projects/$buggy_id" -o /dev/null

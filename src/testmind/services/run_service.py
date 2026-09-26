@@ -10,7 +10,7 @@ from testmind.analyzers.code import CodeProfile
 from testmind.analyzers.repository import RepositoryProfile
 from testmind.core.errors import DispatchError, NotFoundError
 from testmind.core.logging import get_logger
-from testmind.db.models import AnalysisRun
+from testmind.db.models import AnalysisRun, TestGeneration
 from testmind.domain.enums import RunStatus
 from testmind.domain.run_lifecycle import ensure_transition
 from testmind.repositories.analysis_repository import AnalysisRepository
@@ -24,9 +24,12 @@ DISPATCH_FAILED_MESSAGE = "The run could not be handed to the task queue"
 
 
 def apply_transition(
-    run: AnalysisRun, target: RunStatus, *, error_message: str | None = None
+    run: AnalysisRun | TestGeneration, target: RunStatus, *, error_message: str | None = None
 ) -> None:
-    """Validate and apply a status change, maintaining the timestamp invariants."""
+    """Validate and apply a status change, maintaining the timestamp invariants.
+
+    Used for every job-like row (analysis runs, test generations): they share one lifecycle.
+    """
     ensure_transition(run.status, target)
     now = datetime.now(UTC)
     run.status = target

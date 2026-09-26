@@ -46,12 +46,16 @@ test-services: ## Start PostgreSQL + Redis used by the test suite
 test-services-down: ## Stop the test PostgreSQL + Redis
 	$(COMPOSE_TEST) down -v
 
+.PHONY: sandbox-image
+sandbox-image: ## Build the Docker image used to run untrusted code (generated tests)
+	docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
+
 .PHONY: test-unit
-test-unit: ## Run unit tests only (no services required)
-	uv run pytest -m "not integration"
+test-unit: ## Run unit tests only (no services, no Docker required)
+	uv run pytest -m "not integration and not sandbox"
 
 .PHONY: test
-test: ## Run the full test suite with coverage (needs `make test-services`)
+test: ## Full suite with coverage (needs `make test-services` and `make sandbox-image`)
 	uv run pytest --cov --cov-report=term-missing --cov-report=xml
 
 .PHONY: check

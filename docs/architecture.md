@@ -30,7 +30,7 @@ flowchart LR
 | `redis` | `redis:7-alpine` | Celery broker |
 | `migrate` | `api` | Applies Alembic migrations, then exits. `api` and `worker` start only after it succeeds |
 | `api` | `api` | HTTP API. Never does heavy work in the request path |
-| `worker` | `worker` | Executes queued jobs (today: repository analysis; later: test execution, mutation testing) |
+| `worker` | `worker` | Executes queued jobs: analysis runs and AI test generations (later: test execution, mutation testing) |
 
 ## Code layout
 
@@ -45,11 +45,13 @@ src/testmind/
 ├── repositories/  data access. The only place that builds SQL
 ├── services/      use cases shared by API and worker (+ the TaskDispatcher port)
 ├── analyzers/     deterministic analysers: repository/ (repository-analyzer.md), code/ (code-analyzer.md)
+├── ai_engine/     LLM interface + providers, versioned prompts, test_generator/ (ai-engine.md)
+├── sandbox/       isolated execution of untrusted code (Docker)
 ├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
 └── workers/       Celery app, tasks, Celery-backed TaskDispatcher
 ```
 
-Later phases add sibling packages (`test_engine/`, `ai_engine/`, `integrations/github/`)
+Later phases add sibling packages (`test_engine/`, `integrations/github/`)
 when they are implemented. Empty placeholder packages are deliberately
 not created ahead of time.
 
@@ -129,6 +131,7 @@ erDiagram
     projects ||--o{ analysis_runs : has
     analysis_runs ||--o| repository_analyses : produces
     analysis_runs ||--o| code_analyses : produces
+    analysis_runs ||--o{ test_generations : "AI tests for"
     projects {
         uuid id PK
         varchar name UK
