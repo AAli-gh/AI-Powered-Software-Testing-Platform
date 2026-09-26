@@ -15,3 +15,4 @@ These are fixtures, not part of TestMind itself: they are excluded from TestMind
 | `fastapi_todo/` | FastAPI, `src/` layout, PEP 621 + PEP 735 groups, pytest | App instance, console script, Docker Compose, GitHub Actions |
 | `flask_notes/` | Flask app factory, `setup.cfg`, unittest | `create_app()` factory, `console_scripts`, GitLab CI |
 | `buggy_inventory/` | Plain Python, **intentionally flawed** | Every code-analysis rule (see its `EXPECTED_FINDINGS.md`), plus code that must *not* be flagged |
+| `failing_suite/` | Plain Python, pytest, **intentionally failing** | Every failure category of the failure analysis: code and library exceptions, assertions, fixture, import and syntax errors, a strict xfail that passes (see its `EXPECTED_FAILURES.md`) |

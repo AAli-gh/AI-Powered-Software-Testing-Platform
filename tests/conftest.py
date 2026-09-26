@@ -81,8 +81,8 @@ async def engine(migrated_database: None, settings: Settings) -> AsyncIterator[A
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE test_executions, test_generations, code_analyses, repository_analyses, "
-                "analysis_runs, projects CASCADE"
+                "TRUNCATE failure_analyses, test_executions, test_generations, code_analyses, "
+                "repository_analyses, analysis_runs, projects CASCADE"
             )
         )
     yield engine

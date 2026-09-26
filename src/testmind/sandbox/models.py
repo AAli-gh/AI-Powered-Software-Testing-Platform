@@ -37,6 +37,9 @@ class SandboxResult(BaseModel):
     output: str = Field(description="Truncated combined stdout/stderr")
     coverage_json: str | None = Field(default=None, description="coverage.py JSON, if measured")
     coverage_error: str | None = Field(default=None, description="Why coverage is missing")
+    failures_json: str | None = Field(
+        default=None, description="Failure records of the testmind_failures pytest plugin"
+    )
 
     def count(self, outcome: Outcome) -> int:
         return sum(1 for t in self.tests if t.outcome is outcome)

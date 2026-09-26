@@ -13,6 +13,7 @@ from testmind.core.config import Settings
 from testmind.coverage_engine import CoverageReport
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
+from testmind.failure_engine import FailureCategory, FailureReport
 from testmind.services.execution_service import ExecutionService
 from testmind.test_engine.models import ExecutionOutcome, TestRunReport
 from testmind.workers.celery_app import create_celery_app
@@ -75,3 +76,9 @@ async def test_repository_suite_runs_through_the_whole_stack(
     coverage = CoverageReport.model_validate(row.coverage)
     assert [(f.path, f.percent) for f in coverage.files] == [("calc.py", 100.0), ("main.py", 0.0)]
     assert coverage.tool == "coverage.py 7.16.1"
+    # The deterministic failure analysis ran in the worker too.
+    failures = FailureReport.model_validate(row.failures)
+    [group] = failures.groups
+    assert group.category is FailureCategory.ASSERTION_FAILURE
+    assert [t.nodeid for t in group.tests] == ["test_calc.py::test_wrong"]
+    assert "assert 2 == 3" in group.message

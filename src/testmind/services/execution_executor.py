@@ -53,7 +53,7 @@ class ExecutionExecutor:
             profile = RepositoryProfile.model_validate(analysis.profile) if analysis else None
             code_analysis = await analyses.get_code_for_run(execution.run_id)
             code = CodeProfile.model_validate(code_analysis.profile) if code_analysis else None
-            generated = await _generated_files(generations, execution.generation_id)
+            generated = await generated_files(generations, execution.generation_id)
             apply_transition(execution, RunStatus.RUNNING)
             await session.commit()
 
@@ -87,6 +87,8 @@ class ExecutionExecutor:
             if result is not None:
                 execution.report = result.report.model_dump(mode="json")
                 execution.outcome = result.report.outcome
+                if result.failures is not None:
+                    execution.failures = result.failures.model_dump(mode="json")
                 if result.coverage is not None:
                     execution.coverage = result.coverage.model_dump(mode="json")
                     execution.coverage_percent = result.coverage.totals.percent
@@ -95,7 +97,7 @@ class ExecutionExecutor:
         return status
 
 
-async def _generated_files(
+async def generated_files(
     generations: GenerationRepository, generation_id: uuid.UUID | None
 ) -> dict[str, str]:
     """Generated test modules (sandbox path -> source) of an included generation."""

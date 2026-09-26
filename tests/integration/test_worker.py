@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.ai_engine.test_generator.models import GenerationOptions
 from testmind.core.config import Settings
-from testmind.db.models import AnalysisRun, TestGeneration
+from testmind.db.models import AnalysisRun, FailureAnalysis, TestGeneration
 from testmind.domain.enums import RunStatus
 from testmind.repositories.analysis_repository import AnalysisRepository
 from testmind.schemas.project import ProjectCreate
@@ -21,6 +21,7 @@ from testmind.services.project_service import ProjectService
 from testmind.services.run_service import RunService
 from testmind.workers.celery_app import create_celery_app
 from testmind.workers.dispatcher import CeleryTaskDispatcher
+from tests.integration.test_failure_analysis import failed_execution
 
 WAIT_SECONDS = 20
 
@@ -142,6 +143,38 @@ async def test_generation_without_llm_fails_cleanly_in_the_real_worker(
                     if stored is not None and stored.status.is_terminal:
                         break
                 await asyncio.sleep(0.1)
+
+    assert stored.status is RunStatus.FAILED
+    assert stored.error_message is not None
+    assert stored.error_message.startswith("No LLM provider is configured")
+
+
+@pytest.mark.usefixtures("worker")
+async def test_failure_analysis_without_llm_fails_cleanly_in_the_real_worker(
+    session_factory: async_sessionmaker[AsyncSession],
+    celery_app: Celery,
+    repos_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real worker and provider factory, no API key: the job fails with the reason."""
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    execution_id = await failed_execution(session_factory, repos_root)
+    async with session_factory() as session:
+        analysis = FailureAnalysis(
+            execution_id=execution_id, status=RunStatus.QUEUED, provider="anthropic"
+        )
+        session.add(analysis)
+        await session.commit()
+    await CeleryTaskDispatcher(celery_app).dispatch_failure_analysis(analysis.id)
+
+    async with asyncio.timeout(WAIT_SECONDS):
+        while True:
+            async with session_factory() as session:
+                stored = await session.get(FailureAnalysis, analysis.id)
+                if stored is not None and stored.status.is_terminal:
+                    break
+            await asyncio.sleep(0.1)
 
     assert stored.status is RunStatus.FAILED
     assert stored.error_message is not None

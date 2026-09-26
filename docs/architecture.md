@@ -135,6 +135,7 @@ erDiagram
     analysis_runs ||--o{ test_generations : "AI tests for"
     analysis_runs ||--o{ test_executions : "suite runs for"
     test_generations |o--o{ test_executions : "included in"
+    test_executions ||--o{ failure_analyses : "AI analyses of"
     projects {
         uuid id PK
         varchar name UK
@@ -178,6 +179,17 @@ erDiagram
         jsonb report "TestRunReport"
         jsonb coverage "CoverageReport"
         float coverage_percent
+        jsonb failures "FailureReport (deterministic)"
+        text error_message
+    }
+    failure_analyses {
+        uuid id PK
+        uuid execution_id FK "ON DELETE CASCADE, indexed"
+        varchar status "job lifecycle"
+        varchar provider
+        varchar model
+        varchar prompt_version
+        jsonb result "FailureAnalysisResult (AI)"
         text error_message
     }
 ```
@@ -193,8 +205,10 @@ erDiagram
   test files as input.
 - `test_executions.coverage` holds the whole `CoverageReport`; `coverage_percent` duplicates
   its total so lists and comparisons do not have to load the document.
-- Tables for findings, regressions, mutation results and so on are added by the phases that
-  produce that data.
+- `test_executions.failures` is the deterministic failure report, written with the execution;
+  `failure_analyses` holds the optional AI jobs about it.
+- Tables for regressions, mutation results and so on are added by the phases that produce that
+  data.
 - `tests/integration/test_migrations.py` fails if the ORM models and the migrations drift apart.
 
 ## Configuration and logging

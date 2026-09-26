@@ -57,6 +57,7 @@ def result(
     timed_out: bool = False,
     coverage_json: str | None = None,
     coverage_error: str | None = None,
+    failures_json: str | None = None,
 ) -> SandboxResult:
     return SandboxResult(
         exit_code=exit_code,
@@ -66,6 +67,7 @@ def result(
         output="out",
         coverage_json=coverage_json,
         coverage_error=coverage_error,
+        failures_json=failures_json,
     )
 
 
@@ -286,3 +288,55 @@ def test_missing_coverage_is_explained(
 def test_no_run_means_no_coverage(profile: RepositoryProfile) -> None:
     report = run(profile, Sandbox(available=False))
     assert report.coverage_error == "Coverage was not measured: sandbox unavailable"
+
+
+# ---------------------------------------------------------------------------------- failures
+FAILURES_JSON = json.dumps(
+    {
+        "version": 1,
+        "rootdir": "/workspace/src",
+        "failures": [
+            {
+                "phase": "call",
+                "path": "/workspace/src/tests/test_a.py",
+                "name": "t",
+                "line": 3,
+                "exception": {"type": "ZeroDivisionError", "message": "division by zero"},
+                "frames": [
+                    {"path": "/workspace/src/tests/test_a.py", "line": 4, "function": "t"},
+                    {"path": "/workspace/src/app.py", "line": 3, "function": "f"},
+                ],
+            }
+        ],
+    }
+)
+
+
+def test_failures_are_analysed_after_every_run(tmp_path: Path) -> None:
+    profile, code = code_for(tmp_path)
+    sandbox = Sandbox(result(case("t", Outcome.FAILED), exit_code=1, failures_json=FAILURES_JSON))
+    suite = TestSuiteRunner(sandbox, Images()).run(tmp_path, profile, code=code)
+
+    job = sandbox.jobs[0]
+    assert (job.capture_failures, job.continue_on_collection_errors) == (True, True)
+    assert suite.failures is not None
+    [group] = suite.failures.groups
+    assert group.exception_type == "ZeroDivisionError"
+    assert group.function is not None
+    assert group.function.qualname == "f"
+    assert suite.failures.unanalysed_tests == []
+
+
+def test_unreadable_failure_capture_is_noted(tmp_path: Path) -> None:
+    profile, code = code_for(tmp_path)
+    sandbox = Sandbox(result(case("t", Outcome.FAILED), exit_code=1, failures_json="{}"))
+    suite = TestSuiteRunner(sandbox, Images()).run(tmp_path, profile, code=code)
+    assert suite.failures is not None
+    assert suite.failures.groups == []
+    assert suite.failures.unanalysed_tests == ["tests/test_a.py::t"]
+    assert suite.failures.notes[0].startswith("Not a TestMind failure capture")
+
+
+def test_no_sandbox_run_means_no_failure_report(profile: RepositoryProfile) -> None:
+    suite = TestSuiteRunner(Sandbox(available=False), Images()).run(Path("/repo"), profile)
+    assert suite.failures is None

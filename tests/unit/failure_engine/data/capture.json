@@ -1,0 +1,327 @@
+{
+ "version": 1,
+ "rootdir": "/workspace/src",
+ "failures": [
+  {
+   "phase": "collect",
+   "nodeid": "tests/test_missing.py",
+   "longrepr": "ImportError while importing test module '/workspace/src/tests/test_missing.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_missing.py:1: in <module>\n    import not_installed_package\nE   ModuleNotFoundError: No module named 'not_installed_package'"
+  },
+  {
+   "phase": "collect",
+   "nodeid": "tests/test_syntax.py",
+   "longrepr": "/usr/local/lib/python3.12/site-packages/_pytest/python.py:498: in importtestmodule\n    mod = import_path(\n/usr/local/lib/python3.12/site-packages/_pytest/pathlib.py:587: in import_path\n    importlib.import_module(module_name)\n/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n<frozen importlib._bootstrap>:1387: in _gcd_import\n    ???\n<frozen importlib._bootstrap>:1360: in _find_and_load\n    ???\n<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked\n    ???\n<frozen importlib._bootstrap>:935: in _load_unlocked\n    ???\n/usr/local/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:177: in exec_module\n    source_stat, co = _rewrite_test(fn, self.config)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:357: in _rewrite_test\n    tree = ast.parse(source, filename=strfn)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/ast.py:52: in parse\n    return compile(source, filename, mode, flags,\nE     File \"/workspace/src/tests/test_syntax.py\", line 1\nE       def test_x(:\nE                  ^\nE   SyntaxError: invalid syntax"
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_assertion",
+   "line": 6,
+   "exception": {
+    "type": "AssertionError",
+    "message": "assert 'negative' == 'zero'\n  \n  - zero\n  + negative"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 7,
+     "function": "test_assertion",
+     "code": "assert label(0) == \"zero\""
+    }
+   ],
+   "locals": {}
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_zero_division",
+   "line": 10,
+   "exception": {
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 11,
+     "function": "test_zero_division",
+     "code": "assert average(10, 0) == 0"
+    },
+    {
+     "path": "/workspace/src/shop/stock.py",
+     "line": 5,
+     "function": "average",
+     "code": "return total / count"
+    }
+   ],
+   "locals": {
+    "total": "10",
+    "count": "0"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_zero_division_again",
+   "line": 14,
+   "exception": {
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 15,
+     "function": "test_zero_division_again",
+     "code": "assert average(5, 0) == 0"
+    },
+    {
+     "path": "/workspace/src/shop/stock.py",
+     "line": 5,
+     "function": "average",
+     "code": "return total / count"
+    }
+   ],
+   "locals": {
+    "total": "5",
+    "count": "0"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_library",
+   "line": 18,
+   "exception": {
+    "type": "json.decoder.JSONDecodeError",
+    "message": "Expecting value: line 1 column 1 (char 0)"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 19,
+     "function": "test_library",
+     "code": "load(\"not json\")"
+    },
+    {
+     "path": "/workspace/src/shop/stock.py",
+     "line": 9,
+     "function": "load",
+     "code": "return json.loads(text)"
+    },
+    {
+     "path": "/usr/local/lib/python3.12/json/__init__.py",
+     "line": 346,
+     "function": "loads",
+     "code": "return _default_decoder.decode(s)"
+    },
+    {
+     "path": "/usr/local/lib/python3.12/json/decoder.py",
+     "line": 338,
+     "function": "decode",
+     "code": "obj, end = self.raw_decode(s, idx=_w(s, 0).end())"
+    },
+    {
+     "path": "/usr/local/lib/python3.12/json/decoder.py",
+     "line": 356,
+     "function": "raw_decode",
+     "code": "raise JSONDecodeError(\"Expecting value\", s, err.value) from None"
+    }
+   ],
+   "locals": {
+    "text": "'not json'"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_in_test",
+   "line": 22,
+   "exception": {
+    "type": "IndexError",
+    "message": "list index out of range"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 24,
+     "function": "test_in_test",
+     "code": "assert items[0] == 1"
+    }
+   ],
+   "locals": {
+    "items": "[]"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_chain",
+   "line": 27,
+   "exception": {
+    "type": "RuntimeError",
+    "message": "bad value"
+   },
+   "chain": [
+    {
+     "type": "ValueError",
+     "message": "invalid literal for int() with base 10: 'x'"
+    }
+   ],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 28,
+     "function": "test_chain",
+     "code": "Wrapper().run(\"x\")"
+    },
+    {
+     "path": "/workspace/src/shop/stock.py",
+     "line": 23,
+     "function": "run",
+     "code": "raise RuntimeError(\"bad value\") from exc"
+    }
+   ],
+   "locals": {
+    "self": "<shop.stock.Wrapper object at 0x7f61da341f40>",
+    "value": "'x'"
+   }
+  },
+  {
+   "phase": "setup",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_fixture",
+   "line": 36,
+   "exception": {
+    "type": "KeyError",
+    "message": "'config'"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 33,
+     "function": "broken",
+     "code": "raise KeyError(\"config\")"
+    }
+   ],
+   "locals": {}
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_strict_xpass",
+   "line": 40,
+   "unexpected_pass": true,
+   "longrepr": "[XPASS(strict)] possible bug"
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_param[1]",
+   "line": 45,
+   "exception": {
+    "type": "AssertionError",
+    "message": "assert 'positive' == 'negative'\n  \n  - negative\n  + positive"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 47,
+     "function": "test_param",
+     "code": "assert label(n) == \"negative\""
+    }
+   ],
+   "locals": {
+    "n": "1"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_param[2]",
+   "line": 45,
+   "exception": {
+    "type": "AssertionError",
+    "message": "assert 'positive' == 'negative'\n  \n  - negative\n  + positive"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 47,
+     "function": "test_param",
+     "code": "assert label(n) == \"negative\""
+    }
+   ],
+   "locals": {
+    "n": "2"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/src/tests/test_stock.py",
+   "name": "test_method",
+   "line": 51,
+   "exception": {
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/src/tests/test_stock.py",
+     "line": 52,
+     "function": "test_method",
+     "code": "assert average(1, 0)"
+    },
+    {
+     "path": "/workspace/src/shop/stock.py",
+     "line": 5,
+     "function": "average",
+     "code": "return total / count"
+    }
+   ],
+   "locals": {
+    "total": "1",
+    "count": "0"
+   }
+  },
+  {
+   "phase": "call",
+   "path": "/workspace/tests/testmind/test_gen.py",
+   "name": "test_gen",
+   "line": 3,
+   "exception": {
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   },
+   "chain": [],
+   "frames": [
+    {
+     "path": "/workspace/tests/testmind/test_gen.py",
+     "line": 4,
+     "function": "test_gen",
+     "code": "assert average(1, 0) == 0"
+    },
+    {
+     "path": "/workspace/src/shop/stock.py",
+     "line": 5,
+     "function": "average",
+     "code": "return total / count"
+    }
+   ],
+   "locals": {
+    "total": "1",
+    "count": "0"
+   }
+  }
+ ],
+ "dropped": 0
+}

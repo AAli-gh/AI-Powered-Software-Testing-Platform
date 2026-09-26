@@ -13,10 +13,11 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–6 of 14 are complete: the platform foundation, the deterministic
+> **Status: Phases 1–7 of 14 are complete: the platform foundation, the deterministic
 > repository and code analyzers, AI test generation with sandboxed validation, the
-> sandboxed test runner, and coverage analysis with coverage-guided test generation.**
-> The AI stage has been verified end to end with a scripted model. A live call to the
+> sandboxed test runner, coverage analysis with coverage-guided test generation, and
+> failure analysis (deterministic grouping plus evidence-checked AI root causes).**
+> The AI stages have been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
 > planned.
@@ -140,6 +141,18 @@ Everything listed here is implemented and tested.
     prompt lists the lines and branches that never ran. Comparing executions measures the
     effect. On `examples/buggy_inventory` (scripted model, real sandbox) total coverage rose
     from 8.47 % to 38.98 %.
+- **Failure analysis** ([details](docs/failure-analysis.md)), after every execution:
+  - failures captured as **structured data** by a pytest plugin in the sandbox (exception,
+    cause chain, frames, locals at the crash site), not parsed from traceback text;
+  - **9 categories** (exception in code / library / test, assertion, fixture, import, syntax,
+    collection error, unexpected pass) and **grouping by cause**: four tests failing with the
+    same exception on the same line are one group;
+  - each group linked to the failing function's complexity, static-analysis findings and
+    coverage, with the facts as evidence; blame decided by the facts where they leave no
+    doubt (e.g. a missing third-party module is the environment);
+  - on request, an **AI root-cause hypothesis** per group (blame, evidence, fix, confidence):
+    every cited line is checked against what the model was actually shown, and unverified
+    evidence lowers the confidence.
 - **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
   starts.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
@@ -147,7 +160,7 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 735 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 800 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -199,6 +212,7 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_HOST_REPOS_DIR` | `./examples` | Host directory mounted read-only at `/repos` |
 | `TESTMIND_CELERY_TASK_TIME_LIMIT_SECONDS` | `3600` | Hard time limit per job |
 | `TESTMIND_COVERAGE_THRESHOLD` | `80` | Functions below this coverage are reported as gaps |
+| `TESTMIND_FAILURE_ANALYSIS_MAX_GROUPS` | `10` | Failure groups the LLM explains per requested analysis |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | — | Database container credentials |
 
 ## Usage
@@ -287,6 +301,9 @@ Errors always have the same shape:
 | `GET` | `/api/v1/test-executions/{id}` · `/tests` · `/logs` | Summary (including coverage %); per-test results (`outcome`, `generated` filters); pytest and install logs |
 | `GET` | `/api/v1/test-executions/{id}/coverage` · `/files` · `/functions` · `/gaps` | Coverage totals and riskiest gaps; per file / function (`below`, `sort=percent`); ranked gaps |
 | `GET` | `/api/v1/test-executions/{id}/coverage/compare?base={id}` | Coverage change between two executions |
+| `GET` | `/api/v1/test-executions/{id}/failures` · `/failures/groups[/{group_id}]` | Deterministic failure analysis: categories, groups, evidence |
+| `POST` | `/api/v1/test-executions/{id}/failure-analyses` | Queue an AI root-cause analysis (`503` without an LLM) |
+| `GET` | `/api/v1/test-executions/{id}/failure-analyses` · `/api/v1/failure-analyses/{id}` | Hypotheses with verified evidence and adjusted confidence |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -303,7 +320,7 @@ make help            # all targets
 | Suite | Location | Runs against |
 |---|---|---|
 | Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/`, the generator loop and prompt handling |
-| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, and the coverage-guided loop |
+| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, the coverage-guided loop, and failure capture and analysis |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
@@ -342,7 +359,8 @@ In place today:
 - **Untrusted code runs only in a Docker sandbox** with no network, all capabilities dropped,
   `no-new-privileges`, user `nobody`, a read-only root filesystem and a read-only repository,
   CPU/memory/pids limits and a hard timeout. The JUnit output is parsed with `defusedxml`.
-- LLM output is never trusted: static checks and a sandboxed pytest run decide
+- LLM output is never trusted: static checks and a sandboxed pytest run decide; in failure
+  analysis every cited line is checked against what the model was shown
   ([ADR-0006](docs/adr/0006-llm-proposes-tools-decide.md)).
 
 - Project dependencies are installed **wheels only** (`pip --only-binary=:all:`), so no
@@ -364,7 +382,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 | 4 | Test generator: unit / edge / negative tests, bounded validation loop | ✅ Done (live Anthropic call not yet verified: no API key available) |
 | 5 | Test runner: sandboxed pytest, structured results, tracebacks | ✅ Done |
 | 6 | Coverage: coverage.py, file/function/branch coverage, weak areas, coverage-guided generation | ✅ Done |
-| 7 | AI failure analyzer: evidence, root-cause hypothesis, confidence | Planned |
+| 7 | AI failure analyzer: evidence, root-cause hypothesis, confidence | ✅ Done (AI step verified with a scripted model) |
 | 8 | Regression engine: git diff, affected tests, test selection | Planned |
 | 9 | Mutation testing: mutants, score, survivors | Planned |
 | 10 | API & E2E testing: endpoint discovery, API tests, Playwright | Planned |
@@ -381,6 +399,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 - [AI engine](docs/ai-engine.md): test generation pipeline, providers, prompts, sandbox validation
 - [Test engine](docs/test-engine.md): runner images, sandboxed execution, reports, orphaned jobs
 - [Coverage](docs/coverage.md): measurement, function mapping, gap ranking, coverage-guided generation
+- [Failure analysis](docs/failure-analysis.md): structured capture, categories, grouping, evidence, AI hypotheses and their checks
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

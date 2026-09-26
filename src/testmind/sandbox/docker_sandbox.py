@@ -6,7 +6,8 @@ Isolation (every run):
   the repository and the test files mounted read-only, a wall-clock timeout enforced from outside
   (the container is killed), and no environment variables from the host.
 Only /out (a fresh temporary directory) is writable, and only the JUnit report (and, when
-requested, coverage.py's JSON report) is read back, with a size cap.
+requested, coverage.py's JSON report and the failure records of TestMind's pytest plugin) is
+read back, with a size cap.
 """
 
 from __future__ import annotations
@@ -30,7 +31,9 @@ MAX_OUTPUT = 20_000
 PIDS_LIMIT = 256
 DOCKER_CHECK_TIMEOUT = 15
 MAX_COVERAGE_BYTES = 50 * 1024 * 1024
+MAX_FAILURES_BYTES = 10 * 1024 * 1024
 COVERAGE_CONFIG = "/opt/testmind/coveragerc"  # baked into the sandbox image
+PLUGIN_DIR = "/opt/testmind"  # testmind_failures.py, baked into the sandbox image
 
 
 class DockerSandbox:
@@ -126,6 +129,11 @@ class DockerSandbox:
             coverage_json, coverage_error = (
                 _read_coverage(out_dir / "coverage.json") if job.coverage else (None, None)
             )
+            failures_json = (
+                _read_capped(out_dir / "failures.json", MAX_FAILURES_BYTES)
+                if job.capture_failures
+                else None
+            )
 
         logger.info(
             "sandbox_finished", exit_code=exit_code, timed_out=timed_out, seconds=round(duration, 2)
@@ -138,6 +146,7 @@ class DockerSandbox:
             output=output[-MAX_OUTPUT:],
             coverage_json=coverage_json,
             coverage_error=coverage_error,
+            failures_json=failures_json,
         )
 
     def _command(
@@ -166,6 +175,13 @@ class DockerSandbox:
                 f"--cov-config={COVERAGE_CONFIG}",
                 "--cov-report=json:/out/coverage.json",
             ]
+        plugin = ["-p", "testmind_failures"] if job.capture_failures else []
+        if job.continue_on_collection_errors:
+            plugin.append("--continue-on-collection-errors")
+        # The plugin directory comes first so that no repository module can shadow it.
+        pythonpath = "/workspace/src:/workspace/src/src"
+        if job.capture_failures:
+            pythonpath = f"{PLUGIN_DIR}:{pythonpath}"
         return [
             self._docker, "run", "--rm", "--name", name,
             "--network", "none",
@@ -179,7 +195,7 @@ class DockerSandbox:
             "--cpus", str(self._cpus),
             "--pids-limit", str(PIDS_LIMIT),
             "--workdir", rootdir,
-            "--env", "PYTHONPATH=/workspace/src:/workspace/src/src",
+            "--env", f"PYTHONPATH={pythonpath}",
             "--env", "PYTHONDONTWRITEBYTECODE=1",
             "--env", "HOME=/tmp",
             *env,
@@ -196,6 +212,7 @@ class DockerSandbox:
             "-o", "junit_family=xunit1",  # adds file and line to each test case
             "--junitxml", "/out/report.xml",
             *coverage,
+            *plugin,
             "-q", *targets,
         ]  # fmt: skip
 
@@ -217,6 +234,15 @@ class PytestJob:
     image: str | None = None  # defaults to the sandbox base image
     env: dict[str, str] = field(default_factory=dict)
     coverage: bool = False  # measure line + branch coverage of the repository
+    capture_failures: bool = False  # structured failure records (testmind_failures plugin)
+    # One test module that fails to import must not hide the results of all the others.
+    continue_on_collection_errors: bool = False
+
+
+def _read_capped(path: Path, limit: int) -> str | None:
+    if not path.is_file() or path.stat().st_size > limit:
+        return None
+    return path.read_text("utf-8", errors="replace")
 
 
 def _read_coverage(path: Path) -> tuple[str | None, str | None]:

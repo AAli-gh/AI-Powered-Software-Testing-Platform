@@ -37,6 +37,8 @@ class TestExecution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Serialised CoverageReport, and its total percentage (cheap to list and compare).
     coverage: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     coverage_percent: Mapped[float | None] = mapped_column(Float)
+    # Serialised FailureReport: the deterministic failure analysis, made with every execution.
+    failures: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

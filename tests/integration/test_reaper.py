@@ -9,7 +9,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.core.config import get_settings
-from testmind.db.models import AnalysisRun, Project, TestExecution, TestGeneration
+from testmind.db.models import (
+    AnalysisRun,
+    FailureAnalysis,
+    Project,
+    TestExecution,
+    TestGeneration,
+)
 from testmind.domain.enums import RunStatus, SourceType
 from testmind.services.reaper import ORPHANED_MESSAGE, reap_orphaned_jobs
 from tests.conftest import TEST_DATABASE_URL, TEST_REDIS_URL
@@ -36,6 +42,11 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
         )
         execution = TestExecution(run_id=done_run.id, status=RunStatus.RUNNING, started_at=old)
         session.add_all([generation, execution])
+        await session.flush()
+        analysis = FailureAnalysis(
+            execution_id=execution.id, status=RunStatus.RUNNING, started_at=old, provider="x"
+        )
+        session.add(analysis)
         await session.commit()
         return {
             "stuck": stuck_run.id,
@@ -43,6 +54,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
             "done": done_run.id,
             "gen": generation.id,
             "exe": execution.id,
+            "fa": analysis.id,
         }
 
 
@@ -50,7 +62,7 @@ async def test_only_long_running_jobs_are_reaped(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     ids = await seed(session_factory)
-    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 3
+    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 4
 
     async with session_factory() as session:
         stuck = await session.get(AnalysisRun, ids["stuck"])
@@ -58,6 +70,7 @@ async def test_only_long_running_jobs_are_reaped(
         done = await session.get(AnalysisRun, ids["done"])
         generation = await session.get(TestGeneration, ids["gen"])
         execution = await session.get(TestExecution, ids["exe"])
+        analysis = await session.get(FailureAnalysis, ids["fa"])
     assert stuck is not None
     assert stuck.status is RunStatus.FAILED
     assert stuck.error_message == ORPHANED_MESSAGE
@@ -70,6 +83,8 @@ async def test_only_long_running_jobs_are_reaped(
     assert generation.status is RunStatus.FAILED
     assert execution is not None
     assert execution.status is RunStatus.FAILED
+    assert analysis is not None
+    assert analysis.status is RunStatus.FAILED
 
     assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 0
 
@@ -89,7 +104,7 @@ async def test_worker_startup_hook_reaps(
     sys.modules.pop("testmind.workers.main", None)
     try:
         main = importlib.import_module("testmind.workers.main")  # fresh, with the test env
-        assert await main.reap_on_startup() == 3
+        assert await main.reap_on_startup() == 4
     finally:
         sys.modules.pop("testmind.workers.main", None)
         get_settings.cache_clear()

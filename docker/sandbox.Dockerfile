@@ -10,6 +10,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 RUN pip install "pytest==8.4.2" "coverage==7.16.1" "pytest-cov==7.1.0"
 COPY docker/coveragerc /opt/testmind/coveragerc
+COPY docker/testmind_failures.py /opt/testmind/testmind_failures.py
 
 # Runs as nobody; everything the container may write is a tmpfs or the /out bind mount.
 USER 65534:65534

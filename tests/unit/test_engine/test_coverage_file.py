@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from testmind.sandbox import docker_sandbox
-from testmind.sandbox.docker_sandbox import _read_coverage
+from testmind.sandbox.docker_sandbox import _read_capped, _read_coverage
 
 
 def test_report_is_read(tmp_path: Path) -> None:
@@ -28,3 +28,10 @@ def test_oversized_report_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyP
         None,
         "The coverage report exceeds 2 MB",
     )
+
+
+def test_capped_reads(tmp_path: Path) -> None:
+    (tmp_path / "failures.json").write_text("12345")
+    assert _read_capped(tmp_path / "failures.json", 5) == "12345"
+    assert _read_capped(tmp_path / "failures.json", 4) is None
+    assert _read_capped(tmp_path / "missing.json", 5) is None

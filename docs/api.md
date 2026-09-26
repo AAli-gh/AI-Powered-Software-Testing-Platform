@@ -210,9 +210,22 @@ File `status` values and their meaning are listed in [ai-engine.md](ai-engine.md
 |---|---|---|
 | `POST` | `/api/v1/runs/{run_id}/test-executions` | Body (optional): `{"generation_id": "<uuid>"}` to add that generation's test modules. `202`. `404` unknown run, or a generation that does not belong to it. `409` run or generation not succeeded. `503 dispatch_failed` |
 | `GET` | `/api/v1/runs/{run_id}/test-executions` | Paginated summaries, newest first |
-| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict) and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment, `coverage_percent`, `coverage_error`) |
+| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict) and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment, `coverage_percent`, `coverage_error`, `failure_groups`) |
 | `GET` | `/api/v1/test-executions/{id}/tests` | Per-test results, filterable by `outcome` (`passed`, `failed`, `error`, `skipped`, `xfailed`) and `generated`. `limit` ≤ 500. `404` until a report exists |
 | `GET` | `/api/v1/test-executions/{id}/logs` | `{"output": pytest console tail, "install_log": pip/docker build tail}` |
+
+### Failure analysis
+
+Every execution that ran tests has a deterministic failure report; an AI analysis is queued
+on request ([details](failure-analysis.md)).
+
+| Method | Path | Parameters | Notes |
+|---|---|---|---|
+| `GET` | `/api/v1/test-executions/{id}/failures` | | `failed_tests`, `analysed_tests`, `unanalysed_tests`, `notes`, `groups`, `by_category`, `decided` (groups whose blame the facts decide). `404` until tests ran |
+| `GET` | `/api/v1/test-executions/{id}/failures/groups` | `category`, `limit` ≤ 100, `offset` | Groups, largest first: category, exception, crash frame, frames, locals, chain, tests, linked function, evidence, deterministic blame |
+| `GET` | `/api/v1/test-executions/{id}/failures/groups/{group_id}` | | One group (`404` if unknown) |
+| `POST` | `/api/v1/test-executions/{id}/failure-analyses` | | Queue an AI analysis. `202`; `409` no failure groups; `503 llm_not_configured`; `503 dispatch_failed` |
+| `GET` | `/api/v1/test-executions/{id}/failure-analyses` · `/api/v1/failure-analyses/{id}` | | Status; `result.hypotheses[]` with `status` (`analysed`, `deterministic`, `skipped`, `llm_error`), `blame`, `root_cause`, `evidence[]` (`verified`), `suggested_fix`, `model_confidence`, `confidence`, `notes` |
 
 ### Coverage
 

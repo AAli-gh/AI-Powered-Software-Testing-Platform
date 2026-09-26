@@ -56,6 +56,10 @@ USER 65534:65534
   every test case has a file and line).
 - **Coverage** is measured in the same run with coverage.py and TestMind's own config file;
   see [coverage.md](coverage.md).
+- **Failures** are captured as structured data by TestMind's pytest plugin and analysed
+  after every run ([failure-analysis.md](failure-analysis.md)). Suite runs use
+  `--continue-on-collection-errors`, so a test module that fails to import is reported as its
+  own error instead of stopping the whole run.
 - **Django:** when the project sets `DJANGO_SETTINGS_MODULE` to a string literal (in
   `manage.py`, `wsgi.py`, …), the value is extracted from the AST during repository
   analysis and passed to the sandbox, so `pytest-django` finds the settings.

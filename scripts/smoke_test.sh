@@ -97,15 +97,18 @@ done
 [[ "$execution_status" == "succeeded" ]] || fail "test execution ended as $execution_status"
 outcome=$(echo "$execution" | json "['outcome']")
 coverage_status=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/test-executions/$execution_id/coverage")
+failures_status=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/test-executions/$execution_id/failures")
 case "$outcome" in
   passed)
     [[ "$coverage_status" == "200" ]] || fail "no coverage report for a passed execution"
+    [[ "$failures_status" == "200" ]] || fail "no failure report for a finished execution"
     percent=$(echo "$execution" | json "['summary']['coverage_percent']")
     echo "  project tests passed in the sandbox, coverage ${percent}%"
     ;;
   sandbox_unavailable)
     [[ "$coverage_status" == "404" ]] || fail "coverage reported without a sandbox run"
-    echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no coverage"
+    [[ "$failures_status" == "404" ]] || fail "failure report without a sandbox run"
+    echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no coverage or failure report"
     ;;
   *) fail "unexpected test execution outcome: $outcome" ;;
 esac

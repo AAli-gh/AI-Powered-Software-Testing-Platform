@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # --- Coverage: functions below this percentage are reported as coverage gaps.
     coverage_threshold: float = Field(default=80.0, ge=0, le=100)
 
+    # --- AI failure analysis: failure groups explained per request (the rest are skipped).
+    failure_analysis_max_groups: int = Field(default=10, ge=1, le=100)
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalise_log_level(cls, value: object) -> object:

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from testmind.core.config import Settings
 from testmind.services.execution_service import ExecutionService
+from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
 from testmind.services.project_service import ProjectService
 from testmind.services.run_service import RunService
@@ -55,3 +56,12 @@ def get_execution_service(request: Request, session: SessionDep) -> ExecutionSer
 
 
 ExecutionServiceDep = Annotated[ExecutionService, Depends(get_execution_service)]
+
+
+def get_failure_analysis_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> FailureAnalysisService:
+    return FailureAnalysisService(session, request.app.state.dispatcher, settings)
+
+
+FailureAnalysisServiceDep = Annotated[FailureAnalysisService, Depends(get_failure_analysis_service)]

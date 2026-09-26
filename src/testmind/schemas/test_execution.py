@@ -35,6 +35,9 @@ class ExecutionSummary(BaseModel):
         description="Total line + branch coverage of production code, if measured"
     )
     coverage_error: str | None = Field(description="Why coverage is missing, if it is")
+    failure_groups: int | None = Field(
+        description="Failure groups found by the deterministic analysis (see /failures)"
+    )
 
 
 class TestExecutionRead(BaseModel):
@@ -71,6 +74,7 @@ class TestExecutionRead(BaseModel):
                 environment=report.environment,
                 coverage_percent=row.coverage_percent,
                 coverage_error=report.coverage_error,
+                failure_groups=len(row.failures["groups"]) if row.failures else None,
             )
         return cls(
             id=row.id,

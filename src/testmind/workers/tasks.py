@@ -12,6 +12,7 @@ from testmind.domain.enums import RunStatus
 from testmind.sandbox.docker_sandbox import DockerSandbox
 from testmind.sandbox.runner_image import RunnerImageBuilder
 from testmind.services.execution_executor import ExecutionExecutor
+from testmind.services.failure_analysis_executor import FailureAnalysisExecutor
 from testmind.services.generation_executor import GenerationExecutor
 from testmind.services.run_executor import RunExecutor
 from testmind.test_engine.runner import TestSuiteRunner
@@ -19,6 +20,7 @@ from testmind.test_engine.runner import TestSuiteRunner
 EXECUTE_ANALYSIS_RUN = "testmind.analysis_run.execute"
 GENERATE_TESTS = "testmind.test_generation.execute"
 EXECUTE_TESTS = "testmind.test_execution.execute"
+ANALYZE_FAILURES = "testmind.failure_analysis.execute"
 
 
 def register_tasks(app: Celery, settings: Settings) -> None:
@@ -32,6 +34,11 @@ def register_tasks(app: Celery, settings: Settings) -> None:
     @app.task(name=EXECUTE_TESTS, shared=False)
     def execute_tests(execution_id: str) -> str | None:
         status = asyncio.run(_execute_tests(settings, uuid.UUID(execution_id)))
+        return status.value if status else None
+
+    @app.task(name=ANALYZE_FAILURES, shared=False)
+    def analyze_failures(analysis_id: str) -> str | None:
+        status = asyncio.run(_analyze_failures(settings, uuid.UUID(analysis_id)))
         return status.value if status else None
 
     @app.task(name=GENERATE_TESTS, shared=False)
@@ -94,5 +101,20 @@ async def _execute_tests(settings: Settings, execution_id: uuid.UUID) -> RunStat
         )
         executor = ExecutionExecutor(create_session_factory(engine), settings.repos_root, runner)
         return await executor.execute(execution_id)
+    finally:
+        await engine.dispose()
+
+
+async def _analyze_failures(settings: Settings, analysis_id: uuid.UUID) -> RunStatus | None:
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = FailureAnalysisExecutor(
+            create_session_factory(engine),
+            settings.repos_root,
+            provider_factory=lambda: create_provider(settings),
+            max_tokens=settings.llm_max_tokens,
+            max_groups=settings.failure_analysis_max_groups,
+        )
+        return await executor.execute(analysis_id)
     finally:
         await engine.dispose()

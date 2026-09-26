@@ -7,12 +7,11 @@ used as keys to match files TestMind already knows (they are never opened).
 
 from __future__ import annotations
 
-import posixpath
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-PROJECT_PREFIX = "/workspace/src/"
+from testmind.sandbox.paths import repository_path
 
 
 class CoverageParseError(ValueError):
@@ -74,7 +73,7 @@ def parse_coverage_json(text: str, *, rootdir: str) -> RawCoverage:
 
     files: dict[str, RawFile] = {}
     for name, data in report.files.items():
-        path = _repository_path(name, rootdir)
+        path = repository_path(name, rootdir)
         if path is None:
             continue
         files[path] = RawFile(
@@ -89,10 +88,3 @@ def parse_coverage_json(text: str, *, rootdir: str) -> RawCoverage:
         branch_coverage=report.meta.branch_coverage,
         files=files,
     )
-
-
-def _repository_path(name: str, rootdir: str) -> str | None:
-    absolute = posixpath.normpath(posixpath.join(rootdir, name))
-    if not absolute.startswith(PROJECT_PREFIX):
-        return None
-    return absolute.removeprefix(PROJECT_PREFIX)
