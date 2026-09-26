@@ -156,6 +156,15 @@ the coverage endpoints answer `404` with the same reason:
 
 A run whose tests **fail** still has coverage. It reflects the tests that ran.
 
+## Per-test coverage
+
+Regression runs ([regression.md](regression.md)) add coverage.py's dynamic contexts
+(`--cov-context=test`, [`docker/coveragerc_contexts`](../docker/coveragerc_contexts)). The report
+then says which test executed which lines, and TestMind maps that onto functions. Ordinary
+executions do not record contexts, because the report becomes much larger. Contexts of tests
+outside pytest's rootdir have no file part and are dropped: generated tests running next to a
+repository suite, which never happens in regression runs.
+
 ## Configuration
 
 | Variable | Default | Purpose |

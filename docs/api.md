@@ -214,6 +214,18 @@ File `status` values and their meaning are listed in [ai-engine.md](ai-engine.md
 | `GET` | `/api/v1/test-executions/{id}/tests` | Per-test results, filterable by `outcome` (`passed`, `failed`, `error`, `skipped`, `xfailed`) and `generated`. `limit` ≤ 500. `404` until a report exists |
 | `GET` | `/api/v1/test-executions/{id}/logs` | `{"output": pytest console tail, "install_log": pip/docker build tail}` |
 
+### Regression analysis
+
+Between two commits of a project's git repository ([details](regression.md)).
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/v1/projects/{id}/regressions` | Body: `{"base": "<ref>", "head": "HEAD", "mode": "full" \| "selected"}`; refs are a branch, tag, `HEAD` or sha, optionally `~N`, resolved to commits now. `202`; `404`; `409 not_a_git_repository`; `422 invalid_revision` (unknown, malformed, or base = head); `503 dispatch_failed` |
+| `GET` | `/api/v1/projects/{id}/regressions` | Paginated, newest first |
+| `GET` | `/api/v1/regressions/{id}` | Status, refs and resolved commits, `verdict` (`regressions`, `clean`, `inconclusive`), `summary` |
+| `GET` | `/api/v1/regressions/{id}/report` | Changes (files, functions, module-level), selection with reasons and notes, both runs, per-test changes, failure causes (new / resolved / persisting), coverage diff, selection check. `404` until finished |
+| `GET` | `/api/v1/regressions/{id}/tests` | `change` (`regressed`, `fixed`, `still_failing`, `added`, `removed`, `unchanged`, `not_run`), `limit` ≤ 500, `offset` |
+
 ### Failure analysis
 
 Every execution that ran tests has a deterministic failure report; an AI analysis is queued

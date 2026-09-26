@@ -1,40 +1,22 @@
 """No doubles: service → Celery (Redis) → real worker → Docker sandbox → PostgreSQL."""
 
 import asyncio
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from celery import Celery
-from celery.contrib.testing.worker import start_worker
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from testmind.core.config import Settings
 from testmind.coverage_engine import CoverageReport
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
 from testmind.failure_engine import FailureCategory, FailureReport
 from testmind.services.execution_service import ExecutionService
 from testmind.test_engine.models import ExecutionOutcome, TestRunReport
-from testmind.workers.celery_app import create_celery_app
 from testmind.workers.dispatcher import CeleryTaskDispatcher
 from tests.integration.test_worker import queue_run, wait_for_terminal
-from tests.sandbox.conftest import SANDBOX_IMAGE
 
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture
-def celery_app(settings: Settings) -> Celery:
-    app = create_celery_app(settings.model_copy(update={"sandbox_image": SANDBOX_IMAGE}))
-    app.control.purge()
-    return app
-
-
-@pytest.fixture
-def worker(celery_app: Celery) -> Iterator[None]:
-    with start_worker(celery_app, pool="solo", perform_ping_check=False, loglevel="WARNING"):
-        yield
 
 
 @pytest.mark.usefixtures("worker")

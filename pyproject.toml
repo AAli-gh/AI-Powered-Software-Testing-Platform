@@ -22,6 +22,7 @@ dependencies = [
     "asyncpg>=0.29",
     "celery[redis]>=5.4",
     "defusedxml>=0.7",
+    "dulwich>=0.24",
     "fastapi>=0.115",
     "packaging>=24",
     "pathspec>=0.12",

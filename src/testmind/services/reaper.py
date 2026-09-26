@@ -15,7 +15,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.core.logging import get_logger
-from testmind.db.models import AnalysisRun, FailureAnalysis, TestExecution, TestGeneration
+from testmind.db.models import (
+    AnalysisRun,
+    FailureAnalysis,
+    Regression,
+    TestExecution,
+    TestGeneration,
+)
 from testmind.domain.enums import RunStatus
 from testmind.services.run_service import apply_transition
 
@@ -24,7 +30,7 @@ logger = get_logger(__name__)
 ORPHANED_MESSAGE = "The worker stopped while this job was running; the job was abandoned"
 
 
-JobT = TypeVar("JobT", AnalysisRun, TestGeneration, TestExecution, FailureAnalysis)
+JobT = TypeVar("JobT", AnalysisRun, TestGeneration, TestExecution, FailureAnalysis, Regression)
 
 
 async def reap_orphaned_jobs(
@@ -37,6 +43,7 @@ async def reap_orphaned_jobs(
             + await _reap(session, TestGeneration, cutoff)
             + await _reap(session, TestExecution, cutoff)
             + await _reap(session, FailureAnalysis, cutoff)
+            + await _reap(session, Regression, cutoff)
         )
         await session.commit()
     return reaped

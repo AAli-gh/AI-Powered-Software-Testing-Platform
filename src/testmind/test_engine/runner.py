@@ -11,9 +11,11 @@ from testmind.analyzers.repository.models import Dependency, RepositoryProfile
 from testmind.coverage_engine import (
     CoverageParseError,
     CoverageReport,
+    RawCoverage,
     build_coverage_report,
     parse_coverage_json,
 )
+from testmind.coverage_engine.impact import TestImpact, build_test_impact
 from testmind.coverage_engine.report import DEFAULT_THRESHOLD
 from testmind.failure_engine import (
     FailureAnalyzer,
@@ -58,6 +60,7 @@ class SuiteResult:
     report: TestRunReport
     coverage: CoverageReport | None  # None: see report.coverage_error
     failures: FailureReport | None = None  # None when no tests ran
+    impact: TestImpact | None = None  # only when per-test contexts were requested
 
 
 class TestSuiteRunner:
@@ -81,9 +84,14 @@ class TestSuiteRunner:
         generated: dict[str, str] | None = None,
         *,
         code: CodeProfile | None = None,
+        test_contexts: bool = False,
+        select: tuple[str, ...] = (),
     ) -> SuiteResult:
         """Run the suite with coverage and structured failure capture. `code` (the run's code
-        analysis) maps coverage and failures onto production modules and functions."""
+        analysis) maps coverage and failures onto production modules and functions.
+
+        `test_contexts` also records which test executed which function (`impact`); `select`
+        runs only the given test files or pytest nodeids of the project's suite."""
         generated = generated or {}
         project_tests = list(profile.test_files)
         env = (
@@ -124,6 +132,8 @@ class TestSuiteRunner:
             coverage=True,
             capture_failures=True,
             continue_on_collection_errors=True,
+            test_contexts=test_contexts,
+            select=select,
         )
         try:
             result = self._sandbox.run(root, job)
@@ -132,23 +142,28 @@ class TestSuiteRunner:
                 ExecutionOutcome.SANDBOX_UNAVAILABLE, install=install, output=str(exc)
             )
             return SuiteResult(report, None)
-        coverage, coverage_error = self._coverage(result, code, base.rootdir)
+        raw, coverage_error = _raw_coverage(result, code, base.rootdir)
+        coverage = None
+        impact = None
+        if raw is not None and code is not None:
+            coverage = build_coverage_report(raw, code, threshold=self._threshold)
+            impact = build_test_impact(raw, code) if test_contexts else None
         report = base.from_result(result, install, coverage_error)
         failures = _failures(result, report, profile, code, coverage)
-        return SuiteResult(report, coverage, failures)
+        return SuiteResult(report, coverage, failures, impact)
 
-    def _coverage(
-        self, result: SandboxResult, code: CodeProfile | None, rootdir: str
-    ) -> tuple[CoverageReport | None, str | None]:
-        if result.coverage_json is None:
-            return None, result.coverage_error or "coverage.py wrote no report"
-        if code is None:
-            return None, NO_CODE_ANALYSIS
-        try:
-            raw = parse_coverage_json(result.coverage_json, rootdir=rootdir)
-        except CoverageParseError as exc:
-            return None, str(exc)
-        return build_coverage_report(raw, code, threshold=self._threshold), None
+
+def _raw_coverage(
+    result: SandboxResult, code: CodeProfile | None, rootdir: str
+) -> tuple[RawCoverage | None, str | None]:
+    if result.coverage_json is None:
+        return None, result.coverage_error or "coverage.py wrote no report"
+    if code is None:
+        return None, NO_CODE_ANALYSIS
+    try:
+        return parse_coverage_json(result.coverage_json, rootdir=rootdir), None
+    except CoverageParseError as exc:
+        return None, str(exc)
 
 
 def _failures(

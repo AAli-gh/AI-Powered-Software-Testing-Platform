@@ -340,3 +340,21 @@ def test_unreadable_failure_capture_is_noted(tmp_path: Path) -> None:
 def test_no_sandbox_run_means_no_failure_report(profile: RepositoryProfile) -> None:
     suite = TestSuiteRunner(Sandbox(available=False), Images()).run(Path("/repo"), profile)
     assert suite.failures is None
+
+
+def test_contexts_and_selection_are_passed_to_the_sandbox(tmp_path: Path) -> None:
+    profile, code = code_for(tmp_path)
+    contexts = json.loads(COVERAGE_JSON)
+    contexts["files"]["app.py"]["contexts"] = {"2": ["tests/test_a.py::t|run"]}
+    sandbox = Sandbox(result(case("t", Outcome.PASSED), coverage_json=json.dumps(contexts)))
+    suite = TestSuiteRunner(sandbox, Images()).run(
+        tmp_path, profile, code=code, test_contexts=True, select=("tests/test_a.py::t",)
+    )
+    job = sandbox.jobs[0]
+    assert (job.test_contexts, job.select) == (True, ("tests/test_a.py::t",))
+    assert suite.impact is not None
+    assert suite.impact.functions == {"app.py::f": ["tests/test_a.py::t"]}
+    plain = TestSuiteRunner(
+        Sandbox(result(case("t", Outcome.PASSED), coverage_json=COVERAGE_JSON)), Images()
+    )
+    assert plain.run(tmp_path, profile, code=code).impact is None

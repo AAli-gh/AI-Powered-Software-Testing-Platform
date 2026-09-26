@@ -1,0 +1,15 @@
+# docker/coveragerc plus per-test contexts, for regression runs: coverage.py records which test
+# executed each line (--cov-context=test), and the JSON report includes those contexts. The
+# report is much larger, so ordinary executions use docker/coveragerc.
+[run]
+branch = True
+source = /workspace/src
+data_file = /tmp/.coverage
+omit =
+    /workspace/tests/*
+
+[report]
+include_namespace_packages = True
+
+[json]
+show_contexts = True

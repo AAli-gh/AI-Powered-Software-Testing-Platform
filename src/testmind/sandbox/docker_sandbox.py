@@ -33,6 +33,7 @@ DOCKER_CHECK_TIMEOUT = 15
 MAX_COVERAGE_BYTES = 50 * 1024 * 1024
 MAX_FAILURES_BYTES = 10 * 1024 * 1024
 COVERAGE_CONFIG = "/opt/testmind/coveragerc"  # baked into the sandbox image
+CONTEXTS_CONFIG = "/opt/testmind/coveragerc_contexts"  # the same, plus per-test contexts
 PLUGIN_DIR = "/opt/testmind"  # testmind_failures.py, baked into the sandbox image
 
 
@@ -85,6 +86,8 @@ class DockerSandbox:
             _check_relative(relative)
         for relative in job.project_tests:
             _check_relative(relative)
+        for nodeid in job.select:
+            _check_nodeid(nodeid, job.project_tests)
         for key, value in job.env.items():
             _check_env(key, value)
 
@@ -161,7 +164,9 @@ class DockerSandbox:
     ) -> list[str]:
         # The project's own tests run from the repository root with its conftest files;
         # generated tests live in a separate read-only directory.
-        targets = [f"/workspace/src/{relative}" for relative in job.project_tests]
+        # `select` narrows the project's tests to single test files or test nodeids.
+        selected = job.select or job.project_tests
+        targets = [f"/workspace/src/{relative}" for relative in selected]
         targets += [f"/workspace/tests/{relative}" for relative in sorted(job.test_files)]
         rootdir = "/workspace/src" if job.project_tests else "/workspace/tests"
         env: list[str] = []
@@ -170,11 +175,14 @@ class DockerSandbox:
         coverage: list[str] = []
         if job.coverage:
             # TestMind's own coverage config: the project's fail_under / omit do not apply.
+            config = CONTEXTS_CONFIG if job.test_contexts else COVERAGE_CONFIG
             coverage = [
                 "--cov=/workspace/src",
-                f"--cov-config={COVERAGE_CONFIG}",
+                f"--cov-config={config}",
                 "--cov-report=json:/out/coverage.json",
             ]
+            if job.test_contexts:
+                coverage.append("--cov-context=test")
         plugin = ["-p", "testmind_failures"] if job.capture_failures else []
         if job.continue_on_collection_errors:
             plugin.append("--continue-on-collection-errors")
@@ -234,6 +242,9 @@ class PytestJob:
     image: str | None = None  # defaults to the sandbox base image
     env: dict[str, str] = field(default_factory=dict)
     coverage: bool = False  # measure line + branch coverage of the repository
+    test_contexts: bool = False  # with coverage: record which test executed each line
+    # Run only these project tests: files from `project_tests`, or nodeids within them.
+    select: tuple[str, ...] = ()
     capture_failures: bool = False  # structured failure records (testmind_failures plugin)
     # One test module that fails to import must not hide the results of all the others.
     continue_on_collection_errors: bool = False
@@ -261,6 +272,17 @@ _ENV_VALUE = re.compile(r"^[A-Za-z0-9_.:/-]{0,256}$")
 def _check_env(key: str, value: str) -> None:
     if not _ENV_KEY.match(key) or not _ENV_VALUE.match(value):
         raise ValueError(f"Invalid sandbox environment variable: {key!r}")
+
+
+_NODEID_PART = re.compile(r"^[^\x00-\x1f]{1,1000}$")
+
+
+def _check_nodeid(nodeid: str, project_tests: tuple[str, ...]) -> None:
+    """A nodeid becomes a pytest argument: it must name one of the project's test files and
+    cannot start an option or contain control characters."""
+    file, _, rest = nodeid.partition("::")
+    if file not in project_tests or (rest and not _NODEID_PART.match(rest)):
+        raise ValueError(f"Invalid test selection: {nodeid!r}")
 
 
 def _check_relative(relative: str) -> None:

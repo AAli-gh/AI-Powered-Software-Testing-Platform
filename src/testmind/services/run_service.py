@@ -10,7 +10,13 @@ from testmind.analyzers.code import CodeProfile
 from testmind.analyzers.repository import RepositoryProfile
 from testmind.core.errors import DispatchError, NotFoundError
 from testmind.core.logging import get_logger
-from testmind.db.models import AnalysisRun, FailureAnalysis, TestExecution, TestGeneration
+from testmind.db.models import (
+    AnalysisRun,
+    FailureAnalysis,
+    Regression,
+    TestExecution,
+    TestGeneration,
+)
 from testmind.domain.enums import RunStatus
 from testmind.domain.run_lifecycle import ensure_transition
 from testmind.repositories.analysis_repository import AnalysisRepository
@@ -24,7 +30,7 @@ DISPATCH_FAILED_MESSAGE = "The run could not be handed to the task queue"
 
 
 def apply_transition(
-    run: AnalysisRun | TestGeneration | TestExecution | FailureAnalysis,
+    run: AnalysisRun | TestGeneration | TestExecution | FailureAnalysis | Regression,
     target: RunStatus,
     *,
     error_message: str | None = None,

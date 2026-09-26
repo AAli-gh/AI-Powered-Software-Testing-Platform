@@ -13,6 +13,7 @@ from testmind.services.execution_service import ExecutionService
 from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
 from testmind.services.project_service import ProjectService
+from testmind.services.regression_service import RegressionService
 from testmind.services.run_service import RunService
 
 
@@ -65,3 +66,12 @@ def get_failure_analysis_service(
 
 
 FailureAnalysisServiceDep = Annotated[FailureAnalysisService, Depends(get_failure_analysis_service)]
+
+
+def get_regression_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> RegressionService:
+    return RegressionService(session, request.app.state.dispatcher, settings.repos_root)
+
+
+RegressionServiceDep = Annotated[RegressionService, Depends(get_regression_service)]

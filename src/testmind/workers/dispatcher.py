@@ -7,6 +7,7 @@ from celery import Celery
 
 from testmind.workers.tasks import (
     ANALYZE_FAILURES,
+    ANALYZE_REGRESSION,
     EXECUTE_ANALYSIS_RUN,
     EXECUTE_TESTS,
     GENERATE_TESTS,
@@ -30,3 +31,6 @@ class CeleryTaskDispatcher:
 
     async def dispatch_failure_analysis(self, analysis_id: uuid.UUID) -> None:
         await asyncio.to_thread(self._app.send_task, ANALYZE_FAILURES, args=[str(analysis_id)])
+
+    async def dispatch_regression(self, regression_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._app.send_task, ANALYZE_REGRESSION, args=[str(regression_id)])

@@ -113,6 +113,14 @@ case "$outcome" in
   *) fail "unexpected test execution outcome: $outcome" ;;
 esac
 
+echo "→ regression analysis"
+regression_status=$(curl -s -o /tmp/testmind-regression.json -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' -d '{"base": "HEAD~1"}' \
+  "$API/api/v1/projects/$project_id/regressions")
+[[ "$regression_status" == "409" ]] || fail "expected 409 for a directory without git history, got $regression_status"
+grep -q not_a_git_repository /tmp/testmind-regression.json || fail "unexpected regression error body"
+echo "  example directories have no git history: honest 409 not_a_git_repository"
+
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
 curl -fsS -X DELETE "$API/api/v1/projects/$buggy_id" -o /dev/null

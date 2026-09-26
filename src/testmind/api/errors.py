@@ -14,6 +14,7 @@ from testmind.core.errors import (
     AppError,
     ConflictError,
     DispatchError,
+    InvalidRevisionError,
     InvalidSourceError,
     LLMUnavailableError,
     NotFoundError,
@@ -27,6 +28,7 @@ STATUS_BY_ERROR: dict[type[AppError], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
     InvalidSourceError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    InvalidRevisionError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     DispatchError: status.HTTP_503_SERVICE_UNAVAILABLE,
     LLMUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }

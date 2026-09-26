@@ -13,6 +13,7 @@ from testmind.db.models import (
     AnalysisRun,
     FailureAnalysis,
     Project,
+    Regression,
     TestExecution,
     TestGeneration,
 )
@@ -46,7 +47,11 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
         analysis = FailureAnalysis(
             execution_id=execution.id, status=RunStatus.RUNNING, started_at=old, provider="x"
         )
-        session.add(analysis)
+        regression = Regression(
+            project_id=project.id, status=RunStatus.RUNNING, started_at=old, mode="full",
+            base_ref="a", head_ref="b", base_commit="a" * 40, head_commit="b" * 40,
+        )  # fmt: skip
+        session.add_all([analysis, regression])
         await session.commit()
         return {
             "stuck": stuck_run.id,
@@ -55,6 +60,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
             "gen": generation.id,
             "exe": execution.id,
             "fa": analysis.id,
+            "reg": regression.id,
         }
 
 
@@ -62,7 +68,7 @@ async def test_only_long_running_jobs_are_reaped(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     ids = await seed(session_factory)
-    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 4
+    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 5
 
     async with session_factory() as session:
         stuck = await session.get(AnalysisRun, ids["stuck"])
@@ -71,6 +77,7 @@ async def test_only_long_running_jobs_are_reaped(
         generation = await session.get(TestGeneration, ids["gen"])
         execution = await session.get(TestExecution, ids["exe"])
         analysis = await session.get(FailureAnalysis, ids["fa"])
+        regression = await session.get(Regression, ids["reg"])
     assert stuck is not None
     assert stuck.status is RunStatus.FAILED
     assert stuck.error_message == ORPHANED_MESSAGE
@@ -85,6 +92,8 @@ async def test_only_long_running_jobs_are_reaped(
     assert execution.status is RunStatus.FAILED
     assert analysis is not None
     assert analysis.status is RunStatus.FAILED
+    assert regression is not None
+    assert regression.status is RunStatus.FAILED
 
     assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 0
 
@@ -104,7 +113,7 @@ async def test_worker_startup_hook_reaps(
     sys.modules.pop("testmind.workers.main", None)
     try:
         main = importlib.import_module("testmind.workers.main")  # fresh, with the test env
-        assert await main.reap_on_startup() == 4
+        assert await main.reap_on_startup() == 5
     finally:
         sys.modules.pop("testmind.workers.main", None)
         get_settings.cache_clear()

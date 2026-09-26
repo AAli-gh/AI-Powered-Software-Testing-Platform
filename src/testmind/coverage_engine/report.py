@@ -8,7 +8,7 @@ a fixed formula. No LLM is involved.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -79,6 +79,29 @@ def is_production(path: str) -> bool:
     return parts[-1] not in EXCLUDED_FILES and not TEST_DIRECTORIES & set(parts[:-1])
 
 
+def own_lines(function: FunctionInfo, siblings: Iterable[FunctionInfo]) -> Callable[[int], bool]:
+    """Whether a line is one of the function's own: its body, without the bodies of functions
+    nested in it.
+
+    The `def` line itself runs when the module (or enclosing scope) is executed, not when the
+    function is called, so it belongs to the enclosing scope.
+    """
+    nested = [
+        (other.line, other.end_line)
+        for other in siblings
+        if other is not function
+        and function.line < other.line
+        and other.end_line <= function.end_line
+    ]
+
+    def own(line: int) -> bool:
+        return function.line < line <= function.end_line and not any(
+            start < line <= end for start, end in nested
+        )
+
+    return own
+
+
 # ---------------------------------------------------------------------------------- counting
 def _counts(
     statements: frozenset[int],
@@ -118,24 +141,7 @@ def _file(path: str, data: RawFile) -> FileCoverage:
 def _function(
     function: FunctionInfo, data: RawFile, siblings: list[FunctionInfo], rule_ids: list[str]
 ) -> FunctionCoverage:
-    """A function's own statements: its body, without the bodies of functions nested in it.
-
-    The `def` line itself runs when the module (or enclosing scope) is executed, not when the
-    function is called, so it belongs to the enclosing scope.
-    """
-    nested = [
-        (other.line, other.end_line)
-        for other in siblings
-        if other is not function
-        and function.line < other.line
-        and other.end_line <= function.end_line
-    ]
-
-    def own(line: int) -> bool:
-        return function.line < line <= function.end_line and not any(
-            start < line <= end for start, end in nested
-        )
-
+    own = own_lines(function, siblings)
     statements = frozenset(line for line in data.statements if own(line))
     taken = frozenset(arc for arc in data.executed_branches if own(arc[0]))
     missed = frozenset(arc for arc in data.missing_branches if own(arc[0]))

@@ -45,3 +45,15 @@ class LLMUnavailableError(AppError):
     """AI features were requested but no LLM provider is configured."""
 
     code = "llm_not_configured"
+
+
+class InvalidRevisionError(AppError):
+    """A requested git revision does not exist or is malformed."""
+
+    code = "invalid_revision"
+
+
+class NotVersionedError(ConflictError):
+    """The project's source is not a (supported) git repository."""
+
+    code = "not_a_git_repository"

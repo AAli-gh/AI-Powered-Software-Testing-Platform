@@ -136,6 +136,7 @@ erDiagram
     analysis_runs ||--o{ test_executions : "suite runs for"
     test_generations |o--o{ test_executions : "included in"
     test_executions ||--o{ failure_analyses : "AI analyses of"
+    projects ||--o{ regressions : "compared commits of"
     projects {
         uuid id PK
         varchar name UK
@@ -180,6 +181,19 @@ erDiagram
         jsonb coverage "CoverageReport"
         float coverage_percent
         jsonb failures "FailureReport (deterministic)"
+        text error_message
+    }
+    regressions {
+        uuid id PK
+        uuid project_id FK "ON DELETE CASCADE, indexed"
+        varchar status "job lifecycle"
+        varchar mode "full, selected"
+        varchar base_ref
+        varchar head_ref
+        varchar base_commit "resolved at request time"
+        varchar head_commit
+        varchar verdict "regressions, clean, inconclusive"
+        jsonb report "RegressionReport"
         text error_message
     }
     failure_analyses {

@@ -152,6 +152,8 @@ def test_generated_tests_run_next_to_the_project_suite(
         PytestJob(project_tests=("../escape.py",)),
         PytestJob(test_files={"t.py": ""}, env={"lower": "x"}),
         PytestJob(test_files={"t.py": ""}, env={"OK": "has space"}),
+        PytestJob(project_tests=("tests/a.py",), select=("tests/other.py::t",)),
+        PytestJob(project_tests=("tests/a.py",), select=("tests/a.py::t\nx",)),
     ],
 )
 def test_invalid_jobs_are_refused(sandbox: DockerSandbox, job: PytestJob) -> None:
