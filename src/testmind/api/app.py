@@ -9,7 +9,7 @@ from redis.asyncio import Redis
 from testmind import __version__
 from testmind.api.errors import install_exception_handlers
 from testmind.api.middleware import RequestContextMiddleware
-from testmind.api.routes import health, projects, runs
+from testmind.api.routes import code, health, projects, runs
 from testmind.core.config import Settings, get_settings
 from testmind.core.logging import configure_logging
 from testmind.db.session import create_engine, create_session_factory
@@ -59,4 +59,5 @@ def create_app(
     app.include_router(health.router)
     app.include_router(projects.router)
     app.include_router(runs.router)
+    app.include_router(code.router)
     return app

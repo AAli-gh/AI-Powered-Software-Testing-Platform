@@ -12,8 +12,10 @@ A platform about software testing needs a trustworthy test suite of its own. The
 4. **Coverage is a floor, not a goal.** CI enforces ≥ 85 % (line + branch). The suite is at
    100 % in CI. Locally, as root, a few permission tests are skipped because root bypasses file
    permissions.
-5. **Dogfooding.** The analyzer is also run on TestMind itself. That found a Django false
-   positive (a string mentioning `DJANGO_SETTINGS_MODULE`), which is now a regression test.
+5. **Dogfooding.** The analyzers are also run on TestMind itself. That found false positives
+   (a string mentioning `DJANGO_SETTINGS_MODULE`, `pathlib`'s `/` treated as division, and
+   `# noqa` side-effect imports) and real bugs (nested functions counted in complexity,
+   line numbers shifted by `\x0c`). Each is now a regression test.
 
 ## Suites
 
@@ -21,6 +23,7 @@ A platform about software testing needs a trustworthy test suite of its own. The
 |---|---|---|---|
 | Unit | `tests/unit/` | nothing | Settings validation, logging, run state machine, path confinement (traversal, symlinks, permissions), Celery configuration, error mapping |
 | Analyzer | `tests/unit/analyzers/` | nothing | Every detector in isolation (hostile and malformed inputs included), plus **golden tests** against the real repositories in `examples/` (Django, FastAPI, Flask, plain pytest) |
+| Code analyzer | `tests/unit/analyzers/code/` | nothing | Complexity, symbols, and every rule with positive **and** negative cases. A golden test requires exactly the defects documented in `examples/buggy_inventory/EXPECTED_FINDINGS.md` |
 | Integration | `tests/integration/` | PostgreSQL + Redis | Repositories and services, row-lock races, migrations (drift + reversibility), run executor, full queue path with a real worker |
 | API | `tests/api/` | PostgreSQL (+ Redis for `/ready`) | Every endpoint over HTTP: status codes, error bodies, pagination, request IDs, readiness with dependencies down |
 | Smoke | `scripts/smoke_test.sh` | running stack | Containers wired together: readiness, create project, traversal rejected, run completes, cleanup |

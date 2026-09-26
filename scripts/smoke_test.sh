@@ -10,6 +10,19 @@ NAME="smoke-$(date +%s)-$RANDOM"
 fail() { echo "SMOKE FAILED: $*" >&2; exit 1; }
 json() { python3 -c "import json,sys; print(json.load(sys.stdin)$1)"; }
 
+wait_for_run() {
+  local deadline=$((SECONDS + TIMEOUT_SECONDS)) status=""
+  while (( SECONDS < deadline )); do
+    status=$(curl -fsS "$API/api/v1/runs/$1" | json "['status']")
+    case "$status" in
+      succeeded) return 0 ;;
+      failed|cancelled) fail "run $1 ended as $status" ;;
+      *) sleep 1 ;;
+    esac
+  done
+  fail "run $1 did not finish within ${TIMEOUT_SECONDS}s"
+}
+
 echo "→ readiness"
 curl -fsS "$API/ready" | tee /dev/stderr | grep -q '"status":"ready"' || fail "API not ready"
 echo
@@ -30,16 +43,8 @@ run_id=$(curl -fsS -X POST "$API/api/v1/projects/$project_id/runs" | json "['id'
 echo "  run $run_id"
 
 echo "→ wait for worker"
-deadline=$((SECONDS + TIMEOUT_SECONDS))
-while (( SECONDS < deadline )); do
-  run_status=$(curl -fsS "$API/api/v1/runs/$run_id" | json "['status']")
-  case "$run_status" in
-    succeeded) echo "  run succeeded"; break ;;
-    failed|cancelled) fail "run ended as $run_status" ;;
-    *) sleep 1 ;;
-  esac
-done
-[[ "${run_status:-}" == "succeeded" ]] || fail "run did not finish within ${TIMEOUT_SECONDS}s"
+wait_for_run "$run_id"
+echo "  run succeeded"
 
 echo "→ repository analysis"
 analysis=$(curl -fsS "$API/api/v1/runs/$run_id/analysis")
@@ -51,6 +56,24 @@ tests_total=$(curl -fsS "$API/api/v1/runs/$run_id/analysis/files?is_test=true" |
 [[ "$tests_total" == "1" ]] || fail "expected 1 test file, got $tests_total"
 echo "  python project, pytest detected, 1 test file"
 
+echo "→ code analysis (clean project)"
+code=$(curl -fsS "$API/api/v1/runs/$run_id/code")
+echo "$code" | json "['metrics']['test_modules_skipped']" | grep -qx 1 || fail "test modules skipped"
+echo "$code" | json "['metrics']['findings_by_severity']" | grep -qx "{}" || fail "unexpected findings"
+echo "  no findings, test module excluded"
+
+echo "→ code analysis (intentionally flawed project)"
+buggy_id=$(curl -fsS -X POST "$API/api/v1/projects" -H 'Content-Type: application/json' \
+  -d "{\"name\": \"$NAME-buggy\", \"source_location\": \"buggy_inventory\"}" | json "['id']")
+buggy_run=$(curl -fsS -X POST "$API/api/v1/projects/$buggy_id/runs" | json "['id']")
+wait_for_run "$buggy_run"
+critical=$(curl -fsS "$API/api/v1/runs/$buggy_run/code/findings?min_severity=critical")
+echo "$critical" | json "['items'][0]['rule_id']" | grep -qx TM010 || fail "eval() not reported"
+total=$(curl -fsS "$API/api/v1/runs/$buggy_run/code/findings" | json "['total']")
+[[ "$total" == "17" ]] || fail "expected 17 findings in buggy_inventory, got $total"
+echo "  17 findings, eval() reported as critical"
+
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
+curl -fsS -X DELETE "$API/api/v1/projects/$buggy_id" -o /dev/null
 echo "SMOKE OK"

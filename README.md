@@ -13,8 +13,8 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–2 of 14 are complete: the platform foundation and the deterministic
-> repository analyzer.** Code analysis, test generation and the rest of the pipeline are
+> **Status: Phases 1–3 of 14 are complete: the platform foundation and the deterministic
+> repository and code analyzers.** Test generation and the rest of the pipeline are
 > **not implemented yet**. The [roadmap](#roadmap) shows exactly what exists today and what is
 > planned.
 
@@ -95,14 +95,26 @@ Everything listed here is implemented and tested.
   - test files, entry points (console scripts, `manage.py`, `__main__`, ASGI/WSGI apps
     including app factories), config files, Docker (base images, compose services) and CI/CD
     (GitHub Actions, GitLab CI, CircleCI, …).
+- **Code analysis** (every run, AST only, [details](docs/code-analyzer.md)):
+  - functions, methods, classes and parameters (kinds, type hints, defaults), raised
+    exceptions, and module imports with relative imports resolved;
+  - **cyclomatic complexity** per function, with an A–F rank;
+  - **19 rules** with severity, confidence and the offending line as evidence: dangerous
+    patterns (`eval`, `pickle`, `shell=True`, unsafe `yaml.load`, hard-coded secrets), error
+    handling (bare or swallowed exceptions), potential bugs (mutable defaults, `is` with
+    literals, requests without timeout), dead code, high complexity, and heuristic
+    missing-validation checks (clearly marked with low confidence);
+  - suppression per line with `# testmind: ignore[TM0xx]`, and `# noqa` for the equivalent
+    flake8 codes.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
   structured JSON logs with request-ID correlation, uniform error responses and OpenAPI docs.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 346 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 517 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
-  Django, FastAPI and Flask, plus an end-to-end smoke test of the running containers.
+  Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
+  defects must be found exactly. An end-to-end smoke test runs against the containers.
 
 ## Tech stack
 
@@ -225,6 +237,11 @@ Errors always have the same shape:
 | `POST` | `/api/v1/runs/{id}/cancel` | Cancel a queued run (`409` once started) |
 | `GET` | `/api/v1/runs/{id}/analysis` | Repository analysis summary of a succeeded run |
 | `GET` | `/api/v1/runs/{id}/analysis/files` | Analysed files (`limit` ≤ 500, `offset`, `language`, `is_test`) |
+| `GET` | `/api/v1/runs/{id}/code` | Code metrics: size, complexity distribution, findings by severity/category |
+| `GET` | `/api/v1/runs/{id}/code/findings` | Findings, most severe first (`min_severity`, `category`, `rule_id`, `min_confidence`, `path_prefix`) |
+| `GET` | `/api/v1/runs/{id}/code/functions` | Functions/methods (`sort=complexity`, `min_complexity`, `public_only`, `path_prefix`) |
+| `GET` | `/api/v1/runs/{id}/code/classes` · `/code/modules` | Classes; modules with resolved imports |
+| `GET` | `/api/v1/code-rules` | Catalog of code-analysis rules |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -239,7 +256,7 @@ make help            # all targets
 
 | Suite | Location | Runs against |
 |---|---|---|
-| Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector, golden tests on `examples/` |
+| Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/` |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
@@ -285,7 +302,7 @@ CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
 |---|---|---|
 | 1 | Architecture: stack, structure, Docker, PostgreSQL, Redis, backend skeleton, CI | ✅ Done |
 | 2 | Repository analyzer: languages, frameworks, file tree, dependencies, metadata | ✅ Done |
-| 3 | Code analyzer: AST, functions/classes, complexity, static analysis | Planned |
+| 3 | Code analyzer: AST, functions/classes, complexity, static analysis | ✅ Done |
 | 4 | Test generator: unit / edge / negative tests, bounded validation loop | Planned |
 | 5 | Test runner: sandboxed pytest, structured results, tracebacks | Planned |
 | 6 | Coverage: coverage.py, file/function/branch coverage, weak areas | Planned |
@@ -302,6 +319,7 @@ CPU, memory, time, network and filesystem limits. The trade-offs are recorded in
 
 - [Architecture](docs/architecture.md): layers, run lifecycle, data model, known limitations
 - [Repository analyzer](docs/repository-analyzer.md): detectors, confidence model, safety limits
+- [Code analyzer](docs/code-analyzer.md): symbols, complexity, rule catalog, suppression
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

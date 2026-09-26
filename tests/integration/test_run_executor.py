@@ -6,11 +6,12 @@ import pytest
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from testmind.analyzers.code import CODE_ANALYZER_VERSION, CodeProfile
 from testmind.analyzers.repository import ANALYZER_VERSION, RepositoryProfile
 from testmind.db.models import AnalysisRun, Project, RepositoryAnalysis
 from testmind.domain.enums import RunStatus, SourceType
 from testmind.repositories.analysis_repository import AnalysisRepository
-from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE, RunExecutor
+from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE, RunExecutor, RunResult
 
 
 async def add_run(
@@ -101,7 +102,7 @@ async def test_unknown_run_returns_none(
 
 
 class CrashingExecutor(RunExecutor):
-    async def _perform(self, source_location: str) -> RepositoryProfile:
+    async def _perform(self, source_location: str) -> RunResult:
         raise RuntimeError("bug in analysis step")
 
 
@@ -131,14 +132,14 @@ async def test_run_deleted_while_running_is_tolerated(
             run_id: uuid.UUID,
             status: RunStatus,
             error_message: str | None,
-            profile: RepositoryProfile | None = None,
+            result: RunResult | None = None,
         ) -> RunStatus:
             async with session_factory() as session:
                 run = await session.get(AnalysisRun, run_id)
                 await session.delete(run)
                 await session.commit()
                 deleted.append(True)
-            return await super()._finish(run_id, status, error_message, profile)
+            return await super()._finish(run_id, status, error_message, result)
 
     assert (
         await DeletingExecutor(session_factory, repos_root).execute(run_id) is RunStatus.SUCCEEDED
@@ -167,6 +168,12 @@ async def test_success_stores_the_repository_analysis(
     assert [f.path for f in profile.files] == ["main.py"]
     assert profile.primary_language == "Python"
 
+    async with session_factory() as session:
+        code = await AnalysisRepository(session).get_code_for_run(run_id)
+    assert code is not None
+    assert code.analyzer_version == CODE_ANALYZER_VERSION
+    assert CodeProfile.model_validate(code.profile).metrics.modules == 1
+
 
 async def test_failed_run_has_no_analysis(
     session_factory: async_sessionmaker[AsyncSession], repos_root: Path
@@ -177,6 +184,8 @@ async def test_failed_run_has_no_analysis(
     await RunExecutor(session_factory, repos_root).execute(run_id)
 
     assert await load_analysis(session_factory, run_id) is None
+    async with session_factory() as session:
+        assert await AnalysisRepository(session).get_code_for_run(run_id) is None
 
 
 async def test_analysis_is_deleted_with_its_project(

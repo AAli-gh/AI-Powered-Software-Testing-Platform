@@ -127,3 +127,33 @@ File entry:
 
 `lines` is `null` for binary files, files larger than the read limit and files of unknown
 language. The complete field reference is the OpenAPI schema (`RepositorySummary`, `FileEntry`).
+
+### Code analysis
+
+All list endpoints take `limit` (1–500, default 100) and `offset`, and return the standard page
+shape. `404` if the run is unknown or has no code analysis (not succeeded).
+
+| Method | Path | Query parameters | Notes |
+|---|---|---|---|
+| `GET` | `/api/v1/runs/{run_id}/code` | | `{"metrics": {...}, "issues": [...]}` |
+| `GET` | `/api/v1/runs/{run_id}/code/findings` | `min_severity` (`low`…`critical`), `category`, `rule_id` (`TM\d{3}`), `min_confidence` (0–1), `path_prefix` | Most severe first, then path and line |
+| `GET` | `/api/v1/runs/{run_id}/code/functions` | `sort` (`path` or `complexity`), `min_complexity`, `public_only`, `path_prefix` | |
+| `GET` | `/api/v1/runs/{run_id}/code/classes` | `path_prefix` | |
+| `GET` | `/api/v1/runs/{run_id}/code/modules` | `path_prefix` | Includes resolved imports |
+| `GET` | `/api/v1/code-rules` | | Rule catalog: `[{"id": "TM010", "category": "dangerous_pattern", "title": "eval / exec"}, ...]` |
+
+Finding object:
+
+```json
+{
+  "rule_id": "TM040",
+  "category": "missing_validation",
+  "severity": "medium",
+  "confidence": 0.5,
+  "path": "inventory/stock.py",
+  "line": 10,
+  "symbol": "average_price",
+  "message": "'count' is used as a divisor without being validated (possible ZeroDivisionError)",
+  "evidence": "return total / count"
+}
+```

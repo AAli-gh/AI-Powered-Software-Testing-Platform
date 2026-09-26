@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from testmind.analyzers.code import CodeProfile
 from testmind.analyzers.repository import RepositoryProfile
 from testmind.core.errors import DispatchError, NotFoundError
 from testmind.core.logging import get_logger
@@ -78,6 +79,13 @@ class RunService:
                 f"Run '{run_id}' has no repository analysis (status: {run.status.value})"
             )
         return RepositoryProfile.model_validate(analysis.profile)
+
+    async def get_code_analysis(self, run_id: uuid.UUID) -> CodeProfile:
+        run = await self.get(run_id)
+        analysis = await AnalysisRepository(self._session).get_code_for_run(run_id)
+        if analysis is None:
+            raise NotFoundError(f"Run '{run_id}' has no code analysis (status: {run.status.value})")
+        return CodeProfile.model_validate(analysis.profile)
 
     async def list_for_project(
         self, project_id: uuid.UUID, *, offset: int, limit: int

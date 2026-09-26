@@ -44,13 +44,13 @@ src/testmind/
 ├── schemas/       Pydantic API contracts (request/response bodies, error model, pagination)
 ├── repositories/  data access. The only place that builds SQL
 ├── services/      use cases shared by API and worker (+ the TaskDispatcher port)
-├── analyzers/     deterministic analysers (repository/: see repository-analyzer.md)
+├── analyzers/     deterministic analysers: repository/ (repository-analyzer.md), code/ (code-analyzer.md)
 ├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
 └── workers/       Celery app, tasks, Celery-backed TaskDispatcher
 ```
 
 Later phases add sibling packages (`test_engine/`, `ai_engine/`, `integrations/github/`)
-and more analysers (`analyzers/code/`) when they are implemented. Empty placeholder packages are deliberately
+when they are implemented. Empty placeholder packages are deliberately
 not created ahead of time.
 
 ### Dependency rule
@@ -82,8 +82,8 @@ sequenceDiagram
     A-->>C: 202 {status: queued}
     R->>W: deliver task
     W->>P: SELECT … FOR UPDATE; queued→running; COMMIT
-    W->>W: analyse the repository (no lock held, in a thread)
-    W->>P: SELECT … FOR UPDATE; running→succeeded + INSERT analysis (or →failed); COMMIT
+    W->>W: repository analysis → code analysis (no lock held, in a thread)
+    W->>P: SELECT … FOR UPDATE; running→succeeded + INSERT both analyses (or →failed); COMMIT
     C->>A: GET /api/v1/runs/{id}
     A-->>C: 200 {status: succeeded}
 ```
@@ -128,6 +128,7 @@ stateDiagram-v2
 erDiagram
     projects ||--o{ analysis_runs : has
     analysis_runs ||--o| repository_analyses : produces
+    analysis_runs ||--o| code_analyses : produces
     projects {
         uuid id PK
         varchar name UK
@@ -154,15 +155,25 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    code_analyses {
+        uuid id PK
+        uuid run_id FK,UK "ON DELETE CASCADE"
+        varchar analyzer_version
+        jsonb profile "CodeProfile"
+        timestamptz created_at
+        timestamptz updated_at
+    }
 ```
 
 - Enumerations are stored as `VARCHAR` + a named `CHECK` constraint instead of native PostgreSQL
   enums, so adding a value is an ordinary transactional migration.
 - `source_location` is stored **relative** to the repositories root, so the same row is valid in
   every container regardless of where the root is mounted.
-- `repository_analyses.profile` is a JSONB document (schema: `RepositoryProfile`). It is
-  written once, in the same transaction that marks the run `succeeded`, so a succeeded run
-  always has its analysis and a failed run never has a partial one.
+- `repository_analyses.profile` and `code_analyses.profile` are JSONB documents (schemas:
+  `RepositoryProfile`, `CodeProfile`). Both are written in the same transaction that marks
+  the run `succeeded`, so a succeeded run always has all its analyses and a failed run never
+  has a partial one. The code analysis takes the repository analysis's classification of
+  test files as input.
 - Tables for test results, coverage, findings, mutation results and so on are added by the
   phases that produce that data.
 - `tests/integration/test_migrations.py` fails if the ORM models and the migrations drift apart.

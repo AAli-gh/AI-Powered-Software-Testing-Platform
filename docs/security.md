@@ -8,7 +8,7 @@ write. The platform must assume that code is hostile.
 | Threat | Phase 1 control | Later |
 |---|---|---|
 | Reading files outside the intended repositories (path traversal, symlinks) | Paths resolved with symlinks followed and required to be strictly inside `TESTMIND_REPOS_ROOT`, checked at registration and again at execution. Covered by unit and API tests | — |
-| Hostile repository content during analysis | The analyzer never imports or runs repository code: `ast` parsing, `ast.literal_eval` for `setup.py`, `yaml.safe_load`, `tomllib`. Symlinks are never followed (`O_NOFOLLOW` on open), `-r` includes cannot leave the repository, and file count, size and depth are bounded ([details](repository-analyzer.md#safety-and-limits)) | — |
+| Hostile repository content during analysis | The analyzers never import or run repository code: `ast` parsing, `ast.literal_eval` for `setup.py`, `yaml.safe_load`, `tomllib`. Symlinks are never followed (`O_NOFOLLOW` on open), `-r` includes cannot leave the repository, and file count, size and depth are bounded ([details](repository-analyzer.md#safety-and-limits)) | — |
 | Modifying analysed repositories | Repositories root mounted **read-only** in `api` and `worker` | Test execution works on a disposable copy |
 | Executing untrusted repository code on the platform host | Not applicable yet: nothing is executed | Sandboxed runner containers with CPU, memory, pids, timeout, network and filesystem limits ([ADR-0003](adr/0003-sandboxed-execution.md)) |
 | Container breakout / privilege escalation | Non-root user (uid 10001), read-only root FS, `no-new-privileges`, all capabilities dropped | Sandboxes: seccomp profile, optional gVisor runtime |

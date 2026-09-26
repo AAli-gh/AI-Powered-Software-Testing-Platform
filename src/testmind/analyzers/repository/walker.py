@@ -116,3 +116,15 @@ def read_text(file: WalkedFile, limits: AnalysisLimits) -> str | None:
     if len(data) > limits.max_read_bytes or b"\x00" in data[:8192]:
         return None
     return data.decode("utf-8", errors="replace")
+
+
+def read_relative(root: Path, relative: str, limits: AnalysisLimits) -> str | None:
+    """Read a file identified by its path relative to `root` (symlinks refused)."""
+    path = root / relative
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return read_text(WalkedFile(path, relative, info.st_size), limits)

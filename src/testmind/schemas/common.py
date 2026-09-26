@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from collections.abc import Sequence
+from typing import Any, Generic, Self, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -25,3 +26,10 @@ class Page(BaseModel, Generic[ItemT]):  # PEP 695 generics would require Python 
     total: int
     limit: int
     offset: int
+
+    @classmethod
+    def slice(cls, items: Sequence[ItemT], *, limit: int, offset: int) -> Self:
+        """Page over an in-memory sequence (e.g. entries of a stored analysis document)."""
+        return cls(
+            items=list(items[offset : offset + limit]), total=len(items), limit=limit, offset=offset
+        )

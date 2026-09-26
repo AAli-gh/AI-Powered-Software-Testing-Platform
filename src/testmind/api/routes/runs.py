@@ -61,6 +61,4 @@ async def list_analysis_files(
         files = [f for f in files if f.language == language]
     if is_test is not None:
         files = [f for f in files if f.is_test is is_test]
-    return Page[FileEntry](
-        items=files[offset : offset + limit], total=len(files), limit=limit, offset=offset
-    )
+    return Page[FileEntry].slice(files, limit=limit, offset=offset)

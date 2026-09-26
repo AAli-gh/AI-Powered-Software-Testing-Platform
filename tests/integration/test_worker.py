@@ -73,6 +73,7 @@ async def test_run_succeeds_through_the_real_queue(
     assert run.finished_at is not None
     async with session_factory() as session:
         assert await AnalysisRepository(session).get_for_run(run_id) is not None
+        assert await AnalysisRepository(session).get_code_for_run(run_id) is not None
 
 
 @pytest.mark.usefixtures("worker")
