@@ -78,6 +78,9 @@ class TestRunReport(_Model):
     project_test_files: list[str]
     generated_test_files: list[str]
     environment: dict[str, str]
+    coverage_error: str | None = Field(
+        default=None, description="Why no coverage report exists for this run, if none does"
+    )
 
     def failures(self) -> list[TestCaseReport]:
         return [t for t in self.tests if t.outcome in {Outcome.FAILED, Outcome.ERROR}]

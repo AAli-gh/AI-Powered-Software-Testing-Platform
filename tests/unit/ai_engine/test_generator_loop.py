@@ -14,6 +14,8 @@ from testmind.ai_engine.test_generator.models import (
     TestKind,
 )
 from testmind.analyzers.code import CodeAnalyzer, CodeProfile
+from testmind.coverage_engine import RawCoverage, build_coverage_report
+from testmind.coverage_engine.parser import RawFile
 from testmind.sandbox.models import Outcome, SandboxResult, SandboxUnavailableError, TestCaseResult
 from tests.doubles import ScriptedLLM
 from tests.unit.analyzers.helpers import make_repo
@@ -184,3 +186,46 @@ def test_no_targets(tmp_path: Path) -> None:
     assert generated.files == []
     assert (generated.targets_selected, generated.targets_available) == (0, 0)
     assert generated.model is None
+
+
+def test_coverage_guided_prompt(tmp_path: Path) -> None:
+    source = (
+        "def f(x):\n    if x:\n        return 1\n    return 2\n\n\ndef g():\n    return 3\n\n\n"
+        "def h(x):\n    if x:\n        x += 1\n    return x\n"
+    )
+    root = make_repo(
+        tmp_path, {"pkg/__init__.py": "", "pkg/mod.py": source, "pkg/other.py": source}
+    )
+    code = CodeAnalyzer().analyze(root, ["pkg/__init__.py", "pkg/mod.py", "pkg/other.py"])
+    raw = RawCoverage(
+        "coverage.py 7.16.1",
+        True,
+        {
+            "pkg/mod.py": RawFile(
+                executed=frozenset({1, 2, 4, 7, 11, 12, 13, 14}),
+                missing=frozenset({3, 8}),
+                executed_branches=frozenset({(2, 4), (12, 13)}),
+                missing_branches=frozenset({(2, 3), (12, 14)}),
+            )
+        },  # pkg/other.py was never imported
+    )
+    llm = ScriptedLLM([VALID, VALID.replace("pkg.mod", "pkg.other")])
+    result = TestGenerator(llm, None, max_iterations=1, max_tokens=10).generate(
+        root, code, GenerationOptions(), max_targets=10, coverage=build_coverage_report(raw, code)
+    )
+
+    assert result.prompt_version == "v1+coverage.v1"
+    mod, other = (r.prompt for r in llm.requests)
+    # (2 of 3 lines + 1 of 2 branches) / 5
+    assert "- f: 60.0% covered; lines never executed: 3; branches never taken: 2->3" in mod
+    assert "- g: 0.0% covered; lines never executed: 8" in mod
+    assert "- h: 80.0% covered; branches never taken: 12->14" in mod  # every line ran
+    assert "- f: not measured (its module was never imported by the tests)" in other
+    assert "Do not duplicate behaviour" in mod
+
+
+def test_without_coverage_the_prompt_is_unchanged(repo: tuple[Path, CodeProfile]) -> None:
+    llm = ScriptedLLM([VALID])
+    generated = run(repo, llm, None)
+    assert generated.prompt_version == "v1"
+    assert "Coverage of these functions" not in llm.requests[0].prompt

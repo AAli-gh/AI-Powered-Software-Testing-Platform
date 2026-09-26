@@ -1,8 +1,9 @@
+import json
 from pathlib import Path
 
 import pytest
 
-from testmind.sandbox.docker_sandbox import DockerSandbox
+from testmind.sandbox.docker_sandbox import DockerSandbox, PytestJob
 from testmind.sandbox.models import Outcome, SandboxUnavailableError
 from tests.unit.analyzers.helpers import make_repo
 
@@ -70,10 +71,33 @@ def test_isolation(sandbox: DockerSandbox, repo: Path) -> None:
 def test_timeout_kills_the_container(repo: Path, sandbox: DockerSandbox) -> None:
     fast = DockerSandbox(sandbox._image, timeout_seconds=5)
     tests = {"test_hang.py": "import calc.ops, time\n\ndef test_hang():\n    time.sleep(60)\n"}
-    result = fast.run_pytest(repo, tests)
+    result = fast.run(repo, PytestJob(test_files=tests, coverage=True))
     assert result.timed_out is True
     assert result.exit_code == -1
     assert result.duration_seconds < 30
+    assert result.coverage_json is None
+    assert result.coverage_error == (
+        "coverage.py wrote no report (the run timed out or pytest crashed)"
+    )
+
+
+def test_coverage_is_only_measured_on_request(sandbox: DockerSandbox, repo: Path) -> None:
+    # A project whose own coverage settings would fail the run and hide its code.
+    (repo / "pyproject.toml").write_text(
+        '[tool.coverage.run]\nomit = ["calc/*"]\n\n[tool.coverage.report]\nfail_under = 100\n'
+    )
+    tests = {
+        "test_ok.py": "from calc.ops import div\n\ndef test_ok():\n    assert div(4, 2) == 2\n"
+    }
+    plain = sandbox.run_pytest(repo, tests)
+    assert (plain.coverage_json, plain.coverage_error) == (None, None)
+
+    measured = sandbox.run(repo, PytestJob(test_files=tests, coverage=True))
+    assert measured.exit_code == 0, measured.output  # fail_under is not applied
+    assert measured.coverage_json is not None
+    files = json.loads(measured.coverage_json)["files"]
+    assert "/workspace/src/calc/ops.py" in files  # omit is not applied
+    assert not any(name.startswith("/workspace/tests") for name in files)
 
 
 def test_collection_error_is_reported(sandbox: DockerSandbox, repo: Path) -> None:

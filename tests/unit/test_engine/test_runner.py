@@ -1,9 +1,11 @@
 """Outcome mapping of TestSuiteRunner (canned sandbox; the real one is in tests/sandbox/)."""
 
+import json
 from pathlib import Path
 
 import pytest
 
+from testmind.analyzers.code import CodeAnalyzer, CodeProfile
 from testmind.analyzers.repository import RepositoryProfile
 from testmind.analyzers.repository.models import Dependency
 from testmind.sandbox.docker_sandbox import PytestJob
@@ -49,13 +51,21 @@ def case(name: str, outcome: Outcome, file: str | None = "tests/test_a.py") -> T
     )
 
 
-def result(*tests: TestCaseResult, exit_code: int = 0, timed_out: bool = False) -> SandboxResult:
+def result(
+    *tests: TestCaseResult,
+    exit_code: int = 0,
+    timed_out: bool = False,
+    coverage_json: str | None = None,
+    coverage_error: str | None = None,
+) -> SandboxResult:
     return SandboxResult(
         exit_code=exit_code,
         timed_out=timed_out,
         duration_seconds=1.5,
         tests=list(tests),
         output="out",
+        coverage_json=coverage_json,
+        coverage_error=coverage_error,
     )
 
 
@@ -72,7 +82,9 @@ def run(
     images: Images | None = None,
     generated: dict[str, str] | None = None,
 ) -> TestRunReport:
-    return TestSuiteRunner(sandbox, images or Images()).run(Path("/repo"), profile, generated)
+    return (
+        TestSuiteRunner(sandbox, images or Images()).run(Path("/repo"), profile, generated).report
+    )
 
 
 @pytest.mark.parametrize(
@@ -195,3 +207,82 @@ def test_generated_only_run_paths_are_relative_to_the_tests_directory(tmp_path: 
     )
     [test] = report.tests
     assert (test.nodeid, test.generated) == ("tests/testmind/test_g.py::test_g", True)
+
+
+# ---------------------------------------------------------------------------------- coverage
+COVERAGE_JSON = json.dumps(
+    {
+        "meta": {"version": "7.16.1", "branch_coverage": True},
+        "files": {
+            "app.py": {
+                "executed_lines": [1, 2],
+                "missing_lines": [3],
+                "executed_branches": [[2, 3]],
+                "missing_branches": [[2, -1]],
+            },
+            "tests/test_a.py": {"executed_lines": [1], "missing_lines": []},
+        },
+    }
+)
+
+
+def code_for(tmp_path: Path) -> tuple[RepositoryProfile, CodeProfile]:
+    files = {
+        "app.py": "def f(x):\n    if x:\n        return 1\n",
+        "tests/test_a.py": "def test_a(): pass\n",
+    }
+    profile = analyze(tmp_path, files)
+    code = CodeAnalyzer().analyze(tmp_path, ["app.py", "tests/test_a.py"], profile.test_files)
+    return profile, code
+
+
+def test_coverage_is_measured_and_mapped_to_production_code(tmp_path: Path) -> None:
+    profile, code = code_for(tmp_path)
+    sandbox = Sandbox(result(case("t", Outcome.PASSED), coverage_json=COVERAGE_JSON))
+    suite = TestSuiteRunner(sandbox, Images(), coverage_threshold=90).run(
+        tmp_path, profile, code=code
+    )
+
+    assert sandbox.jobs[0].coverage is True
+    assert suite.report.coverage_error is None
+    assert suite.coverage is not None
+    assert [f.path for f in suite.coverage.files] == ["app.py"]  # the test module is not counted
+    assert suite.coverage.threshold == 90
+    [function] = suite.coverage.functions
+    assert (function.qualname, function.statements, function.covered_lines) == ("f", 2, 1)
+    assert [g.qualname for g in suite.coverage.gaps] == ["f"]
+
+
+@pytest.mark.parametrize(
+    ("coverage_json", "coverage_error", "with_code", "expected"),
+    [
+        (None, "coverage.py wrote no report (timed out)", True, "wrote no report (timed out)"),
+        (None, None, True, "coverage.py wrote no report"),
+        (COVERAGE_JSON, None, False, "no code analysis"),
+        ('{"files": 3}', None, True, "Not a coverage.py JSON report"),
+    ],
+)
+def test_missing_coverage_is_explained(
+    tmp_path: Path,
+    coverage_json: str | None,
+    coverage_error: str | None,
+    with_code: bool,
+    expected: str,
+) -> None:
+    profile, code = code_for(tmp_path)
+    sandbox = Sandbox(
+        result(
+            case("t", Outcome.PASSED), coverage_json=coverage_json, coverage_error=coverage_error
+        )
+    )
+    suite = TestSuiteRunner(sandbox, Images()).run(
+        tmp_path, profile, code=code if with_code else None
+    )
+    assert suite.coverage is None
+    assert suite.report.coverage_error is not None
+    assert expected in suite.report.coverage_error
+
+
+def test_no_run_means_no_coverage(profile: RepositoryProfile) -> None:
+    report = run(profile, Sandbox(available=False))
+    assert report.coverage_error == "Coverage was not measured: sandbox unavailable"

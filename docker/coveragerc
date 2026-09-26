@@ -1,0 +1,14 @@
+# Coverage configuration used inside the sandbox (passed with --cov-config, so the project's
+# own [tool.coverage] settings -- fail_under, omit, plugins -- never change TestMind's results).
+# Which files count as production code is decided afterwards from the repository analysis.
+[run]
+branch = True
+source = /workspace/src
+# Only /tmp (tmpfs) and /out are writable in the container.
+data_file = /tmp/.coverage
+omit =
+    /workspace/tests/*
+
+[report]
+# Also report modules in directories without __init__.py that no test imported.
+include_namespace_packages = True

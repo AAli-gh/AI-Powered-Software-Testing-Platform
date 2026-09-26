@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import posixpath
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from testmind.analyzers.code.models import CodeProfile
 from testmind.analyzers.repository.models import Dependency, RepositoryProfile
+from testmind.coverage_engine import (
+    CoverageParseError,
+    CoverageReport,
+    build_coverage_report,
+    parse_coverage_json,
+)
+from testmind.coverage_engine.report import DEFAULT_THRESHOLD
 from testmind.sandbox.docker_sandbox import PytestJob
 from testmind.sandbox.models import (
     Outcome,
@@ -27,6 +36,7 @@ from testmind.test_engine.models import (
 GENERATED_PREFIX = "/workspace/tests/"
 PROJECT_PREFIX = "/workspace/src/"
 EXIT_NO_TESTS_COLLECTED = 5
+NO_CODE_ANALYSIS = "The run has no code analysis to map coverage onto"
 
 
 class Sandbox(Protocol):
@@ -39,19 +49,36 @@ class ImageBuilder(Protocol):
     def ensure(self, dependencies: list[Dependency]) -> RunnerImage: ...
 
 
+@dataclass(frozen=True, slots=True)
+class SuiteResult:
+    report: TestRunReport
+    coverage: CoverageReport | None  # None: see report.coverage_error
+
+
 class TestSuiteRunner:
     __test__ = False
 
-    def __init__(self, sandbox: Sandbox, images: ImageBuilder) -> None:
+    def __init__(
+        self,
+        sandbox: Sandbox,
+        images: ImageBuilder,
+        *,
+        coverage_threshold: float = DEFAULT_THRESHOLD,
+    ) -> None:
         self._sandbox = sandbox
         self._images = images
+        self._threshold = coverage_threshold
 
     def run(
         self,
         root: Path,
         profile: RepositoryProfile,
         generated: dict[str, str] | None = None,
-    ) -> TestRunReport:
+        *,
+        code: CodeProfile | None = None,
+    ) -> SuiteResult:
+        """Run the suite with coverage; `code` (the run's code analysis) maps coverage onto
+        production modules and functions."""
         generated = generated or {}
         project_tests = list(profile.test_files)
         env = (
@@ -62,9 +89,11 @@ class TestSuiteRunner:
         base = _Base(project_tests, sorted(generated), env)
 
         if not project_tests and not generated:
-            return base.report(ExecutionOutcome.NO_TESTS, install=None)
+            return SuiteResult(base.report(ExecutionOutcome.NO_TESTS, install=None), None)
         if not self._sandbox.available():
-            return base.report(ExecutionOutcome.SANDBOX_UNAVAILABLE, install=None)
+            return SuiteResult(
+                base.report(ExecutionOutcome.SANDBOX_UNAVAILABLE, install=None), None
+            )
 
         try:
             image = self._images.ensure(profile.dependencies)
@@ -72,7 +101,8 @@ class TestSuiteRunner:
             install = InstallReport(
                 image="", requirements=[], from_cache=False, notes=list(exc.notes), log=exc.log
             )
-            return base.report(ExecutionOutcome.INSTALL_FAILED, install=install, output=str(exc))
+            report = base.report(ExecutionOutcome.INSTALL_FAILED, install=install, output=str(exc))
+            return SuiteResult(report, None)
         install = InstallReport(
             image=image.tag,
             requirements=list(image.requirements),
@@ -82,15 +112,34 @@ class TestSuiteRunner:
         )
 
         job = PytestJob(
-            test_files=generated, project_tests=tuple(project_tests), image=image.tag, env=env
+            test_files=generated,
+            project_tests=tuple(project_tests),
+            image=image.tag,
+            env=env,
+            coverage=True,
         )
         try:
             result = self._sandbox.run(root, job)
         except SandboxUnavailableError as exc:
-            return base.report(
+            report = base.report(
                 ExecutionOutcome.SANDBOX_UNAVAILABLE, install=install, output=str(exc)
             )
-        return base.from_result(result, install)
+            return SuiteResult(report, None)
+        coverage, coverage_error = self._coverage(result, code, base.rootdir)
+        return SuiteResult(base.from_result(result, install, coverage_error), coverage)
+
+    def _coverage(
+        self, result: SandboxResult, code: CodeProfile | None, rootdir: str
+    ) -> tuple[CoverageReport | None, str | None]:
+        if result.coverage_json is None:
+            return None, result.coverage_error or "coverage.py wrote no report"
+        if code is None:
+            return None, NO_CODE_ANALYSIS
+        try:
+            raw = parse_coverage_json(result.coverage_json, rootdir=rootdir)
+        except CoverageParseError as exc:
+            return None, str(exc)
+        return build_coverage_report(raw, code, threshold=self._threshold), None
 
 
 class _Base:
@@ -98,6 +147,11 @@ class _Base:
         self.project_tests = project_tests
         self.generated = generated
         self.env = env
+
+    @property
+    def rootdir(self) -> str:
+        """Where pytest runs: the repository, or the generated tests when it has none."""
+        return PROJECT_PREFIX if self.project_tests else GENERATED_PREFIX
 
     def report(
         self, outcome: ExecutionOutcome, *, install: InstallReport | None, output: str = ""
@@ -114,11 +168,13 @@ class _Base:
             project_test_files=self.project_tests,
             generated_test_files=self.generated,
             environment=self.env,
+            coverage_error=f"Coverage was not measured: {outcome.value.replace('_', ' ')}",
         )
 
-    def from_result(self, result: SandboxResult, install: InstallReport) -> TestRunReport:
-        rootdir = PROJECT_PREFIX if self.project_tests else GENERATED_PREFIX
-        tests = [_case(t, rootdir) for t in result.tests]
+    def from_result(
+        self, result: SandboxResult, install: InstallReport, coverage_error: str | None
+    ) -> TestRunReport:
+        tests = [_case(t, self.rootdir) for t in result.tests]
         totals = TestTotals(
             total=len(tests),
             passed=result.count(Outcome.PASSED),
@@ -139,6 +195,7 @@ class _Base:
             project_test_files=self.project_tests,
             generated_test_files=self.generated,
             environment=self.env,
+            coverage_error=coverage_error,
         )
 
 

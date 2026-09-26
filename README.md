@@ -13,9 +13,9 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–5 of 14 are complete: the platform foundation, the deterministic
-> repository and code analyzers, AI test generation with sandboxed validation, and the
-> sandboxed test runner.**
+> **Status: Phases 1–6 of 14 are complete: the platform foundation, the deterministic
+> repository and code analyzers, AI test generation with sandboxed validation, the
+> sandboxed test runner, and coverage analysis with coverage-guided test generation.**
 > The AI stage has been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
@@ -129,6 +129,17 @@ Everything listed here is implemented and tested.
   - a structured report: outcome, pytest exit code and its meaning, totals, duration, and
     every test with file, line, message and traceback, plus logs;
   - verified green on the Django, FastAPI, Flask and plain-pytest example repositories.
+- **Coverage** ([details](docs/coverage.md)), measured by coverage.py in every test execution:
+  - line and branch coverage per project, file and **function**, with missing line ranges
+    and branches never taken, and production code separated from test code;
+  - function coverage computed from the code analysis and **verified against coverage.py's
+    own numbers** on every example repository;
+  - **coverage gaps** ranked deterministically by risk (uncovered share × (complexity +
+    2 × findings)), each with its reasons;
+  - **coverage-guided test generation**: the riskiest gaps become the AI's targets and the
+    prompt lists the lines and branches that never ran. Comparing executions measures the
+    effect. On `examples/buggy_inventory` (scripted model, real sandbox) total coverage rose
+    from 8.47 % to 38.98 %.
 - **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
   starts.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
@@ -136,7 +147,7 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 670 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 735 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -154,7 +165,8 @@ Everything listed here is implemented and tested.
 | AI | Anthropic SDK (Claude), versioned prompt files, provider-neutral interface |
 | Security | bandit, pip-audit, gitleaks, non-root read-only containers, Docker sandbox for untrusted code |
 | Packaging / infra | uv, Docker (multi-stage), docker compose, GitHub Actions |
-| Planned | coverage.py & mutation testing engines, LLM providers (pluggable), Playwright, GitHub API, React dashboard |
+| Coverage | coverage.py 7.16 + pytest-cov in the sandbox image |
+| Planned | mutation testing engine, LLM providers (pluggable), Playwright, GitHub API, React dashboard |
 
 ## Quick start (Docker)
 
@@ -186,6 +198,7 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_REPOS_ROOT` | — | Directory that projects must live in (`/repos` in containers) |
 | `TESTMIND_HOST_REPOS_DIR` | `./examples` | Host directory mounted read-only at `/repos` |
 | `TESTMIND_CELERY_TASK_TIME_LIMIT_SECONDS` | `3600` | Hard time limit per job |
+| `TESTMIND_COVERAGE_THRESHOLD` | `80` | Functions below this coverage are reported as gaps |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | — | Database container credentials |
 
 ## Usage
@@ -271,7 +284,9 @@ Errors always have the same shape:
 | `POST` | `/api/v1/runs/{id}/test-generations` | Queue AI test generation (`202`; `409` if the run has not succeeded; `503` if no LLM is configured) |
 | `GET` | `/api/v1/runs/{id}/test-generations` · `/api/v1/test-generations/{id}` | Generation status and result (generated code, statuses, suspected bugs) |
 | `POST` | `/api/v1/runs/{id}/test-executions` | Queue a sandboxed run of the test suite (`{"generation_id": …}` adds generated tests) |
-| `GET` | `/api/v1/test-executions/{id}` · `/tests` · `/logs` | Summary; per-test results (`outcome`, `generated` filters); pytest and install logs |
+| `GET` | `/api/v1/test-executions/{id}` · `/tests` · `/logs` | Summary (including coverage %); per-test results (`outcome`, `generated` filters); pytest and install logs |
+| `GET` | `/api/v1/test-executions/{id}/coverage` · `/files` · `/functions` · `/gaps` | Coverage totals and riskiest gaps; per file / function (`below`, `sort=percent`); ranked gaps |
+| `GET` | `/api/v1/test-executions/{id}/coverage/compare?base={id}` | Coverage change between two executions |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -288,7 +303,7 @@ make help            # all targets
 | Suite | Location | Runs against |
 |---|---|---|
 | Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/`, the generator loop and prompt handling |
-| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, and the full generate → run → fix loop |
+| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, and the coverage-guided loop |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
@@ -348,7 +363,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 | 3 | Code analyzer: AST, functions/classes, complexity, static analysis | ✅ Done |
 | 4 | Test generator: unit / edge / negative tests, bounded validation loop | ✅ Done (live Anthropic call not yet verified: no API key available) |
 | 5 | Test runner: sandboxed pytest, structured results, tracebacks | ✅ Done |
-| 6 | Coverage: coverage.py, file/function/branch coverage, weak areas | Planned |
+| 6 | Coverage: coverage.py, file/function/branch coverage, weak areas, coverage-guided generation | ✅ Done |
 | 7 | AI failure analyzer: evidence, root-cause hypothesis, confidence | Planned |
 | 8 | Regression engine: git diff, affected tests, test selection | Planned |
 | 9 | Mutation testing: mutants, score, survivors | Planned |
@@ -365,6 +380,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 - [Code analyzer](docs/code-analyzer.md): symbols, complexity, rule catalog, suppression
 - [AI engine](docs/ai-engine.md): test generation pipeline, providers, prompts, sandbox validation
 - [Test engine](docs/test-engine.md): runner images, sandboxed execution, reports, orphaned jobs
+- [Coverage](docs/coverage.md): measurement, function mapping, gap ranking, coverage-guided generation
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

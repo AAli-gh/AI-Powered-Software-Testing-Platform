@@ -52,7 +52,7 @@ async def test_create_and_read(
     assert response.status_code == 202
     generation = response.json()
     assert generation["status"] == "queued"
-    assert generation["options"] == body
+    assert generation["options"] == {**body, "coverage_execution_id": None}
     assert generation["provider"] == "anthropic"
     assert generation["result"] is None
     assert dispatcher.generations == [uuid.UUID(generation["id"])]
@@ -72,6 +72,7 @@ async def test_default_options(client: httpx.AsyncClient, run_id: str) -> None:
         "kinds": ["unit", "edge_cases", "negative"],
         "max_targets": None,
         "path_prefix": None,
+        "coverage_execution_id": None,
     }
 
 

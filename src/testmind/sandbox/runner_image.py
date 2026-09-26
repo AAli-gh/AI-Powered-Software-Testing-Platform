@@ -3,13 +3,13 @@
 Dependencies are installed with `pip --only-binary=:all:` — wheels only — so no third-party
 `setup.py` is ever executed while building. The install happens in `docker build` (network is
 needed there); tests later run from the finished image with no network. Images are cached by a
-hash of the base image and the exact requirement list.
+hash of the base image's *content id* (so rebuilding the base image invalidates them) and the
+exact requirement list.
 """
 
 from __future__ import annotations
 
 import hashlib
-import shutil
 import subprocess  # nosec B404 - only fixed argument lists, never a shell
 import tempfile
 from collections.abc import Iterable
@@ -24,6 +24,7 @@ from testmind.core.logging import get_logger
 logger = get_logger(__name__)
 
 MAX_LOG = 20_000
+DOCKER_PROBE_TIMEOUT = 15
 IMAGE_REPOSITORY = "testmind-runner"
 INSTALLED_GROUPS = frozenset({DependencyGroup.RUNTIME, DependencyGroup.DEVELOPMENT})
 DOCKERFILE = """\
@@ -86,15 +87,15 @@ class RunnerImageBuilder:
         self._docker = docker_binary
         self._timeout = timeout_seconds
 
-    def tag_for(self, requirements: list[str]) -> str:
-        digest = hashlib.sha256("\n".join([self._base, *requirements]).encode()).hexdigest()
+    def tag_for(self, requirements: list[str], base_id: str) -> str:
+        digest = hashlib.sha256("\n".join([base_id, *requirements]).encode()).hexdigest()
         return f"{IMAGE_REPOSITORY}:{digest[:16]}"
 
     def ensure(self, dependencies: Iterable[Dependency]) -> RunnerImage:
         requirements, notes = requirement_lines(dependencies)
         if not requirements:
             return RunnerImage(self._base, (), True, "", tuple(notes))
-        tag = self.tag_for(requirements)
+        tag = self.tag_for(requirements, self._base_id(notes))
         if self._exists(tag):
             return RunnerImage(tag, tuple(requirements), True, "", tuple(notes))
 
@@ -127,14 +128,34 @@ class RunnerImageBuilder:
         logger.info("runner_image_built", tag=tag, requirements=len(requirements))
         return RunnerImage(tag, tuple(requirements), False, log, tuple(notes))
 
+    def _base_id(self, notes: list[str]) -> str:
+        """Content id of the base image: a rebuilt base (e.g. a new pytest or coverage version)
+        must not reuse runner images built on the old one."""
+        try:
+            probe = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
+                [self._docker, "image", "inspect", "--format", "{{.Id}}", self._base],
+                capture_output=True,
+                timeout=DOCKER_PROBE_TIMEOUT,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise DependencyInstallError(
+                f"Docker is not available: {exc}", "", tuple(notes)
+            ) from None
+        if probe.returncode != 0:
+            raise DependencyInstallError(
+                f"Sandbox base image '{self._base}' is not available",
+                probe.stderr.decode("utf-8", errors="replace")[-MAX_LOG:],
+                tuple(notes),
+            )
+        return probe.stdout.decode("utf-8", errors="replace").strip()
+
     def _exists(self, tag: str) -> bool:
-        if shutil.which(self._docker) is None:
-            return False
         try:
             probe = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
                 [self._docker, "image", "inspect", tag],
                 capture_output=True,
-                timeout=15,
+                timeout=DOCKER_PROBE_TIMEOUT,
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired):

@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from testmind.analyzers.repository import RepositoryAnalyzer
+from testmind.analyzers.code import CodeAnalyzer, CodeProfile
+from testmind.analyzers.repository import RepositoryAnalyzer, RepositoryProfile
 from testmind.analyzers.repository.models import Dependency, DependencyGroup
+from testmind.coverage_engine.report import is_production
 from testmind.sandbox.docker_sandbox import DockerSandbox, PytestJob
 from testmind.sandbox.models import Outcome
 from testmind.sandbox.runner_image import DependencyInstallError, RunnerImageBuilder
@@ -22,16 +24,39 @@ def dependency(name: str, specifier: str = "") -> Dependency:
     return Dependency(name=name, specifier=specifier, group=DependencyGroup.RUNTIME, source="r.txt")
 
 
+def analyse(root: Path) -> tuple[RepositoryProfile, CodeProfile]:
+    """Both analyses, exactly as an analysis run produces them."""
+    repository = RepositoryAnalyzer().analyze(root)
+    python = [f.path for f in repository.files if f.language == "Python" and f.path.endswith(".py")]
+    return repository, CodeAnalyzer().analyze(root, python, repository.test_files)
+
+
+def docker(*args: str, stdin: str | None = None, check: bool = True) -> str:
+    completed = subprocess.run(  # noqa: S603
+        ["docker", *args],  # noqa: S607
+        input=stdin.encode() if stdin is not None else None,
+        check=check,
+        capture_output=True,
+    )
+    return completed.stdout.decode().strip()
+
+
 @pytest.fixture(scope="module")
 def builder(sandbox: DockerSandbox) -> Iterator[RunnerImageBuilder]:
-    """A builder on a per-session alias of the sandbox image, so every run really builds
-    (and coverage does not depend on images cached by an earlier run). Cleaned up after."""
-    alias = f"testmind-sandbox:test-{uuid.uuid4().hex[:8]}"
-    subprocess.run(["docker", "tag", sandbox.image, alias], check=True, capture_output=True)  # noqa: S603, S607
+    """A builder on a per-session copy of the sandbox image with its own content id, so every
+    run really builds (and coverage does not depend on images cached by an earlier run).
+    Cleaned up after."""
+    marker = uuid.uuid4().hex[:8]
+    alias = f"testmind-sandbox:test-{marker}"
+    docker(
+        "build", "--quiet", "--tag", alias, "-",
+        stdin=f"FROM {sandbox.image}\nLABEL org.testmind.test={marker}\n",
+    )  # fmt: skip
     image_builder = RunnerImageBuilder(alias, timeout_seconds=600)
     yield image_builder
-    built = [image_builder.tag_for(r) for r in BUILT_REQUIREMENTS]
-    subprocess.run(["docker", "rmi", "--force", alias, *built], check=False, capture_output=True)  # noqa: S603, S607
+    base_id = docker("image", "inspect", "--format", "{{.Id}}", alias)
+    built = [image_builder.tag_for(r, base_id) for r in BUILT_REQUIREMENTS]
+    docker("rmi", "--force", *built, alias, check=False)
 
 
 BUILT_REQUIREMENTS = [["six==1.16.0"], ["pyyaml>=6.0", "requests>=2.31"]]
@@ -78,12 +103,21 @@ def test_example_suites_pass(
     runner: TestSuiteRunner, example: str, total: int, environment: dict[str, str]
 ) -> None:
     root = EXAMPLES / example
-    report = runner.run(root, RepositoryAnalyzer().analyze(root))
+    repository, code = analyse(root)
+    suite = runner.run(root, repository, code=code)
+    report = suite.report
     assert report.outcome is ExecutionOutcome.PASSED, report.output
     assert report.totals.total == total
     assert report.totals.passed == total
     assert report.environment == environment
     assert all(t.file and t.line for t in report.tests)
+    # Coverage of production code only: every analysed module except test support code.
+    assert suite.coverage is not None, report.coverage_error
+    measured = {f.path for f in suite.coverage.files} | set(suite.coverage.unmeasured_files)
+    assert measured == {m.path for m in code.modules if is_production(m.path)}
+    assert not measured & set(repository.test_files)
+    assert suite.coverage.branch_coverage is True
+    assert suite.coverage.totals.covered_lines > 0
 
 
 def test_generated_tests_run_next_to_the_project_suite(
@@ -97,7 +131,9 @@ def test_generated_tests_run_next_to_the_project_suite(
             "def test_average_of_zero_items():\n    assert average_price(10, 0) == 0\n"
         )
     }
-    report = runner.run(root, RepositoryAnalyzer().analyze(root), generated)
+    repository, code = analyse(root)
+    suite = runner.run(root, repository, generated, code=code)
+    report = suite.report
 
     assert report.outcome is ExecutionOutcome.FAILED
     assert report.install is not None

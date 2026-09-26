@@ -162,7 +162,7 @@ Finding object:
 
 | Method | Path | Notes |
 |---|---|---|
-| `POST` | `/api/v1/runs/{run_id}/test-generations` | Body (optional): `{"kinds": ["unit", "edge_cases", "negative"], "max_targets": 10, "path_prefix": "src/"}`. `202` queued. `404` unknown run. `409` run not succeeded. `422` invalid options. `503 llm_not_configured` if no LLM credentials. `503 dispatch_failed` if the queue is down |
+| `POST` | `/api/v1/runs/{run_id}/test-generations` | Body (optional): `{"kinds": ["unit", "edge_cases", "negative"], "max_targets": 10, "path_prefix": "src/", "coverage_execution_id": "<uuid>"}`. With `coverage_execution_id` the generation is [coverage-guided](coverage.md#coverage-guided-test-generation) (`404` if that execution does not belong to the run, `409` if it has no coverage report). `202` queued. `404` unknown run. `409` run not succeeded. `422` invalid options. `503 llm_not_configured` if no LLM credentials. `503 dispatch_failed` if the queue is down |
 | `GET` | `/api/v1/runs/{run_id}/test-generations` | Paginated, newest first |
 | `GET` | `/api/v1/test-generations/{generation_id}` | Status plus `result` once succeeded |
 
@@ -210,9 +210,43 @@ File `status` values and their meaning are listed in [ai-engine.md](ai-engine.md
 |---|---|---|
 | `POST` | `/api/v1/runs/{run_id}/test-executions` | Body (optional): `{"generation_id": "<uuid>"}` to add that generation's test modules. `202`. `404` unknown run, or a generation that does not belong to it. `409` run or generation not succeeded. `503 dispatch_failed` |
 | `GET` | `/api/v1/runs/{run_id}/test-executions` | Paginated summaries, newest first |
-| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict) and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment) |
+| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict) and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment, `coverage_percent`, `coverage_error`) |
 | `GET` | `/api/v1/test-executions/{id}/tests` | Per-test results, filterable by `outcome` (`passed`, `failed`, `error`, `skipped`, `xfailed`) and `generated`. `limit` ≤ 500. `404` until a report exists |
 | `GET` | `/api/v1/test-executions/{id}/logs` | `{"output": pytest console tail, "install_log": pip/docker build tail}` |
+
+### Coverage
+
+Every execution that ran tests measures line and branch coverage ([details](coverage.md)).
+Without a coverage report every endpoint below answers `404` with the reason (for example
+`Coverage was not measured: sandbox unavailable`).
+
+| Method | Path | Parameters | Notes |
+|---|---|---|---|
+| `GET` | `/api/v1/test-executions/{id}/coverage` | | Tool, threshold, totals (lines, branches, combined, functions never executed), unmeasured files, gap count and the 10 riskiest gaps |
+| `GET` | `/api/v1/test-executions/{id}/coverage/files` | `below` (0–100), `sort` (`path` or `percent`), `limit` ≤ 500, `offset` | Per file: counts, percentages, `missing` ranges, `missing_lines`, branches never taken |
+| `GET` | `/api/v1/test-executions/{id}/coverage/functions` | `path`, `below`, `sort`, `limit`, `offset` | Per function, with complexity and findings |
+| `GET` | `/api/v1/test-executions/{id}/coverage/gaps` | `limit`, `offset` | Functions below the threshold, riskiest first, with reasons |
+| `GET` | `/api/v1/test-executions/{id}/coverage/compare` | `base` (execution id, required) | Change from `base` to this execution: totals, newly covered / newly missed lines, changed files and functions |
+
+Gap entry:
+
+```json
+{
+  "path": "inventory/pricing.py",
+  "qualname": "price_for",
+  "line": 1,
+  "percent": 0.0,
+  "missing": ["2-24"],
+  "missing_branches_detail": ["3->4", "3->10", "…"],
+  "risk": 17.0,
+  "reasons": [
+    "never executed by the test suite",
+    "22 of 22 branches never taken",
+    "cyclomatic complexity 15",
+    "static-analysis findings: TM030"
+  ]
+}
+```
 
 Test entry:
 

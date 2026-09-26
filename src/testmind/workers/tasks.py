@@ -87,7 +87,11 @@ def build_image_builder(settings: Settings) -> RunnerImageBuilder:
 async def _execute_tests(settings: Settings, execution_id: uuid.UUID) -> RunStatus | None:
     engine = create_engine(settings, pooled=False)
     try:
-        runner = TestSuiteRunner(build_sandbox(settings), build_image_builder(settings))
+        runner = TestSuiteRunner(
+            build_sandbox(settings),
+            build_image_builder(settings),
+            coverage_threshold=settings.coverage_threshold,
+        )
         executor = ExecutionExecutor(create_session_factory(engine), settings.repos_root, runner)
         return await executor.execute(execution_id)
     finally:

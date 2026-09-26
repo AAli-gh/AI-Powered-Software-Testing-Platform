@@ -10,6 +10,7 @@ from celery.contrib.testing.worker import start_worker
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.core.config import Settings
+from testmind.coverage_engine import CoverageReport
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
 from testmind.services.execution_service import ExecutionService
@@ -68,3 +69,9 @@ async def test_repository_suite_runs_through_the_whole_stack(
     [failure] = report.failures()
     assert failure.nodeid == "test_calc.py::test_wrong"
     assert failure.line == 6
+    # Production modules only: calc.py is fully covered, main.py (print('hello')) is never
+    # imported by a test; the test module itself is not counted.
+    assert row.coverage_percent == 66.67
+    coverage = CoverageReport.model_validate(row.coverage)
+    assert [(f.path, f.percent) for f in coverage.files] == [("calc.py", 100.0), ("main.py", 0.0)]
+    assert coverage.tool == "coverage.py 7.16.1"

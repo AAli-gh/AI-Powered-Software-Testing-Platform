@@ -48,10 +48,11 @@ def test_non_pep440_specifiers_are_dropped_with_a_note() -> None:
 
 def test_tag_is_deterministic_and_depends_on_base_and_requirements() -> None:
     builder = RunnerImageBuilder("base:1")
-    assert builder.tag_for(["a", "b"]) == builder.tag_for(["a", "b"])
-    assert builder.tag_for(["a"]) != builder.tag_for(["a", "b"])
-    assert RunnerImageBuilder("base:2").tag_for(["a"]) != builder.tag_for(["a"])
-    assert builder.tag_for(["a"]).startswith("testmind-runner:")
+    assert builder.tag_for(["a", "b"], "sha256:1") == builder.tag_for(["a", "b"], "sha256:1")
+    assert builder.tag_for(["a"], "sha256:1") != builder.tag_for(["a", "b"], "sha256:1")
+    # A rebuilt base image (new content id, same name) must not reuse old runner images.
+    assert builder.tag_for(["a"], "sha256:2") != builder.tag_for(["a"], "sha256:1")
+    assert builder.tag_for(["a"], "sha256:1").startswith("testmind-runner:")
 
 
 def test_only_wheels_are_installed_and_the_image_drops_root() -> None:
@@ -71,6 +72,39 @@ def fake_docker(tmp_path: Path, script: str) -> str:
     return str(binary)
 
 
+# `docker image inspect --format {{.Id}} base` answers with a content id; other probes fail.
+INSPECT_BASE = 'if [ "$3" = "--format" ]; then echo sha256:base; exit 0; fi\n'
+
+
+def test_base_image_id_is_part_of_the_tag(tmp_path: Path) -> None:
+    log = tmp_path / "calls"
+    docker = fake_docker(
+        tmp_path,
+        f'echo "$@" >> {log}\n' + INSPECT_BASE + 'if [ "$1" = "image" ]; then exit 0; fi\n',
+    )
+    image = RunnerImageBuilder("base", docker_binary=docker).ensure([dep("six")])
+    builder = RunnerImageBuilder("base")
+    assert image.tag == builder.tag_for(["six"], "sha256:base")
+    assert image.from_cache is True
+    assert log.read_text().splitlines()[0] == "image inspect --format {{.Id}} base"
+
+
+def test_docker_disappearing_after_the_base_image_probe(tmp_path: Path) -> None:
+    # The fake binary removes itself after answering the base-image probe.
+    docker = fake_docker(tmp_path, 'if [ "$3" = "--format" ]; then echo sha256:b; rm "$0"; fi\n')
+    with pytest.raises(DependencyInstallError, match="Docker is not available"):
+        RunnerImageBuilder("base", docker_binary=docker).ensure([dep("six")])
+
+
+def test_missing_base_image(tmp_path: Path) -> None:
+    docker = fake_docker(tmp_path, "echo 'No such image' >&2\nexit 1\n")
+    with pytest.raises(
+        DependencyInstallError, match="base image 'base' is not available"
+    ) as caught:
+        RunnerImageBuilder("base", docker_binary=docker).ensure([dep("six")])
+    assert "No such image" in caught.value.log
+
+
 def test_missing_docker_is_an_install_error(tmp_path: Path) -> None:
     builder = RunnerImageBuilder("base", docker_binary=str(tmp_path / "no-docker"))
     with pytest.raises(DependencyInstallError, match="Docker is not available"):
@@ -78,7 +112,9 @@ def test_missing_docker_is_an_install_error(tmp_path: Path) -> None:
 
 
 def test_build_timeout(tmp_path: Path) -> None:
-    docker = fake_docker(tmp_path, 'if [ "$1" = "image" ]; then exit 1; fi\nsleep 5\n')
+    docker = fake_docker(
+        tmp_path, INSPECT_BASE + 'if [ "$1" = "image" ]; then exit 1; fi\nsleep 5\n'
+    )
     builder = RunnerImageBuilder("base", docker_binary=docker, timeout_seconds=1)
     with pytest.raises(DependencyInstallError, match="timed out"):
         builder.ensure([dep("six")])

@@ -253,7 +253,7 @@ async def test_missing_source_and_crash(
     second = await queued_execution(session_factory, run_id)
 
     class Crashing(TestSuiteRunner):
-        def run(self, root, profile, generated=None):  # type: ignore[no-untyped-def]
+        def run(self, root, profile, generated=None, *, code=None):  # type: ignore[no-untyped-def]
             raise RuntimeError("bug")
 
     with pytest.raises(RuntimeError):

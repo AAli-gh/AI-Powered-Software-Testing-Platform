@@ -16,8 +16,10 @@ from testmind.analyzers.code import CodeProfile
 from testmind.analyzers.repository.models import Dependency, RepositoryProfile
 from testmind.core.errors import AppError
 from testmind.core.logging import get_logger
+from testmind.coverage_engine import CoverageReport
 from testmind.domain.enums import RunStatus
 from testmind.repositories.analysis_repository import AnalysisRepository
+from testmind.repositories.execution_repository import ExecutionRepository
 from testmind.repositories.generation_repository import GenerationRepository
 from testmind.sandbox.runner_image import DependencyInstallError
 from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE
@@ -28,6 +30,7 @@ from testmind.test_engine.runner import ImageBuilder
 logger = get_logger(__name__)
 
 NO_CODE_ANALYSIS = "The run has no code analysis to generate tests from"
+NO_COVERAGE = "The test execution chosen for coverage-guided generation has no coverage report"
 
 
 class GenerationExecutor:
@@ -73,16 +76,19 @@ class GenerationExecutor:
                 if repository
                 else []
             )
+            coverage = await _coverage(ExecutionRepository(session), options)
             apply_transition(generation, RunStatus.RUNNING)
             await session.commit()
 
         try:
             if profile is None or location is None:
                 return await self._finish(generation_id, RunStatus.FAILED, NO_CODE_ANALYSIS)
+            if options.coverage_execution_id is not None and coverage is None:
+                return await self._finish(generation_id, RunStatus.FAILED, NO_COVERAGE)
             root = resolve_local_source(self._repos_root, location)
             provider = self._provider_factory()
             result = await asyncio.to_thread(
-                self._generate, root, profile, options, provider, dependencies
+                self._generate, root, profile, options, provider, dependencies, coverage=coverage
             )
         except (AppError, LLMError) as exc:
             return await self._finish(generation_id, RunStatus.FAILED, str(exc))
@@ -99,6 +105,8 @@ class GenerationExecutor:
         options: GenerationOptions,
         provider: LLMProvider,
         dependencies: list[Dependency],
+        *,
+        coverage: CoverageReport | None,
     ) -> GenerationResult:
         generator = TestGenerator(
             provider,
@@ -107,7 +115,9 @@ class GenerationExecutor:
             max_tokens=self._max_tokens,
             image=self._runner_image(dependencies),
         )
-        return generator.generate(root, profile, options, max_targets=self._max_targets)
+        return generator.generate(
+            root, profile, options, max_targets=self._max_targets, coverage=coverage
+        )
 
     def _runner_image(self, dependencies: list[Dependency]) -> str | None:
         """The project's dependencies are installed so generated tests can import its code.
@@ -140,3 +150,14 @@ class GenerationExecutor:
             await session.commit()
         logger.info("generation_finished", generation_id=str(generation_id), status=status.value)
         return status
+
+
+async def _coverage(
+    executions: ExecutionRepository, options: GenerationOptions
+) -> CoverageReport | None:
+    if options.coverage_execution_id is None:
+        return None
+    execution = await executions.get(options.coverage_execution_id)
+    if execution is None or execution.coverage is None:  # deleted since the request
+        return None
+    return CoverageReport.model_validate(execution.coverage)

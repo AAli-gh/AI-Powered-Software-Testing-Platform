@@ -14,6 +14,7 @@ from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableErr
 from testmind.core.logging import get_logger
 from testmind.db.models import TestGeneration
 from testmind.domain.enums import RunStatus
+from testmind.repositories.execution_repository import ExecutionRepository
 from testmind.repositories.generation_repository import GenerationRepository
 from testmind.repositories.run_repository import RunRepository
 from testmind.services.dispatcher import TaskDispatcher
@@ -31,6 +32,7 @@ class GenerationService:
         self._settings = settings
         self._generations = GenerationRepository(session)
         self._runs = RunRepository(session)
+        self._executions = ExecutionRepository(session)
 
     async def create(self, run_id: uuid.UUID, options: GenerationOptions) -> TestGeneration:
         run = await self._runs.get(run_id)
@@ -40,6 +42,8 @@ class GenerationService:
             raise ConflictError(
                 f"Tests can only be generated for a succeeded run (status: {run.status.value})"
             )
+        if options.coverage_execution_id is not None:
+            await self._check_coverage_source(run_id, options.coverage_execution_id)
         if not llm_available(self._settings):
             raise LLMUnavailableError(
                 "No LLM provider is configured (set ANTHROPIC_API_KEY; see .env.example)"
@@ -64,6 +68,15 @@ class GenerationService:
             await self._session.commit()
             raise DispatchError(DISPATCH_FAILED_MESSAGE) from None
         return generation
+
+    async def _check_coverage_source(self, run_id: uuid.UUID, execution_id: uuid.UUID) -> None:
+        execution = await self._executions.get(execution_id)
+        if execution is None or execution.run_id != run_id:
+            raise NotFoundError(f"Test execution '{execution_id}' not found for this run")
+        if execution.coverage is None:
+            raise ConflictError(
+                "Coverage-guided generation needs a test execution with a coverage report"
+            )
 
     async def get(self, generation_id: uuid.UUID) -> TestGeneration:
         generation = await self._generations.get(generation_id)

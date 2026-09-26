@@ -42,8 +42,9 @@ USER 65534:65534
   report (`install_failed`). TestMind does not fall back to building from source.
 - The project itself is **not** installed. It is importable through `PYTHONPATH`
   (`/workspace/src` and `/workspace/src/src` for `src/` layouts).
-- Images are tagged `testmind-runner:<hash>` and reused while the requirement list is
-  unchanged.
+- Images are tagged `testmind-runner:<hash>` and reused while the requirement list **and the
+  base image's content id** are unchanged. Rebuilding the sandbox image (for example to
+  upgrade pytest or coverage.py) therefore never reuses runner images built on the old one.
 
 ## Test selection and configuration
 
@@ -51,8 +52,10 @@ USER 65534:65534
   everywhere else). They are passed to pytest explicitly, and `conftest.py` files are still
   honoured.
 - pytest runs from the repository root with `-p no:cacheprovider`, `-o addopts=` (the
-  project's `addopts` may require plugins or write files such as coverage data; coverage is
-  measured in Phase 6) and `-o junit_family=xunit1` (so every test case has a file and line).
+  project's `addopts` may require plugins or write files) and `-o junit_family=xunit1` (so
+  every test case has a file and line).
+- **Coverage** is measured in the same run with coverage.py and TestMind's own config file;
+  see [coverage.md](coverage.md).
 - **Django:** when the project sets `DJANGO_SETTINGS_MODULE` to a string literal (in
   `manage.py`, `wsgi.py`, …), the value is extracted from the AST during repository
   analysis and passed to the sandbox, so `pytest-django` finds the settings.
@@ -67,6 +70,7 @@ USER 65534:65534
 | `tests[]` | `nodeid` (`file::name`), file, line, outcome, duration, message, traceback, `generated` |
 | `install` | image tag, requirements, from cache, notes, installation log |
 | `environment` | variables passed into the sandbox (only `DJANGO_SETTINGS_MODULE` today) |
+| `coverage_error` | why the execution has no coverage report, if it has none ([coverage.md](coverage.md)) |
 
 The job lifecycle (`status`: queued → running → succeeded/failed) is separate from the test
 verdict (`outcome`). A run whose tests fail is a **succeeded** job with outcome `failed`.

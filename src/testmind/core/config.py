@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     sandbox_cpus: float = Field(default=1.0, gt=0, le=16)
     sandbox_build_timeout_seconds: int = Field(default=900, ge=30, le=7200)
 
+    # --- Coverage: functions below this percentage are reported as coverage gaps.
+    coverage_threshold: float = Field(default=80.0, ge=0, le=100)
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalise_log_level(cls, value: object) -> object:

@@ -35,6 +35,9 @@ Deterministic, from the code analysis:
   (`max_targets`, default `TESTMIND_GENERATION_MAX_TARGETS`).
 - Targets are grouped per module. One LLM conversation produces one test module, e.g.
   `tests/testmind/test_inventory_stock.py`.
+- **Coverage-guided** (`coverage_execution_id`): only functions that the chosen execution did
+  not fully cover, riskiest coverage gap first, and the prompt lists the lines and branches
+  that never ran ([coverage.md](coverage.md#coverage-guided-test-generation)).
 
 ### What the model receives
 
@@ -74,7 +77,7 @@ are reported as `suspected_bugs`, which are input for failure and bug analysis (
 | `passed` | Ran in the sandbox. Every test passed or is an intended `xfail` |
 | `failed` | Valid code that still fails after the last iteration |
 | `rejected` | The model never produced code that passed the static checks |
-| `environment_error` | The module under test imports a dependency that is not installed in the sandbox. The model cannot fix that, so it is not retried (project dependency installation is part of Phase 5) |
+| `environment_error` | The module under test imports a dependency that is not installed in the sandbox. The model cannot fix that, so it is not retried. Since Phase 5, generated tests run in the project's runner image, so this means the dependency could not be installed |
 | `unverified` | Statically valid, but no sandbox was available to run it |
 | `llm_error` | The provider failed or refused |
 
@@ -100,7 +103,8 @@ Prompts are files named `<name>.v<N>.md` under `ai_engine/prompts/`, loaded by
 `load_prompt(name, version)` and rendered with `string.Template`. A missing placeholder is an
 error, and substituted values are inserted verbatim. A prompt is changed by **adding** a new
 version file. The version used is stored with every generation (`prompt_version`), so
-results stay traceable to the exact prompt text.
+results stay traceable to the exact prompt text. Coverage-guided generations append the
+separately versioned `coverage.v1.md` section and record `v1+coverage.v1`.
 
 ## Configuration
 

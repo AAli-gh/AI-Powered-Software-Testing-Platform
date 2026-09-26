@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,6 +25,13 @@ class GenerationOptions(_Model):
     )
     max_targets: int | None = Field(default=None, ge=1, le=200)
     path_prefix: str | None = Field(default=None, max_length=1024)
+    coverage_execution_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Coverage-guided generation: target the functions this (succeeded) test execution "
+            "left uncovered, and tell the model which lines and branches never ran"
+        ),
+    )
 
 
 class FileStatus(StrEnum):

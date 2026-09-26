@@ -36,11 +36,13 @@ from testmind.analyzers.code.models import CodeProfile, FunctionInfo
 from testmind.analyzers.repository.limits import AnalysisLimits
 from testmind.analyzers.repository.walker import read_relative
 from testmind.core.logging import get_logger
+from testmind.coverage_engine import CoverageReport, FunctionCoverage
 from testmind.sandbox.models import Outcome, SandboxResult, SandboxUnavailableError
 
 logger = get_logger(__name__)
 
 PROMPT_VERSION = 1
+COVERAGE_PROMPT_VERSION = 1
 MAX_FEEDBACK = 6000
 MAX_SOURCE_CHARS = 60_000
 KIND_DESCRIPTIONS = {
@@ -100,13 +102,24 @@ class TestGenerator:
         self._system = load_prompt("test_generation_system", PROMPT_VERSION)
         self._generate = load_prompt("generate_tests", PROMPT_VERSION)
         self._fix = load_prompt("fix_tests", PROMPT_VERSION)
+        self._coverage = load_prompt("coverage", COVERAGE_PROMPT_VERSION)
         self._on_progress = on_progress or (lambda _: None)
 
     def generate(
-        self, root: Path, profile: CodeProfile, options: GenerationOptions, *, max_targets: int
+        self,
+        root: Path,
+        profile: CodeProfile,
+        options: GenerationOptions,
+        *,
+        max_targets: int,
+        coverage: CoverageReport | None = None,
     ) -> GenerationResult:
+        """With `coverage`, generation is coverage-guided (see select_targets)."""
         groups, available = select_targets(
-            profile, max_targets=options.max_targets or max_targets, path_prefix=options.path_prefix
+            profile,
+            max_targets=options.max_targets or max_targets,
+            path_prefix=options.path_prefix,
+            coverage=coverage,
         )
         sandbox_ready = self._sandbox is not None and self._sandbox.available()
         usage = _Usage()
@@ -117,7 +130,8 @@ class TestGenerator:
         return GenerationResult(
             files=files,
             model=usage.model,
-            prompt_version=f"v{PROMPT_VERSION}",
+            prompt_version=f"v{PROMPT_VERSION}"
+            + (f"+{self._coverage.id}" if coverage is not None else ""),
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
             targets_selected=sum(len(g.functions) for g in groups),
@@ -147,6 +161,8 @@ class TestGenerator:
             findings=_describe_findings(group) or "(none)",
             source=source[:MAX_SOURCE_CHARS],
         )
+        if group.coverage is not None:
+            prompt += self._coverage.render(coverage=_describe_coverage(group.coverage))
         status = FileStatus.REJECTED
         for iteration in range(1, self._max_iterations + 1):
             try:
@@ -275,6 +291,21 @@ def _describe_findings(group: ModuleTargets) -> str:
         f"- line {f.line} {f.rule_id} ({f.severity.value}, confidence {f.confidence}): {f.message}"
         for f in group.findings
     )
+
+
+def _describe_coverage(coverage: dict[str, FunctionCoverage | None]) -> str:
+    lines = []
+    for qualname, data in coverage.items():
+        if data is None:
+            lines.append(f"- {qualname}: not measured (its module was never imported by the tests)")
+            continue
+        facts = [f"{data.percent}% covered"]
+        if data.missing:
+            facts.append("lines never executed: " + ", ".join(data.missing))
+        if data.missing_branches_detail:
+            facts.append("branches never taken: " + ", ".join(data.missing_branches_detail))
+        lines.append(f"- {qualname}: " + "; ".join(facts))
+    return "\n".join(lines)
 
 
 def _summary(result: SandboxResult) -> TestRunSummary:

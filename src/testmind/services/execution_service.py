@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from testmind.core.errors import ConflictError, DispatchError, NotFoundError
 from testmind.core.logging import get_logger
+from testmind.coverage_engine import CoverageReport
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
 from testmind.repositories.execution_repository import ExecutionRepository
@@ -16,6 +17,7 @@ from testmind.repositories.generation_repository import GenerationRepository
 from testmind.repositories.run_repository import RunRepository
 from testmind.services.dispatcher import TaskDispatcher
 from testmind.services.run_service import DISPATCH_FAILED_MESSAGE, apply_transition
+from testmind.test_engine.models import TestRunReport
 
 logger = get_logger(__name__)
 
@@ -70,3 +72,19 @@ class ExecutionService:
         if await self._runs.get(run_id) is None:
             raise NotFoundError(f"Run '{run_id}' not found")
         return await self._executions.list_for_run(run_id, offset=offset, limit=limit)
+
+    async def coverage(self, execution_id: uuid.UUID) -> CoverageReport:
+        execution = await self.get(execution_id)
+        if execution.coverage is None:
+            raise NotFoundError(
+                f"Test execution '{execution_id}' has no coverage report: "
+                + _coverage_missing_reason(execution)
+            )
+        return CoverageReport.model_validate(execution.coverage)
+
+
+def _coverage_missing_reason(execution: TestExecution) -> str:
+    if execution.report is None:
+        return f"it has not finished (status: {execution.status.value})"
+    report = TestRunReport.model_validate(execution.report)
+    return report.coverage_error or "coverage was not measured"

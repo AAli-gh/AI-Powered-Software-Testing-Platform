@@ -5,6 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from testmind.coverage_engine import CoverageGap, CoverageReport, CoverageTotals
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
 from testmind.test_engine.models import ExecutionOutcome, TestRunReport, TestTotals
@@ -30,6 +31,10 @@ class ExecutionSummary(BaseModel):
     project_test_files: list[str]
     generated_test_files: list[str]
     environment: dict[str, str]
+    coverage_percent: float | None = Field(
+        description="Total line + branch coverage of production code, if measured"
+    )
+    coverage_error: str | None = Field(description="Why coverage is missing, if it is")
 
 
 class TestExecutionRead(BaseModel):
@@ -64,6 +69,8 @@ class TestExecutionRead(BaseModel):
                 project_test_files=report.project_test_files,
                 generated_test_files=report.generated_test_files,
                 environment=report.environment,
+                coverage_percent=row.coverage_percent,
+                coverage_error=report.coverage_error,
             )
         return cls(
             id=row.id,
@@ -82,3 +89,25 @@ class TestExecutionRead(BaseModel):
 class ExecutionLogs(BaseModel):
     output: str = Field(description="Tail of pytest's console output")
     install_log: str = Field(description="Tail of the dependency installation log")
+
+
+class CoverageOverview(BaseModel):
+    tool: str
+    branch_coverage: bool
+    threshold: float
+    totals: CoverageTotals
+    unmeasured_files: list[str]
+    gap_count: int
+    top_gaps: list[CoverageGap] = Field(description="The riskiest gaps (see /coverage/gaps)")
+
+    @classmethod
+    def from_report(cls, report: CoverageReport, *, top: int = 10) -> CoverageOverview:
+        return cls(
+            tool=report.tool,
+            branch_coverage=report.branch_coverage,
+            threshold=report.threshold,
+            totals=report.totals,
+            unmeasured_files=report.unmeasured_files,
+            gap_count=len(report.gaps),
+            top_gaps=report.gaps[:top],
+        )

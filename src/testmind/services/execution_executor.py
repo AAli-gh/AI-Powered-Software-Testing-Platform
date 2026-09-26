@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.ai_engine.test_generator.models import GenerationResult
+from testmind.analyzers.code.models import CodeProfile
 from testmind.analyzers.repository.models import RepositoryProfile
 from testmind.core.errors import AppError
 from testmind.core.logging import get_logger
@@ -19,8 +20,7 @@ from testmind.repositories.generation_repository import GenerationRepository
 from testmind.services.run_executor import UNEXPECTED_ERROR_MESSAGE
 from testmind.services.run_service import apply_transition
 from testmind.services.source_locator import resolve_local_source
-from testmind.test_engine.models import TestRunReport
-from testmind.test_engine.runner import TestSuiteRunner
+from testmind.test_engine.runner import SuiteResult, TestSuiteRunner
 
 logger = get_logger(__name__)
 
@@ -48,8 +48,11 @@ class ExecutionExecutor:
                 return execution.status
             generations = GenerationRepository(session)
             location = await generations.source_location(execution.run_id)
-            analysis = await AnalysisRepository(session).get_for_run(execution.run_id)
+            analyses = AnalysisRepository(session)
+            analysis = await analyses.get_for_run(execution.run_id)
             profile = RepositoryProfile.model_validate(analysis.profile) if analysis else None
+            code_analysis = await analyses.get_code_for_run(execution.run_id)
+            code = CodeProfile.model_validate(code_analysis.profile) if code_analysis else None
             generated = await _generated_files(generations, execution.generation_id)
             apply_transition(execution, RunStatus.RUNNING)
             await session.commit()
@@ -58,30 +61,35 @@ class ExecutionExecutor:
             if profile is None or location is None:
                 return await self._finish(execution_id, RunStatus.FAILED, NO_REPOSITORY_ANALYSIS)
             root = resolve_local_source(self._repos_root, location)
-            report = await asyncio.to_thread(self._runner.run, root, profile, generated)
+            result = await asyncio.to_thread(
+                lambda: self._runner.run(root, profile, generated, code=code)
+            )
         except AppError as exc:
             return await self._finish(execution_id, RunStatus.FAILED, exc.message)
         except Exception:
             logger.exception("execution_crashed", execution_id=str(execution_id))
             await self._finish(execution_id, RunStatus.FAILED, UNEXPECTED_ERROR_MESSAGE)
             raise
-        return await self._finish(execution_id, RunStatus.SUCCEEDED, None, report)
+        return await self._finish(execution_id, RunStatus.SUCCEEDED, None, result)
 
     async def _finish(
         self,
         execution_id: uuid.UUID,
         status: RunStatus,
         error_message: str | None,
-        report: TestRunReport | None = None,
+        result: SuiteResult | None = None,
     ) -> RunStatus:
         async with self._session_factory() as session:
             execution = await ExecutionRepository(session).get_for_update(execution_id)
             if execution is None:
                 return status
             apply_transition(execution, status, error_message=error_message)
-            if report is not None:
-                execution.report = report.model_dump(mode="json")
-                execution.outcome = report.outcome
+            if result is not None:
+                execution.report = result.report.model_dump(mode="json")
+                execution.outcome = result.report.outcome
+                if result.coverage is not None:
+                    execution.coverage = result.coverage.model_dump(mode="json")
+                    execution.coverage_percent = result.coverage.totals.percent
             await session.commit()
         logger.info("execution_finished", execution_id=str(execution_id), status=status.value)
         return status

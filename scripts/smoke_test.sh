@@ -96,9 +96,17 @@ while (( SECONDS < deadline )); do
 done
 [[ "$execution_status" == "succeeded" ]] || fail "test execution ended as $execution_status"
 outcome=$(echo "$execution" | json "['outcome']")
+coverage_status=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/test-executions/$execution_id/coverage")
 case "$outcome" in
-  passed) echo "  project tests passed in the sandbox" ;;
-  sandbox_unavailable) echo "  no Docker access for the containerised worker: honest sandbox_unavailable" ;;
+  passed)
+    [[ "$coverage_status" == "200" ]] || fail "no coverage report for a passed execution"
+    percent=$(echo "$execution" | json "['summary']['coverage_percent']")
+    echo "  project tests passed in the sandbox, coverage ${percent}%"
+    ;;
+  sandbox_unavailable)
+    [[ "$coverage_status" == "404" ]] || fail "coverage reported without a sandbox run"
+    echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no coverage"
+    ;;
   *) fail "unexpected test execution outcome: $outcome" ;;
 esac
 

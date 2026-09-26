@@ -10,3 +10,4 @@ Short records of significant decisions: the context, the decision and its conseq
 | [0004](0004-test-against-real-services.md) | Test against real PostgreSQL/Redis instead of mocks | Accepted |
 | [0005](0005-evidence-based-deterministic-detection.md) | Deterministic, evidence-weighted detection for repository analysis | Accepted |
 | [0006](0006-llm-proposes-tools-decide.md) | The LLM proposes, deterministic tools decide (test generation) | Accepted |
+| [0007](0007-own-function-coverage-mapping.md) | TestMind maps coverage onto functions itself | Accepted |

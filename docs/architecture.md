@@ -169,6 +169,17 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    test_executions {
+        uuid id PK
+        uuid run_id FK "ON DELETE CASCADE, indexed"
+        uuid generation_id FK "ON DELETE SET NULL"
+        varchar status "job lifecycle"
+        varchar outcome "test verdict"
+        jsonb report "TestRunReport"
+        jsonb coverage "CoverageReport"
+        float coverage_percent
+        text error_message
+    }
 ```
 
 - Enumerations are stored as `VARCHAR` + a named `CHECK` constraint instead of native PostgreSQL
@@ -180,8 +191,10 @@ erDiagram
   the run `succeeded`, so a succeeded run always has all its analyses and a failed run never
   has a partial one. The code analysis takes the repository analysis's classification of
   test files as input.
-- Tables for test results, coverage, findings, mutation results and so on are added by the
-  phases that produce that data.
+- `test_executions.coverage` holds the whole `CoverageReport`; `coverage_percent` duplicates
+  its total so lists and comparisons do not have to load the document.
+- Tables for findings, regressions, mutation results and so on are added by the phases that
+  produce that data.
 - `tests/integration/test_migrations.py` fails if the ORM models and the migrations drift apart.
 
 ## Configuration and logging

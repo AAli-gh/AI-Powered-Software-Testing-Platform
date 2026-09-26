@@ -2,6 +2,8 @@ from pathlib import Path
 
 from testmind.ai_engine.test_generator.targets import select_targets
 from testmind.analyzers.code import CodeAnalyzer, CodeProfile
+from testmind.coverage_engine import CoverageReport, RawCoverage, build_coverage_report
+from testmind.coverage_engine.parser import RawFile
 from tests.unit.analyzers.helpers import make_repo
 
 FILES = {
@@ -44,3 +46,54 @@ def test_path_prefix(tmp_path: Path) -> None:
     groups, available = select_targets(profile(tmp_path), max_targets=10, path_prefix="shop/orders")
     assert available == 1
     assert [g.module for g in groups] == ["shop.orders"]
+
+
+def coverage_report(code: CodeProfile, *, with_orders: bool) -> CoverageReport:
+    # pricing.py: complex_one's inner branch (6-7) and all of risky (11) never ran.
+    files = {
+        "shop/pricing.py": RawFile(
+            executed=frozenset({1, 2, 4, 5, 8, 10, 13, 15, 16, 17, 18, 19}),
+            missing=frozenset({6, 7, 11}),
+            executed_branches=frozenset({(5, 8)}),
+            missing_branches=frozenset({(5, 6), (6, 7), (6, 8)}),
+        )
+    }
+    if with_orders:
+        files["shop/orders.py"] = RawFile(frozenset({1, 2}), frozenset(), frozenset(), frozenset())
+    return build_coverage_report(RawCoverage("coverage.py", True, files), code)
+
+
+def test_coverage_guided_selection(tmp_path: Path) -> None:
+    code = profile(tmp_path)
+    groups, available = select_targets(
+        code, max_targets=10, coverage=coverage_report(code, with_orders=True)
+    )
+    # simple and place are fully covered; Cart.total is a one-liner (no statement of its own).
+    assert available == 2
+    [group] = groups
+    assert [f.qualname for f in group.functions] == ["complex_one", "risky"]
+    assert group.coverage is not None
+    assert {name: data.percent for name, data in group.coverage.items() if data} == {
+        "complex_one": 37.5,  # (2 of 4 lines + 1 of 4 branches) / 8
+        "risky": 0.0,
+    }
+
+
+def test_riskiest_gap_first_and_unmeasured_modules(tmp_path: Path) -> None:
+    code = profile(tmp_path)
+    groups, available = select_targets(
+        code, max_targets=2, coverage=coverage_report(code, with_orders=False)
+    )
+    assert available == 3  # orders.py was never imported: `place` counts as uncovered
+    # risky: 1.0 x (1 + 2 x TM040) = 3.0 > complex_one: 0.625 x 3 = 1.875 > place: 1.0 x 1
+    assert [f.qualname for g in groups for f in g.functions] == ["complex_one", "risky"]
+    groups, _ = select_targets(
+        code, max_targets=1, coverage=coverage_report(code, with_orders=False)
+    )
+    assert [f.qualname for g in groups for f in g.functions] == ["risky"]
+
+    groups, _ = select_targets(
+        code, max_targets=3, coverage=coverage_report(code, with_orders=False)
+    )
+    orders = next(g for g in groups if g.path == "shop/orders.py")
+    assert orders.coverage == {"place": None}

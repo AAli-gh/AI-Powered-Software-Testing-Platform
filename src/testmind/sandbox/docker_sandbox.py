@@ -5,7 +5,8 @@ Isolation (every run):
   --read-only root filesystem with a small /tmp tmpfs, CPU / memory / pids limits,
   the repository and the test files mounted read-only, a wall-clock timeout enforced from outside
   (the container is killed), and no environment variables from the host.
-Only /out (a fresh temporary directory) is writable, and only the JUnit report is read back.
+Only /out (a fresh temporary directory) is writable, and only the JUnit report (and, when
+requested, coverage.py's JSON report) is read back, with a size cap.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ logger = get_logger(__name__)
 MAX_OUTPUT = 20_000
 PIDS_LIMIT = 256
 DOCKER_CHECK_TIMEOUT = 15
+MAX_COVERAGE_BYTES = 50 * 1024 * 1024
+COVERAGE_CONFIG = "/opt/testmind/coveragerc"  # baked into the sandbox image
 
 
 class DockerSandbox:
@@ -120,6 +123,9 @@ class DockerSandbox:
 
             report = out_dir / "report.xml"
             xml = report.read_text("utf-8", errors="replace") if report.is_file() else ""
+            coverage_json, coverage_error = (
+                _read_coverage(out_dir / "coverage.json") if job.coverage else (None, None)
+            )
 
         logger.info(
             "sandbox_finished", exit_code=exit_code, timed_out=timed_out, seconds=round(duration, 2)
@@ -130,6 +136,8 @@ class DockerSandbox:
             duration_seconds=round(duration, 3),
             tests=parse_junit(xml),
             output=output[-MAX_OUTPUT:],
+            coverage_json=coverage_json,
+            coverage_error=coverage_error,
         )
 
     def _command(
@@ -150,6 +158,14 @@ class DockerSandbox:
         env: list[str] = []
         for key, value in sorted(job.env.items()):
             env += ["--env", f"{key}={value}"]
+        coverage: list[str] = []
+        if job.coverage:
+            # TestMind's own coverage config: the project's fail_under / omit do not apply.
+            coverage = [
+                "--cov=/workspace/src",
+                f"--cov-config={COVERAGE_CONFIG}",
+                "--cov-report=json:/out/coverage.json",
+            ]
         return [
             self._docker, "run", "--rm", "--name", name,
             "--network", "none",
@@ -179,6 +195,7 @@ class DockerSandbox:
             "-o", "addopts=",
             "-o", "junit_family=xunit1",  # adds file and line to each test case
             "--junitxml", "/out/report.xml",
+            *coverage,
             "-q", *targets,
         ]  # fmt: skip
 
@@ -199,6 +216,16 @@ class PytestJob:
     project_tests: tuple[str, ...] = ()  # repository test files, relative to the root
     image: str | None = None  # defaults to the sandbox base image
     env: dict[str, str] = field(default_factory=dict)
+    coverage: bool = False  # measure line + branch coverage of the repository
+
+
+def _read_coverage(path: Path) -> tuple[str | None, str | None]:
+    """(report, None) or (None, why there is no report)."""
+    if not path.is_file():
+        return None, "coverage.py wrote no report (the run timed out or pytest crashed)"
+    if path.stat().st_size > MAX_COVERAGE_BYTES:
+        return None, f"The coverage report exceeds {MAX_COVERAGE_BYTES // (1024 * 1024)} MB"
+    return path.read_text("utf-8", errors="replace"), None
 
 
 _ENV_KEY = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
