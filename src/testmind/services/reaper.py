@@ -18,6 +18,8 @@ from testmind.core.logging import get_logger
 from testmind.db.models import (
     AnalysisRun,
     FailureAnalysis,
+    MutantTestSuggestion,
+    MutationRun,
     Regression,
     TestExecution,
     TestGeneration,
@@ -30,7 +32,16 @@ logger = get_logger(__name__)
 ORPHANED_MESSAGE = "The worker stopped while this job was running; the job was abandoned"
 
 
-JobT = TypeVar("JobT", AnalysisRun, TestGeneration, TestExecution, FailureAnalysis, Regression)
+JobT = TypeVar(
+    "JobT",
+    AnalysisRun,
+    TestGeneration,
+    TestExecution,
+    FailureAnalysis,
+    Regression,
+    MutationRun,
+    MutantTestSuggestion,
+)
 
 
 async def reap_orphaned_jobs(
@@ -44,6 +55,8 @@ async def reap_orphaned_jobs(
             + await _reap(session, TestExecution, cutoff)
             + await _reap(session, FailureAnalysis, cutoff)
             + await _reap(session, Regression, cutoff)
+            + await _reap(session, MutationRun, cutoff)
+            + await _reap(session, MutantTestSuggestion, cutoff)
         )
         await session.commit()
     return reaped

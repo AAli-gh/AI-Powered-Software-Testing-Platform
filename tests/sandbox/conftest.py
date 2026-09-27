@@ -10,8 +10,13 @@ from celery import Celery
 from celery.contrib.testing.worker import start_worker
 
 from testmind.core.config import Settings
+from testmind.mutation_engine.engine import MutationEngine
+from testmind.mutation_engine.models import MutationReport
 from testmind.sandbox.docker_sandbox import DockerSandbox
+from testmind.sandbox.runner_image import RunnerImageBuilder
+from testmind.test_engine.runner import TestSuiteRunner
 from testmind.workers.celery_app import create_celery_app
+from tests.sandbox.test_suite_runner import EXAMPLES, analyse
 
 SANDBOX_IMAGE = os.environ.get("TESTMIND_TEST_SANDBOX_IMAGE", "testmind-sandbox:local")
 
@@ -37,3 +42,15 @@ def celery_app(settings: Settings) -> Celery:
 def worker(celery_app: Celery) -> Iterator[None]:
     with start_worker(celery_app, pool="solo", perform_ping_check=False, loglevel="WARNING"):
         yield
+
+
+def mutation_engine(sandbox: DockerSandbox, **overrides: int) -> MutationEngine:
+    options = {"max_mutants": 200, "mutant_timeout_cap": 30, "job_timeout_cap": 900, **overrides}
+    runner = TestSuiteRunner(sandbox, RunnerImageBuilder(sandbox.image))
+    return MutationEngine(runner, sandbox, **options)  # type: ignore[arg-type]
+
+
+@pytest.fixture(scope="session")
+def shipping(sandbox: DockerSandbox) -> MutationReport:
+    repository, code = analyse(EXAMPLES / "shipping_rates")
+    return mutation_engine(sandbox).run(EXAMPLES / "shipping_rates", repository, code)

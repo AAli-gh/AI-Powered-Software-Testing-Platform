@@ -11,6 +11,8 @@ from testmind.workers.tasks import (
     EXECUTE_ANALYSIS_RUN,
     EXECUTE_TESTS,
     GENERATE_TESTS,
+    RUN_MUTATIONS,
+    SUGGEST_MUTANT_TESTS,
 )
 
 
@@ -34,3 +36,11 @@ class CeleryTaskDispatcher:
 
     async def dispatch_regression(self, regression_id: uuid.UUID) -> None:
         await asyncio.to_thread(self._app.send_task, ANALYZE_REGRESSION, args=[str(regression_id)])
+
+    async def dispatch_mutation_run(self, mutation_run_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._app.send_task, RUN_MUTATIONS, args=[str(mutation_run_id)])
+
+    async def dispatch_mutant_suggestions(self, suggestion_id: uuid.UUID) -> None:
+        await asyncio.to_thread(
+            self._app.send_task, SUGGEST_MUTANT_TESTS, args=[str(suggestion_id)]
+        )

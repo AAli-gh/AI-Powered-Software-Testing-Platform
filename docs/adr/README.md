@@ -13,3 +13,4 @@ Short records of significant decisions: the context, the decision and its conseq
 | [0007](0007-own-function-coverage-mapping.md) | TestMind maps coverage onto functions itself | Accepted |
 | [0008](0008-structured-failure-capture.md) | Capture failures as structured data inside the sandbox | Accepted |
 | [0009](0009-read-only-git-with-dulwich.md) | Read git history with dulwich, never with the git command line | Accepted |
+| [0010](0010-single-container-mutation-driver.md) | Run all mutants of a job in one sandbox container | Accepted |

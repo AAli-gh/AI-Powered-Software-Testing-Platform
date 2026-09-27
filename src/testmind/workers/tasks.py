@@ -9,12 +9,14 @@ from testmind.ai_engine.llm.factory import create_provider
 from testmind.core.config import Settings
 from testmind.db.session import create_engine, create_session_factory
 from testmind.domain.enums import RunStatus
+from testmind.mutation_engine.engine import MutationEngine
 from testmind.regression.engine import RegressionEngine
 from testmind.sandbox.docker_sandbox import DockerSandbox
 from testmind.sandbox.runner_image import RunnerImageBuilder
 from testmind.services.execution_executor import ExecutionExecutor
 from testmind.services.failure_analysis_executor import FailureAnalysisExecutor
 from testmind.services.generation_executor import GenerationExecutor
+from testmind.services.mutation_executor import MutationExecutor, SuggestionExecutor
 from testmind.services.regression_executor import RegressionExecutor
 from testmind.services.run_executor import RunExecutor
 from testmind.test_engine.runner import TestSuiteRunner
@@ -24,6 +26,8 @@ GENERATE_TESTS = "testmind.test_generation.execute"
 EXECUTE_TESTS = "testmind.test_execution.execute"
 ANALYZE_FAILURES = "testmind.failure_analysis.execute"
 ANALYZE_REGRESSION = "testmind.regression.execute"
+RUN_MUTATIONS = "testmind.mutation_run.execute"
+SUGGEST_MUTANT_TESTS = "testmind.mutant_suggestions.execute"
 
 
 def register_tasks(app: Celery, settings: Settings) -> None:
@@ -37,6 +41,16 @@ def register_tasks(app: Celery, settings: Settings) -> None:
     @app.task(name=EXECUTE_TESTS, shared=False)
     def execute_tests(execution_id: str) -> str | None:
         status = asyncio.run(_execute_tests(settings, uuid.UUID(execution_id)))
+        return status.value if status else None
+
+    @app.task(name=RUN_MUTATIONS, shared=False)
+    def run_mutations(mutation_run_id: str) -> str | None:
+        status = asyncio.run(_run_mutations(settings, uuid.UUID(mutation_run_id)))
+        return status.value if status else None
+
+    @app.task(name=SUGGEST_MUTANT_TESTS, shared=False)
+    def suggest_mutant_tests(suggestion_id: str) -> str | None:
+        status = asyncio.run(_suggest_mutant_tests(settings, uuid.UUID(suggestion_id)))
         return status.value if status else None
 
     @app.task(name=ANALYZE_REGRESSION, shared=False)
@@ -142,5 +156,48 @@ async def _analyze_regression(settings: Settings, regression_id: uuid.UUID) -> R
             RegressionEngine(build_runner(settings)),
         )
         return await executor.execute(regression_id)
+    finally:
+        await engine.dispose()
+
+
+def build_mutation_engine(settings: Settings, max_mutants: int) -> MutationEngine:
+    sandbox = build_sandbox(settings)
+    return MutationEngine(
+        TestSuiteRunner(
+            sandbox, build_image_builder(settings), coverage_threshold=settings.coverage_threshold
+        ),
+        sandbox,
+        max_mutants=max_mutants,
+        mutant_timeout_cap=settings.mutation_mutant_timeout_seconds,
+        job_timeout_cap=settings.mutation_job_timeout_seconds,
+    )
+
+
+async def _run_mutations(settings: Settings, mutation_run_id: uuid.UUID) -> RunStatus | None:
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = MutationExecutor(
+            create_session_factory(engine),
+            settings.repos_root,
+            lambda max_mutants: build_mutation_engine(settings, max_mutants),
+        )
+        return await executor.execute(mutation_run_id)
+    finally:
+        await engine.dispose()
+
+
+async def _suggest_mutant_tests(settings: Settings, suggestion_id: uuid.UUID) -> RunStatus | None:
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = SuggestionExecutor(
+            create_session_factory(engine),
+            settings.repos_root,
+            provider_factory=lambda: create_provider(settings),
+            sandbox=build_sandbox(settings),
+            images=build_image_builder(settings),
+            max_tokens=settings.llm_max_tokens,
+            max_suggestions=settings.mutation_max_suggestions,
+        )
+        return await executor.execute(suggestion_id)
     finally:
         await engine.dispose()

@@ -12,6 +12,7 @@ read back, with a size cap.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess  # nosec B404 - only fixed argument lists, never a shell
@@ -30,6 +31,7 @@ logger = get_logger(__name__)
 MAX_OUTPUT = 20_000
 PIDS_LIMIT = 256
 DOCKER_CHECK_TIMEOUT = 15
+DEFAULT_TMPFS = "64m"
 MAX_COVERAGE_BYTES = 50 * 1024 * 1024
 MAX_FAILURES_BYTES = 10 * 1024 * 1024
 COVERAGE_CONFIG = "/opt/testmind/coveragerc"  # baked into the sandbox image
@@ -191,17 +193,7 @@ class DockerSandbox:
         if job.capture_failures:
             pythonpath = f"{PLUGIN_DIR}:{pythonpath}"
         return [
-            self._docker, "run", "--rm", "--name", name,
-            "--network", "none",
-            "--cap-drop", "ALL",
-            "--security-opt", "no-new-privileges",
-            "--user", "65534:65534",
-            "--read-only",
-            "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",  # noqa: S108  # nosec B108 - container tmpfs
-            "--memory", self._memory,
-            "--memory-swap", self._memory,
-            "--cpus", str(self._cpus),
-            "--pids-limit", str(PIDS_LIMIT),
+            *self._isolation(name, tmpfs_size=DEFAULT_TMPFS),
             "--workdir", rootdir,
             "--env", f"PYTHONPATH={pythonpath}",
             "--env", "PYTHONDONTWRITEBYTECODE=1",
@@ -223,6 +215,79 @@ class DockerSandbox:
             *plugin,
             "-q", *targets,
         ]  # fmt: skip
+
+    def _isolation(self, name: str, *, tmpfs_size: str) -> list[str]:
+        """`docker run` flags shared by every sandboxed process (see the module docstring)."""
+        return [
+            self._docker, "run", "--rm", "--name", name,
+            "--network", "none",
+            "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges",
+            "--user", "65534:65534",
+            "--read-only",
+            "--tmpfs", f"/tmp:rw,noexec,nosuid,size={tmpfs_size}",  # noqa: S108  # nosec B108
+            "--memory", self._memory,
+            "--memory-swap", self._memory,
+            "--cpus", str(self._cpus),
+            "--pids-limit", str(PIDS_LIMIT),
+        ]  # fmt: skip
+
+    def run_mutants(self, repo_root: Path, job: MutationJob) -> MutationResult:
+        """Run the mutation driver (docker/testmind_mutate.py) over `job.mutants`.
+
+        Same isolation as test runs. The only differences are a larger /tmp tmpfs (the
+        driver works on a copy of the repository there) and a timeout for the whole job.
+        """
+        if not self.available(job.image):
+            raise SandboxUnavailableError(f"Docker sandbox image '{job.image}' is not available")
+        for key, value in job.env.items():
+            _check_env(key, value)
+        for relative in job.files:
+            _check_relative(relative)
+        with tempfile.TemporaryDirectory(prefix="testmind-mutation-") as scratch:
+            job_dir, out_dir = Path(scratch) / "job", Path(scratch) / "out"
+            job_dir.mkdir()
+            out_dir.mkdir()
+            out_dir.chmod(0o777)
+            document = {"mutants": job.mutants, "files": job.files}
+            (job_dir / "mutants.json").write_text(json.dumps(document), "utf-8")
+            (job_dir / "mutants.json").chmod(0o644)
+            job_dir.chmod(0o755)
+            name = f"testmind-mutation-{uuid.uuid4().hex[:12]}"
+            env: list[str] = []
+            for key, value in sorted(job.env.items()):
+                env += ["--env", f"{key}={value}"]
+            command = [
+                *self._isolation(name, tmpfs_size=job.tmpfs_size),
+                "--workdir", "/tmp",  # noqa: S108  # nosec B108 - container tmpfs
+                "--env", "HOME=/tmp",
+                *env,
+                "--mount", f"type=bind,source={repo_root.resolve()},target=/workspace/src,readonly",
+                "--mount", f"type=bind,source={job_dir},target=/workspace/job,readonly",
+                "--mount", f"type=bind,source={out_dir},target=/out",
+                job.image,
+                "python", f"{PLUGIN_DIR}/testmind_mutate.py",
+                "/workspace/job/mutants.json", "/out/mutation.json",
+            ]  # fmt: skip
+            started = time.monotonic()
+            timed_out = False
+            try:
+                completed = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
+                    command, capture_output=True, timeout=job.timeout_seconds, check=False
+                )
+                exit_code = completed.returncode
+                output = (completed.stdout + completed.stderr).decode("utf-8", errors="replace")
+            except subprocess.TimeoutExpired:
+                timed_out, exit_code, output = True, -1, ""
+                self._kill(name)
+            results = _read_capped(out_dir / "mutation.json", MAX_FAILURES_BYTES)
+        return MutationResult(
+            exit_code=exit_code,
+            timed_out=timed_out,
+            duration_seconds=round(time.monotonic() - started, 3),
+            results_json=results,
+            output=output[-MAX_OUTPUT:],
+        )
 
     def _kill(self, name: str) -> None:
         subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
@@ -272,6 +337,27 @@ _ENV_VALUE = re.compile(r"^[A-Za-z0-9_.:/-]{0,256}$")
 def _check_env(key: str, value: str) -> None:
     if not _ENV_KEY.match(key) or not _ENV_VALUE.match(value):
         raise ValueError(f"Invalid sandbox environment variable: {key!r}")
+
+
+@dataclass(frozen=True, slots=True)
+class MutationJob:
+    """Mutants for the driver: id, path, start, end, original, replacement, tests, timeout."""
+
+    image: str
+    mutants: list[dict[str, object]]
+    timeout_seconds: int  # the whole job
+    tmpfs_size: str = "256m"  # holds the working copy of the repository
+    env: dict[str, str] = field(default_factory=dict)
+    files: dict[str, str] = field(default_factory=dict)  # extra test modules, relative -> source
+
+
+@dataclass(frozen=True, slots=True)
+class MutationResult:
+    exit_code: int
+    timed_out: bool
+    duration_seconds: float
+    results_json: str | None  # the driver's /out/mutation.json, size-capped
+    output: str
 
 
 _NODEID_PART = re.compile(r"^[^\x00-\x1f]{1,1000}$")

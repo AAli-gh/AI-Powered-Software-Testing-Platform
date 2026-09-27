@@ -13,6 +13,8 @@ from testmind.core.logging import get_logger
 from testmind.db.models import (
     AnalysisRun,
     FailureAnalysis,
+    MutantTestSuggestion,
+    MutationRun,
     Regression,
     TestExecution,
     TestGeneration,
@@ -30,7 +32,15 @@ DISPATCH_FAILED_MESSAGE = "The run could not be handed to the task queue"
 
 
 def apply_transition(
-    run: AnalysisRun | TestGeneration | TestExecution | FailureAnalysis | Regression,
+    run: (
+        AnalysisRun
+        | TestGeneration
+        | TestExecution
+        | FailureAnalysis
+        | Regression
+        | MutationRun
+        | MutantTestSuggestion
+    ),
     target: RunStatus,
     *,
     error_message: str | None = None,

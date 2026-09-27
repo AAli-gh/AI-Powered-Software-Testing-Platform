@@ -12,6 +12,7 @@ from testmind.core.config import Settings
 from testmind.services.execution_service import ExecutionService
 from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
+from testmind.services.mutation_service import MutationService
 from testmind.services.project_service import ProjectService
 from testmind.services.regression_service import RegressionService
 from testmind.services.run_service import RunService
@@ -75,3 +76,12 @@ def get_regression_service(
 
 
 RegressionServiceDep = Annotated[RegressionService, Depends(get_regression_service)]
+
+
+def get_mutation_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> MutationService:
+    return MutationService(session, request.app.state.dispatcher, settings)
+
+
+MutationServiceDep = Annotated[MutationService, Depends(get_mutation_service)]

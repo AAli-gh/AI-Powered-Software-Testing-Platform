@@ -13,11 +13,12 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–8 of 14 are complete: the platform foundation, the deterministic
+> **Status: Phases 1–9 of 14 are complete: the platform foundation, the deterministic
 > repository and code analyzers, AI test generation with sandboxed validation, the
 > sandboxed test runner, coverage analysis with coverage-guided test generation, failure
-> analysis (deterministic grouping plus evidence-checked AI root causes), and regression
-> analysis between git commits with test selection.**
+> analysis (deterministic grouping plus evidence-checked AI root causes), regression
+> analysis between git commits with test selection, and mutation testing with
+> sandbox-verified AI tests for surviving mutants.**
 > The AI stages have been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
@@ -163,6 +164,21 @@ Everything listed here is implemented and tested.
   - both commits run in the sandbox: regressed / fixed / added / removed tests, new and
     resolved failure causes, coverage change, and in full mode a check that the selection
     missed no regression.
+- **Mutation testing** ([details](docs/mutation.md)): do the tests notice when the code is
+  wrong?
+  - deterministic AST mutants (7 operators) inside production functions, each an exact byte
+    range, compiled before use; docstrings, annotations, decorators and f-strings are never
+    mutated;
+  - each mutant runs **only the tests that executed its lines** at baseline (per-test
+    coverage); tests failing without mutation are excluded; untested mutants are
+    `no_coverage` and not run;
+  - all mutants of a job run in **one sandbox container** with a per-mutant timeout
+    ([ADR-0010](docs/adr/0010-single-container-mutation-driver.md)); score and covered score
+    per run, file and function, weakest functions first;
+  - verified on `examples/shipping_rates`: 100 % line coverage, but **mutation score 60 %**,
+    with every surviving mutant explained;
+  - on request, **AI tests for surviving mutants**, accepted only when the sandbox shows the
+    test passes on the original code **and** kills the mutant.
 - **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
   starts.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
@@ -170,7 +186,7 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 858 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 901 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -190,7 +206,8 @@ Everything listed here is implemented and tested.
 | Security | bandit, pip-audit, gitleaks, non-root read-only containers, Docker sandbox for untrusted code |
 | Packaging / infra | uv, Docker (multi-stage), docker compose, GitHub Actions |
 | Coverage | coverage.py 7.16 + pytest-cov in the sandbox image |
-| Planned | mutation testing engine, LLM providers (pluggable), Playwright, GitHub API, React dashboard |
+| Mutation testing | Own AST mutant generator + an in-sandbox driver (no third-party mutation tool) |
+| Planned | LLM providers (pluggable), Playwright, GitHub API, React dashboard |
 
 ## Quick start (Docker)
 
@@ -224,6 +241,9 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_CELERY_TASK_TIME_LIMIT_SECONDS` | `3600` | Hard time limit per job |
 | `TESTMIND_COVERAGE_THRESHOLD` | `80` | Functions below this coverage are reported as gaps |
 | `TESTMIND_FAILURE_ANALYSIS_MAX_GROUPS` | `10` | Failure groups the LLM explains per requested analysis |
+| `TESTMIND_MUTATION_MAX_MUTANTS` | `200` | Server cap on mutants per mutation run |
+| `TESTMIND_MUTATION_MUTANT_TIMEOUT_SECONDS` / `…_JOB_TIMEOUT_SECONDS` | `60` / `1800` | Caps on one mutant's tests and on the whole mutation container |
+| `TESTMIND_MUTATION_MAX_SUGGESTIONS` | `10` | Surviving mutants per AI test-suggestion job |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | — | Database container credentials |
 
 ## Usage
@@ -317,6 +337,10 @@ Errors always have the same shape:
 | `GET` | `/api/v1/test-executions/{id}/failure-analyses` · `/api/v1/failure-analyses/{id}` | Hypotheses with verified evidence and adjusted confidence |
 | `POST` | `/api/v1/projects/{id}/regressions` | Queue a regression analysis between two commits (`{"base": "main~1", "head": "HEAD", "mode": "full"}`) |
 | `GET` | `/api/v1/regressions/{id}` · `/report` · `/tests?change=regressed` | Verdict and summary; changes, selection with reasons, both runs; per-test comparison |
+| `POST` | `/api/v1/runs/{id}/mutation-runs` | Queue mutation testing (`{"max_mutants": 100}`, capped by the server) |
+| `GET` | `/api/v1/mutation-runs/{id}` · `/mutants?status=survived` · `/functions` | Score and summary; every mutant with its verdict; scores per function, weakest first |
+| `POST` | `/api/v1/mutation-runs/{id}/test-suggestions` | Queue AI tests for surviving mutants (`409` without survivors, `503` without an LLM) |
+| `GET` | `/api/v1/mutation-runs/{id}/test-suggestions` · `/api/v1/test-suggestions/{id}` | Suggested tests with their sandbox verdicts and attempts |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -333,7 +357,7 @@ make help            # all targets
 | Suite | Location | Runs against |
 |---|---|---|
 | Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/`, the generator loop and prompt handling |
-| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, the coverage-guided loop, failure capture and analysis, and regression analysis on a real git history |
+| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, the coverage-guided loop, failure capture and analysis, regression analysis on a real git history, and the mutation driver, engine and suggestion checks |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
@@ -373,7 +397,9 @@ In place today:
   `no-new-privileges`, user `nobody`, a read-only root filesystem and a read-only repository,
   CPU/memory/pids limits and a hard timeout. The JUnit output is parsed with `defusedxml`.
 - LLM output is never trusted: static checks and a sandboxed pytest run decide; in failure
-  analysis every cited line is checked against what the model was shown
+  analysis every cited line is checked against what the model was shown; a test suggested
+  for a surviving mutant counts only if the sandbox shows it passes on the original code and
+  kills the mutant
   ([ADR-0006](docs/adr/0006-llm-proposes-tools-decide.md)).
 
 - Git history is read with dulwich, never with the git command line, so a repository's
@@ -399,7 +425,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 | 6 | Coverage: coverage.py, file/function/branch coverage, weak areas, coverage-guided generation | ✅ Done |
 | 7 | AI failure analyzer: evidence, root-cause hypothesis, confidence | ✅ Done (AI step verified with a scripted model) |
 | 8 | Regression engine: git diff, affected tests, test selection | ✅ Done |
-| 9 | Mutation testing: mutants, score, survivors | Planned |
+| 9 | Mutation testing: mutants, score, survivors | ✅ Done (AI suggestions verified with a scripted model) |
 | 10 | API & E2E testing: endpoint discovery, API tests, Playwright | Planned |
 | 11 | GitHub integration: import, PR analysis, comments, issue suggestions | Planned |
 | 12 | Dashboard: overview, tests, coverage, findings, regressions, mutation | Planned |
@@ -416,6 +442,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 - [Coverage](docs/coverage.md): measurement, function mapping, gap ranking, coverage-guided generation
 - [Failure analysis](docs/failure-analysis.md): structured capture, categories, grouping, evidence, AI hypotheses and their checks
 - [Regression analysis](docs/regression.md): safe git access, AST diff, test selection, comparison
+- [Mutation testing](docs/mutation.md): operators, targeting, the in-sandbox driver, scores, AI tests for survivors
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

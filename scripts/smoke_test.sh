@@ -113,6 +113,24 @@ case "$outcome" in
   *) fail "unexpected test execution outcome: $outcome" ;;
 esac
 
+echo "→ mutation testing"
+mutation_id=$(curl -fsS -X POST "$API/api/v1/runs/$run_id/mutation-runs" \
+  -H 'Content-Type: application/json' -d '{"max_mutants": 10}' | json "['id']")
+deadline=$((SECONDS + TIMEOUT_SECONDS))
+while (( SECONDS < deadline )); do
+  mutation=$(curl -fsS "$API/api/v1/mutation-runs/$mutation_id")
+  mutation_status=$(echo "$mutation" | json "['status']")
+  [[ "$mutation_status" == "succeeded" || "$mutation_status" == "failed" ]] && break
+  sleep 1
+done
+[[ "$mutation_status" == "succeeded" ]] || fail "mutation run ended as $mutation_status"
+baseline=$(echo "$mutation" | json "['summary']['baseline_outcome']")
+case "$baseline" in
+  passed) echo "  mutation score $(echo "$mutation" | json "['score']")" ;;
+  sandbox_unavailable) echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no score" ;;
+  *) fail "unexpected mutation baseline outcome: $baseline" ;;
+esac
+
 echo "→ regression analysis"
 regression_status=$(curl -s -o /tmp/testmind-regression.json -w '%{http_code}' -X POST \
   -H 'Content-Type: application/json' -d '{"base": "HEAD~1"}' \

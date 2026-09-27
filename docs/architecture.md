@@ -137,6 +137,8 @@ erDiagram
     test_generations |o--o{ test_executions : "included in"
     test_executions ||--o{ failure_analyses : "AI analyses of"
     projects ||--o{ regressions : "compared commits of"
+    analysis_runs ||--o{ mutation_runs : "mutation tests of"
+    mutation_runs ||--o{ mutant_test_suggestions : "AI tests for survivors of"
     projects {
         uuid id PK
         varchar name UK
@@ -196,6 +198,25 @@ erDiagram
         jsonb report "RegressionReport"
         text error_message
     }
+    mutation_runs {
+        uuid id PK
+        uuid run_id FK "ON DELETE CASCADE, indexed"
+        varchar status "job lifecycle"
+        jsonb options "max_mutants (capped by the server)"
+        jsonb report "MutationReport"
+        float score "mutation score, for lists"
+        text error_message
+    }
+    mutant_test_suggestions {
+        uuid id PK
+        uuid mutation_run_id FK "ON DELETE CASCADE, indexed"
+        varchar status "job lifecycle"
+        varchar provider
+        varchar model
+        varchar prompt_version
+        jsonb result "SuggestionResult (sandbox-verified)"
+        text error_message
+    }
     failure_analyses {
         uuid id PK
         uuid execution_id FK "ON DELETE CASCADE, indexed"
@@ -221,8 +242,11 @@ erDiagram
   its total so lists and comparisons do not have to load the document.
 - `test_executions.failures` is the deterministic failure report, written with the execution;
   `failure_analyses` holds the optional AI jobs about it.
-- Tables for regressions, mutation results and so on are added by the phases that produce that
-  data.
+- `mutation_runs.report` holds every mutant with its verdict and the scores per file and
+  function; `score` duplicates the total for lists. `mutant_test_suggestions` holds the
+  optional AI jobs, each suggestion with its sandbox verdicts.
+- Tables for later phases (reports, GitHub integration) are added by the phases that produce
+  that data.
 - `tests/integration/test_migrations.py` fails if the ORM models and the migrations drift apart.
 
 ## Configuration and logging

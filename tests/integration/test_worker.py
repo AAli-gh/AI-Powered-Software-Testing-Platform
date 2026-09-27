@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.ai_engine.test_generator.models import GenerationOptions
 from testmind.core.config import Settings
-from testmind.db.models import AnalysisRun, FailureAnalysis, TestGeneration
+from testmind.db.models import (
+    AnalysisRun,
+    FailureAnalysis,
+    MutantTestSuggestion,
+    MutationRun,
+    TestGeneration,
+)
 from testmind.domain.enums import RunStatus
 from testmind.repositories.analysis_repository import AnalysisRepository
 from testmind.schemas.project import ProjectCreate
@@ -22,6 +28,8 @@ from testmind.services.run_service import RunService
 from testmind.workers.celery_app import create_celery_app
 from testmind.workers.dispatcher import CeleryTaskDispatcher
 from tests.integration.test_failure_analysis import failed_execution
+from tests.integration.test_mutation_service import analysed
+from tests.unit.mutation_engine.test_suggester import report, survivor
 
 WAIT_SECONDS = 20
 
@@ -179,3 +187,42 @@ async def test_failure_analysis_without_llm_fails_cleanly_in_the_real_worker(
     assert stored.status is RunStatus.FAILED
     assert stored.error_message is not None
     assert stored.error_message.startswith("No LLM provider is configured")
+
+
+@pytest.mark.usefixtures("worker")
+async def test_mutant_suggestions_without_llm_fail_cleanly_in_the_real_worker(
+    session_factory: async_sessionmaker[AsyncSession],
+    celery_app: Celery,
+    repos_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real worker and provider factory, no API key: the job fails before any image build."""
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    run_id = await analysed(session_factory, repos_root)
+    async with session_factory() as session:
+        mutation_run = MutationRun(
+            run_id=run_id,
+            status=RunStatus.SUCCEEDED,
+            options={"max_mutants": 10},
+            report=report(survivor()).model_dump(mode="json"),
+        )
+        session.add(mutation_run)
+        await session.flush()
+        suggestion = MutantTestSuggestion(
+            mutation_run_id=mutation_run.id, status=RunStatus.QUEUED, provider="anthropic"
+        )
+        session.add(suggestion)
+        await session.commit()
+    await CeleryTaskDispatcher(celery_app).dispatch_mutant_suggestions(suggestion.id)
+
+    async with asyncio.timeout(WAIT_SECONDS):
+        while True:
+            async with session_factory() as session:
+                stored = await session.get(MutantTestSuggestion, suggestion.id)
+                if stored is not None and stored.status.is_terminal:
+                    break
+            await asyncio.sleep(0.1)
+
+    assert stored.status is RunStatus.FAILED
+    assert (stored.error_message or "").startswith("No LLM provider is configured")

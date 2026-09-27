@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     # --- AI failure analysis: failure groups explained per request (the rest are skipped).
     failure_analysis_max_groups: int = Field(default=10, ge=1, le=100)
 
+    # --- Mutation testing.
+    mutation_max_mutants: int = Field(default=200, ge=1, le=5000)
+    mutation_mutant_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+    mutation_job_timeout_seconds: int = Field(default=1800, ge=60, le=14400)
+    mutation_max_suggestions: int = Field(default=10, ge=1, le=100)
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalise_log_level(cls, value: object) -> object:

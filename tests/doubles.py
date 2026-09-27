@@ -19,6 +19,8 @@ class RecordingDispatcher:
         self.executions: list[uuid.UUID] = []
         self.failure_analyses: list[uuid.UUID] = []
         self.regressions: list[uuid.UUID] = []
+        self.mutation_runs: list[uuid.UUID] = []
+        self.mutant_suggestions: list[uuid.UUID] = []
 
     async def dispatch_analysis_run(self, run_id: uuid.UUID) -> None:
         self.dispatched.append(run_id)
@@ -35,6 +37,12 @@ class RecordingDispatcher:
     async def dispatch_regression(self, regression_id: uuid.UUID) -> None:
         self.regressions.append(regression_id)
 
+    async def dispatch_mutation_run(self, mutation_run_id: uuid.UUID) -> None:
+        self.mutation_runs.append(mutation_run_id)
+
+    async def dispatch_mutant_suggestions(self, suggestion_id: uuid.UUID) -> None:
+        self.mutant_suggestions.append(suggestion_id)
+
 
 class FailingDispatcher:
     async def dispatch_analysis_run(self, run_id: uuid.UUID) -> None:
@@ -50,6 +58,12 @@ class FailingDispatcher:
         raise ConnectionError("broker unavailable")
 
     async def dispatch_regression(self, regression_id: uuid.UUID) -> None:
+        raise ConnectionError("broker unavailable")
+
+    async def dispatch_mutation_run(self, mutation_run_id: uuid.UUID) -> None:
+        raise ConnectionError("broker unavailable")
+
+    async def dispatch_mutant_suggestions(self, suggestion_id: uuid.UUID) -> None:
         raise ConnectionError("broker unavailable")
 
 

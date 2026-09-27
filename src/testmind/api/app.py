@@ -15,6 +15,7 @@ from testmind.api.routes import (
     failures,
     generations,
     health,
+    mutations,
     projects,
     regressions,
     runs,
@@ -73,4 +74,5 @@ def create_app(
     app.include_router(executions.router)
     app.include_router(failures.router)
     app.include_router(regressions.router)
+    app.include_router(mutations.router)
     return app

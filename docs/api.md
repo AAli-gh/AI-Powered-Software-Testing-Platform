@@ -33,8 +33,11 @@ Every non-2xx response has this shape:
 | 405 | `method_not_allowed` | Wrong method for a route |
 | 409 | `conflict` | Duplicate project name; deleting a project with queued/running runs |
 | 409 | `invalid_state_transition` | For example, cancelling a run that already started |
+| 409 | `not_a_git_repository` | Regression analysis on a project that is not a plain git repository |
 | 422 | `validation_error` | Body/query/path validation failed (`details` lists each problem) |
 | 422 | `invalid_source` | `source_location` missing, not a directory, or outside the repositories root |
+| 422 | `invalid_revision` | Unknown or malformed git revision, or base = head |
+| 503 | `llm_not_configured` | An AI feature was requested but no LLM provider is configured |
 | 503 | `dispatch_failed` | The task queue was unreachable. The run is recorded as `failed` |
 | 500 | `internal_error` | Unexpected error. Details are logged, never returned |
 
@@ -225,6 +228,20 @@ Between two commits of a project's git repository ([details](regression.md)).
 | `GET` | `/api/v1/regressions/{id}` | Status, refs and resolved commits, `verdict` (`regressions`, `clean`, `inconclusive`), `summary` |
 | `GET` | `/api/v1/regressions/{id}/report` | Changes (files, functions, module-level), selection with reasons and notes, both runs, per-test changes, failure causes (new / resolved / persisting), coverage diff, selection check. `404` until finished |
 | `GET` | `/api/v1/regressions/{id}/tests` | `change` (`regressed`, `fixed`, `still_failing`, `added`, `removed`, `unchanged`, `not_run`), `limit` ≤ 500, `offset` |
+
+### Mutation testing
+
+On a succeeded run, on request ([details](mutation.md)).
+
+| Method | Path | Parameters | Notes |
+|---|---|---|---|
+| `POST` | `/api/v1/runs/{id}/mutation-runs` | Body (optional): `{"max_mutants": 1-5000}` | `202`. The server's `TESTMIND_MUTATION_MAX_MUTANTS` wins. `404`; `409` run not succeeded; `503 dispatch_failed` |
+| `GET` | `/api/v1/runs/{id}/mutation-runs` | `limit` ≤ 100, `offset` | Paginated, newest first |
+| `GET` | `/api/v1/mutation-runs/{id}` | | Status, options, `score`, `summary` (baseline outcome, mutants generated, totals: killed, survived, timeout, no_coverage, errors, `score`, `covered_score`; notes) |
+| `GET` | `/api/v1/mutation-runs/{id}/mutants` | `status` (`killed`, `survived`, `timeout`, `no_coverage`, `error`), `path`, `limit` ≤ 500, `offset` | Location, operator, original, replacement, tests run, killed by, duration, detail. `404` until finished |
+| `GET` | `/api/v1/mutation-runs/{id}/functions` | `limit` ≤ 500, `offset` | Scores per function, weakest first, unscored last |
+| `POST` | `/api/v1/mutation-runs/{id}/test-suggestions` | | Queue AI tests for the surviving mutants. `202`; `409` no survivors; `503 llm_not_configured`; `503 dispatch_failed` |
+| `GET` | `/api/v1/mutation-runs/{id}/test-suggestions` · `/api/v1/test-suggestions/{id}` | | Status; `result.suggestions[]` with mutant, `status` (`accepted`, `rejected`, `llm_error`, `sandbox_error`), `test_path`, `code`, `attempts[]` (`accepted`, `fails_on_original`, `mutant_survives`, `rejected`, …) |
 
 ### Failure analysis
 

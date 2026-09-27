@@ -59,6 +59,9 @@ USER 65534:65534
 - **Regression runs** additionally record per-test coverage contexts and can run only a
   selection of test files or pytest nodeids ([regression.md](regression.md)). Nodeids are
   validated: they must name one of the project's test files and contain no control characters.
+- **Mutation runs** use the baseline's per-test contexts to run each mutant against only the
+  tests that executed its lines, in one container driven by `docker/testmind_mutate.py`
+  ([mutation.md](mutation.md)).
 - **Failures** are captured as structured data by TestMind's pytest plugin and analysed
   after every run ([failure-analysis.md](failure-analysis.md)). Suite runs use
   `--continue-on-collection-errors`, so a test module that fails to import is reported as its
