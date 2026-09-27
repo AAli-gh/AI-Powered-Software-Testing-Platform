@@ -38,9 +38,11 @@ class FailureAnalysisExecutor:
         provider_factory: Callable[[], LLMProvider],
         max_tokens: int,
         max_groups: int,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._provider_factory = provider_factory
         self._max_tokens = max_tokens
         self._max_groups = max_groups
@@ -70,7 +72,7 @@ class FailureAnalysisExecutor:
         try:
             if report is None or location is None:
                 return await self._finish(analysis_id, RunStatus.FAILED, NO_FAILURE_REPORT)
-            root = resolve_local_source(self._repos_root, location)
+            root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             explainer = FailureExplainer(
                 self._provider_factory(), max_tokens=self._max_tokens, max_groups=self._max_groups
             )

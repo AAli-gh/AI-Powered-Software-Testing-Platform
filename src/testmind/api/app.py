@@ -15,6 +15,7 @@ from testmind.api.routes import (
     executions,
     failures,
     generations,
+    github,
     health,
     mutations,
     projects,
@@ -25,6 +26,7 @@ from testmind.core.config import Settings, get_settings
 from testmind.core.logging import configure_logging
 from testmind.db.session import create_engine, create_session_factory
 from testmind.services.dispatcher import TaskDispatcher
+from testmind.services.github_service import ClientFactory
 from testmind.workers.celery_app import create_celery_app
 from testmind.workers.dispatcher import CeleryTaskDispatcher
 
@@ -32,11 +34,15 @@ REDIS_TIMEOUT_SECONDS = 2.0
 
 
 def create_app(
-    settings: Settings | None = None, *, dispatcher: TaskDispatcher | None = None
+    settings: Settings | None = None,
+    *,
+    dispatcher: TaskDispatcher | None = None,
+    github_clients: ClientFactory | None = None,
 ) -> FastAPI:
     """Application factory (`uvicorn --factory testmind.api.app:create_app`).
 
-    `dispatcher` may be injected by tests; by default runs are sent to Celery.
+    `dispatcher` and `github_clients` may be injected by tests; by default runs are sent to
+    Celery and GitHub is reached at TESTMIND_GITHUB_API_URL.
     """
     settings = settings or get_settings()
     configure_logging(settings.log_level, json=settings.log_json)
@@ -53,6 +59,7 @@ def create_app(
         app.state.session_factory = create_session_factory(engine)
         app.state.redis = redis
         app.state.dispatcher = dispatcher or CeleryTaskDispatcher(create_celery_app(settings))
+        app.state.github_clients = github_clients
         try:
             yield
         finally:
@@ -76,5 +83,6 @@ def create_app(
     app.include_router(failures.router)
     app.include_router(regressions.router)
     app.include_router(mutations.router)
+    app.include_router(github.router)
     app.include_router(api_testing.router)
     return app

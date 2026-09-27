@@ -33,9 +33,12 @@ class ExecutionExecutor:
         session_factory: async_sessionmaker[AsyncSession],
         repos_root: Path,
         runner: TestSuiteRunner,
+        *,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._runner = runner
 
     async def execute(self, execution_id: uuid.UUID) -> RunStatus | None:
@@ -61,7 +64,7 @@ class ExecutionExecutor:
         try:
             if profile is None or location is None:
                 return await self._finish(execution_id, RunStatus.FAILED, NO_REPOSITORY_ANALYSIS)
-            root = resolve_local_source(self._repos_root, location)
+            root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             result = await asyncio.to_thread(
                 lambda: self._runner.run(root, profile, generated, code=code, api_probes=api_probes)
             )

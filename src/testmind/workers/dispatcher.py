@@ -7,10 +7,12 @@ from celery import Celery
 
 from testmind.workers.tasks import (
     ANALYZE_FAILURES,
+    ANALYZE_PULL_REQUEST,
     ANALYZE_REGRESSION,
     EXECUTE_ANALYSIS_RUN,
     EXECUTE_TESTS,
     GENERATE_TESTS,
+    IMPORT_GITHUB_REPOSITORY,
     RUN_MUTATIONS,
     SUGGEST_API_TESTS,
     SUGGEST_MUTANT_TESTS,
@@ -48,3 +50,11 @@ class CeleryTaskDispatcher:
 
     async def dispatch_api_suggestions(self, suggestion_id: uuid.UUID) -> None:
         await asyncio.to_thread(self._app.send_task, SUGGEST_API_TESTS, args=[str(suggestion_id)])
+
+    async def dispatch_pull_analysis(self, analysis_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._app.send_task, ANALYZE_PULL_REQUEST, args=[str(analysis_id)])
+
+    async def dispatch_github_import(self, import_id: uuid.UUID) -> None:
+        await asyncio.to_thread(
+            self._app.send_task, IMPORT_GITHUB_REPOSITORY, args=[str(import_id)]
+        )

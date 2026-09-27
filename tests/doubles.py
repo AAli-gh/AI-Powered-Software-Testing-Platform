@@ -22,6 +22,8 @@ class RecordingDispatcher:
         self.mutation_runs: list[uuid.UUID] = []
         self.mutant_suggestions: list[uuid.UUID] = []
         self.api_suggestions: list[uuid.UUID] = []
+        self.pull_analyses: list[uuid.UUID] = []
+        self.github_imports: list[uuid.UUID] = []
 
     async def dispatch_analysis_run(self, run_id: uuid.UUID) -> None:
         self.dispatched.append(run_id)
@@ -47,6 +49,12 @@ class RecordingDispatcher:
     async def dispatch_api_suggestions(self, suggestion_id: uuid.UUID) -> None:
         self.api_suggestions.append(suggestion_id)
 
+    async def dispatch_pull_analysis(self, analysis_id: uuid.UUID) -> None:
+        self.pull_analyses.append(analysis_id)
+
+    async def dispatch_github_import(self, import_id: uuid.UUID) -> None:
+        self.github_imports.append(import_id)
+
 
 class FailingDispatcher:
     async def dispatch_analysis_run(self, run_id: uuid.UUID) -> None:
@@ -71,6 +79,12 @@ class FailingDispatcher:
         raise ConnectionError("broker unavailable")
 
     async def dispatch_api_suggestions(self, suggestion_id: uuid.UUID) -> None:
+        raise ConnectionError("broker unavailable")
+
+    async def dispatch_pull_analysis(self, analysis_id: uuid.UUID) -> None:
+        raise ConnectionError("broker unavailable")
+
+    async def dispatch_github_import(self, import_id: uuid.UUID) -> None:
         raise ConnectionError("broker unavailable")
 
 

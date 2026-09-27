@@ -4,13 +4,10 @@ from enum import StrEnum
 
 
 class SourceType(StrEnum):
-    """Where a project's code comes from.
+    """Where a project's code comes from."""
 
-    Only local directories are supported in Phase 1. GitHub sources arrive with the GitHub
-    integration (Phase 11) together with a migration that extends the column constraint.
-    """
-
-    LOCAL = "local"
+    LOCAL = "local"  # a directory inside TESTMIND_REPOS_ROOT
+    GITHUB = "github"  # a commit imported from GitHub into TESTMIND_GITHUB_IMPORTS_ROOT
 
 
 class RunStatus(StrEnum):

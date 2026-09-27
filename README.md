@@ -13,13 +13,15 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–10 of 14 are complete: the platform foundation, the deterministic
+> **Status: Phases 1–11 of 14 are complete: the platform foundation, the deterministic
 > repository and code analyzers, AI test generation with sandboxed validation, the
 > sandboxed test runner, coverage analysis with coverage-guided test generation, failure
 > analysis (deterministic grouping plus evidence-checked AI root causes), regression
 > analysis between git commits with test selection, mutation testing with sandbox-verified
 > AI tests for surviving mutants, and API testing (endpoint discovery, API coverage,
-> deterministic probes, sandbox-verified AI API tests) with minimal Playwright support.**
+> deterministic probes, sandbox-verified AI API tests) with minimal Playwright support, and a
+> GitHub App integration (signed webhooks, pull request analysis posted as a check run and a
+> comment, issue suggestions, repository import), tested against a local fake of GitHub.**
 > The AI stages have been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
@@ -197,6 +199,19 @@ Everything listed here is implemented and tested.
     application's own record shows the request that closes the gap;
   - **Playwright** tests run in a browser sandbox image with a headless Chromium, with the
     same isolation (verified in CI).
+- **GitHub integration** ([details](docs/github.md)), as a GitHub App:
+  - **signed webhooks** (HMAC-SHA256, constant-time comparison, de-duplicated deliveries);
+  - **pull request analysis**: both commits are downloaded as tarballs and extracted
+    safely (no `git` process). The whole suite runs at base and head in the sandbox, and
+    the report adds new code-analysis findings in the changed files and changed functions no
+    test executes;
+  - the result is posted as a **check run** and **one comment**, which is updated on every
+    push;
+  - **issue suggestions** with stable ids, created on request, each at most once;
+  - **repository import** as a project, with its analysis run queued
+    ([ADR-0012](docs/adr/0012-github-app-with-tarball-snapshots.md));
+  - tested against a local fake of the GitHub API that verifies the App JWT and the
+    installation tokens. **Not yet exercised against github.com.**
 - **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
   starts.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
@@ -204,7 +219,7 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 1003 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 1064 tests with 100 % line and branch coverage in CI. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -265,6 +280,10 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_MUTATION_MAX_SUGGESTIONS` | `10` | Surviving mutants per AI test-suggestion job |
 | `TESTMIND_API_MAX_SUGGESTIONS` | `10` | Endpoint gaps per AI API test job |
 | `TESTMIND_BROWSER_SANDBOX_IMAGE` | unset | Sandbox image with Chromium for Playwright tests (`make browser-image`) |
+| `TESTMIND_GITHUB_APP_ID` / `…_PRIVATE_KEY` (or `…_PRIVATE_KEY_FILE`) / `…_WEBHOOK_SECRET` | unset | The GitHub App ([docs/github.md](docs/github.md)). Unset: GitHub endpoints answer `503` |
+| `TESTMIND_GITHUB_ALLOWED_OWNERS` | empty (any) | Owners whose repositories may be analysed |
+| `TESTMIND_GITHUB_IMPORTS_ROOT` | unset | Where imported repositories are written (`/imports` volume in compose) |
+| `TESTMIND_PUBLIC_URL` | unset | Links from pull request comments to the report |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | — | Database container credentials |
 
 ## Usage
@@ -365,6 +384,10 @@ Errors always have the same shape:
 | `GET` | `/api/v1/runs/{id}/api` | Discovered HTTP endpoints and applications |
 | `GET` | `/api/v1/test-executions/{id}/api-coverage` · `/endpoints` · `/gaps` · `/probes` · `/unmatched` | API coverage, gaps, probe verdicts, requests no route answered (`{"api_probes": true}` on the execution adds the probes) |
 | `POST` | `/api/v1/test-executions/{id}/api-test-suggestions` | Queue AI API tests for the endpoint gaps (`409` without gaps, `503` without an LLM) |
+| `POST` | `/api/v1/github/webhook` | GitHub App deliveries (`401` unsigned or forged, `202` analysis queued) |
+| `POST` / `GET` | `/api/v1/github/pull-analyses` · `/{id}` · `/report` · `/comment` | Analyse a pull request on request; status, report, the posted markdown |
+| `POST` | `/api/v1/github/pull-analyses/{id}/issues` | Create GitHub issues from chosen suggestions (each at most once) |
+| `POST` / `GET` | `/api/v1/github/imports` · `/{id}` | Import a repository at a ref as a project |
 
 Full reference: [docs/api.md](docs/api.md) and the live OpenAPI schema at `/docs`.
 
@@ -382,12 +405,14 @@ make help            # all targets
 | Suite | Location | Runs against |
 |---|---|---|
 | Unit | `tests/unit/` | Pure code: config, state machine, path confinement, Celery config, every analyzer detector and rule (positive and negative cases), golden tests on `examples/`, the generator loop and prompt handling |
-| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, the coverage-guided loop, failure capture and analysis, regression analysis on a real git history, the mutation driver, engine and suggestion checks, API capture, probes and AI API test checks, and Playwright tests in the browser image |
+| Sandbox | `tests/sandbox/` | The real Docker sandbox: isolation guarantees, timeouts, the full generate → run → fix loop, example suites with coverage cross-checked against coverage.py, the coverage-guided loop, failure capture and analysis, regression analysis on a real git history, the mutation driver, engine and suggestion checks, API capture, probes and AI API test checks, Playwright tests in the browser image, and pull request analysis and import through Celery with the fake GitHub on a real port |
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
+| GitHub | `tests/github_fake.py` | A local fake of the GitHub REST API (JWT verification, installation tokens, tarballs), used by the GitHub tests of every suite |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
 
-Only the task queue boundary has a test double, and only in tests that do not need a worker.
+Only external boundaries have test doubles: the task queue (in tests that do not need a
+worker), the LLM provider, and GitHub (the fake above).
 The real Celery path is covered end to end. See [docs/testing.md](docs/testing.md) and
 [docs/development.md](docs/development.md).
 
@@ -428,6 +453,10 @@ In place today:
   request that closes the gap
   ([ADR-0006](docs/adr/0006-llm-proposes-tools-decide.md)).
 
+- GitHub: webhooks are verified (HMAC-SHA256, constant time) before anything is parsed. The
+  App's private key and installation tokens never reach the database, logs or the sandbox.
+  Commits arrive as size-capped tarballs, extracted without links, special files or unsafe
+  paths ([docs/github.md](docs/github.md)).
 - Git history is read with dulwich, never with the git command line, so a repository's
   configuration cannot run commands ([ADR-0009](docs/adr/0009-read-only-git-with-dulwich.md)).
 - Project dependencies are installed **wheels only** (`pip --only-binary=:all:`), so no
@@ -453,7 +482,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 | 8 | Regression engine: git diff, affected tests, test selection | ✅ Done |
 | 9 | Mutation testing: mutants, score, survivors | ✅ Done (AI suggestions verified with a scripted model) |
 | 10 | API & E2E testing: endpoint discovery, API tests, Playwright | ✅ Done (AI API tests verified with a scripted model; Playwright: running existing browser tests, verified in CI) |
-| 11 | GitHub integration: import, PR analysis, comments, issue suggestions | Planned |
+| 11 | GitHub integration: import, PR analysis, comments, issue suggestions | ✅ Done (tested against a local fake of GitHub; not yet against github.com) |
 | 12 | Dashboard: overview, tests, coverage, findings, regressions, mutation | Planned |
 | 13 | Security hardening: sandboxing, limits, network restrictions | Planned |
 | 14 | Production quality: monitoring, performance, complete docs | Planned |
@@ -470,6 +499,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 - [Regression analysis](docs/regression.md): safe git access, AST diff, test selection, comparison
 - [Mutation testing](docs/mutation.md): operators, targeting, the in-sandbox driver, scores, AI tests for survivors
 - [API and browser testing](docs/api-testing.md): endpoint discovery, runtime capture, API coverage, probes, AI API tests, Playwright
+- [GitHub integration](docs/github.md): the App, webhooks, pull request analysis, issues, imports
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

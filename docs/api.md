@@ -29,6 +29,9 @@ Every non-2xx response has this shape:
 
 | HTTP | `code` | When |
 |---|---|---|
+| 400 | `invalid_payload` | A signed GitHub delivery that is not a usable event; an invalid repository name or ref |
+| 401 | `invalid_signature` | A GitHub webhook delivery without a valid `X-Hub-Signature-256` |
+| 403 | `repository_not_allowed` | The repository's owner is not in `TESTMIND_GITHUB_ALLOWED_OWNERS` |
 | 404 | `not_found` | Unknown project, run or route |
 | 405 | `method_not_allowed` | Wrong method for a route |
 | 409 | `conflict` | Duplicate project name; deleting a project with queued/running runs |
@@ -37,6 +40,9 @@ Every non-2xx response has this shape:
 | 422 | `validation_error` | Body/query/path validation failed (`details` lists each problem) |
 | 422 | `invalid_source` | `source_location` missing, not a directory, or outside the repositories root |
 | 422 | `invalid_revision` | Unknown or malformed git revision, or base = head |
+| 413 | `payload_too_large` | A webhook delivery over 5 MB |
+| 502 | `github_error` | GitHub refused a request (its status and message are included) |
+| 503 | `github_not_configured` | A GitHub feature was requested but the App (or the imports root) is not configured |
 | 503 | `llm_not_configured` | An AI feature was requested but no LLM provider is configured |
 | 503 | `dispatch_failed` | The task queue was unreachable. The run is recorded as `failed` |
 | 500 | `internal_error` | Unexpected error. Details are logged, never returned |
@@ -258,6 +264,22 @@ AI API tests ([details](api-testing.md)).
 | `GET` | `/api/v1/test-executions/{id}/api-coverage/unmatched` | | Requests of the project's tests that no route answered |
 | `POST` | `/api/v1/test-executions/{id}/api-test-suggestions` | | `202`; `404` no API coverage; `409` no gap a test could close; `503 llm_not_configured`; `503 dispatch_failed` |
 | `GET` | `/api/v1/test-executions/{id}/api-test-suggestions` · `/api/v1/api-test-suggestions/{id}` | | Status; `result.suggestions[]` with endpoint, gap, `status` (`accepted`, `rejected`, `llm_error`, `sandbox_error`), `test_path`, `code`, `statuses`, `attempts[]` (`accepted`, `fails_on_original`, `endpoint_not_called`, `gap_not_closed`, `rejected`, …) |
+
+### GitHub
+
+The GitHub App: webhooks, pull request analyses, issues, imports ([details](github.md)).
+
+| Method | Path | Parameters | Notes |
+|---|---|---|---|
+| `POST` | `/api/v1/github/webhook` | headers `X-GitHub-Event`, `X-GitHub-Delivery`, `X-Hub-Signature-256` | `202 {"status": "queued", "id"}`; `200` for `pong`, `duplicate` (same delivery id, same `id`) and `ignored` (with `reason`); `400 invalid_payload`; `401 invalid_signature`; `413`; `503 github_not_configured` |
+| `POST` | `/api/v1/github/pull-analyses` | body `repository`, `pull_number`, `installation_id` | `202`: analyses the pull request's current head; `403 repository_not_allowed`; `503` |
+| `GET` | `/api/v1/github/pull-analyses` | `repository`, `pull_number`, `limit` ≤ 100, `offset` | Newest first |
+| `GET` | `/api/v1/github/pull-analyses/{id}` | | Status, shas, `conclusion` (`success`, `failure`, `neutral`), `check_run_id`, `comment_id`, created `issues`, `summary` (regressed tests, new findings, untested changes, `suggestions`) |
+| `GET` | `/api/v1/github/pull-analyses/{id}/report` | | The whole `PullReport`: regression report, `new_findings`, `untested_changes`, `suggestions`, `notes`. `404` until it has succeeded |
+| `GET` | `/api/v1/github/pull-analyses/{id}/comment` | | The markdown posted on the pull request (`text/markdown`) |
+| `POST` | `/api/v1/github/pull-analyses/{id}/issues` | body `suggestions` (1–50 ids) | `201` with `[{suggestion, number, url}]`. A suggestion already created returns its issue again; `404` unknown suggestion; `502 github_error` |
+| `POST` | `/api/v1/github/imports` | body `repository`, `ref` (default `HEAD`), `installation_id` | `202`; the worker creates or updates the project and queues its run |
+| `GET` | `/api/v1/github/imports/{id}` | | Status, `commit_sha`, `project_id`, `run_id`, `skipped` archive entries |
 
 ### Failure analysis
 

@@ -21,7 +21,12 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     # For local sources: POSIX path relative to TESTMIND_REPOS_ROOT (never absolute), so the
     # same row is valid for the API and the worker regardless of where the root is mounted.
+    # For GitHub imports: "github:<owner>/<repo>/<sha>", relative to the imports root.
     source_location: Mapped[str] = mapped_column(String(1024), nullable=False)
+    # GitHub imports: the repository ("owner/name"), the requested ref and the imported commit.
+    remote_repository: Mapped[str | None] = mapped_column(String(200))
+    remote_ref: Mapped[str | None] = mapped_column(String(200))
+    remote_commit: Mapped[str | None] = mapped_column(String(40))
 
     runs: Mapped[list[AnalysisRun]] = relationship(
         back_populates="project",

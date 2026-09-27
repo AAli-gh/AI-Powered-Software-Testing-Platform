@@ -45,9 +45,11 @@ class GenerationExecutor:
         max_tokens: int,
         max_targets: int,
         images: ImageBuilder | None = None,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._provider_factory = provider_factory
         self._sandbox = sandbox
         self._images = images
@@ -85,7 +87,7 @@ class GenerationExecutor:
                 return await self._finish(generation_id, RunStatus.FAILED, NO_CODE_ANALYSIS)
             if options.coverage_execution_id is not None and coverage is None:
                 return await self._finish(generation_id, RunStatus.FAILED, NO_COVERAGE)
-            root = resolve_local_source(self._repos_root, location)
+            root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             provider = self._provider_factory()
             result = await asyncio.to_thread(
                 self._generate, root, profile, options, provider, dependencies, coverage=coverage

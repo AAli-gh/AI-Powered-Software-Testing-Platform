@@ -57,3 +57,31 @@ class NotVersionedError(ConflictError):
     """The project's source is not a (supported) git repository."""
 
     code = "not_a_git_repository"
+
+
+class GitHubNotConfiguredError(AppError):
+    """The GitHub App (or the part of it an operation needs) is not configured."""
+
+    code = "github_not_configured"
+
+
+class InvalidSignatureError(AppError):
+    """A webhook delivery is not signed with the configured secret."""
+
+    code = "invalid_signature"
+
+
+class RepositoryNotAllowedError(AppError):
+    """The repository's owner is not in TESTMIND_GITHUB_ALLOWED_OWNERS."""
+
+    code = "repository_not_allowed"
+
+
+class PayloadTooLargeError(AppError):
+    code = "payload_too_large"
+
+
+class GitHubRequestError(AppError):
+    """GitHub refused or failed a request made on the user's behalf."""
+
+    code = "github_error"

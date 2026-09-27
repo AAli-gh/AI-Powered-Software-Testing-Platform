@@ -14,6 +14,8 @@ from testmind.db.models import (
     AnalysisRun,
     ApiTestSuggestion,
     FailureAnalysis,
+    GitHubImport,
+    GitHubPullAnalysis,
     MutantTestSuggestion,
     MutationRun,
     Regression,
@@ -42,6 +44,8 @@ def apply_transition(
         | MutationRun
         | MutantTestSuggestion
         | ApiTestSuggestion
+        | GitHubPullAnalysis
+        | GitHubImport
     ),
     target: RunStatus,
     *,

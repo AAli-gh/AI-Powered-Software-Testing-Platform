@@ -8,17 +8,22 @@ Connection URLs can be overridden with TESTMIND_TEST_DATABASE_URL / TESTMIND_TES
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
+import httpx
 import pytest
 from alembic import command
 from alembic.config import Config
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from testmind.core.config import Environment, Settings
 from testmind.db.session import create_engine, create_session_factory
+from testmind.github.client import AppCredentials, GitHubClient
+from tests.github_fake import APP_ID, FakeGitHub, private_key_pem
+from tests.pull_fixture import BASE, HEAD
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -26,6 +31,8 @@ TEST_DATABASE_URL = os.environ.get(
     "TESTMIND_TEST_DATABASE_URL",
     "postgresql+asyncpg://testmind:testmind@localhost:55432/testmind_test",
 )
+GITHUB_REPOSITORY = "acme/shop"
+GITHUB_WEBHOOK_SECRET = "webhook-secret"
 TEST_REDIS_URL = os.environ.get("TESTMIND_TEST_REDIS_URL", "redis://localhost:56379/15")
 
 INTEGRATION_DIRS = ("integration", "api")
@@ -48,6 +55,18 @@ def repos_root(tmp_path: Path) -> Path:
     return root.resolve()
 
 
+@pytest.fixture(scope="session")
+def private_key() -> str:
+    """A GitHub App private key, generated for the test session."""
+    return private_key_pem()
+
+
+@pytest.fixture
+def github(private_key: str) -> FakeGitHub:
+    """The fake GitHub API (tests/github_fake.py), knowing the App's public key."""
+    return FakeGitHub(private_key)
+
+
 @pytest.fixture
 def settings(repos_root: Path) -> Settings:
     return Settings(
@@ -58,6 +77,44 @@ def settings(repos_root: Path) -> Settings:
         repos_root=repos_root,
         log_json=False,
     )
+
+
+@pytest.fixture
+def github_settings(settings: Settings, private_key: str, tmp_path: Path) -> Settings:
+    """Settings with the GitHub App configured, against the fake GitHub API."""
+    return settings.model_copy(
+        update={
+            "github_app_id": APP_ID,
+            "github_private_key": SecretStr(private_key),
+            "github_webhook_secret": SecretStr(GITHUB_WEBHOOK_SECRET),
+            "github_api_url": "http://github.test",
+            "github_imports_root": tmp_path / "imports",
+        }
+    )
+
+
+@pytest.fixture
+def github_clients(github: FakeGitHub, private_key: str) -> Callable[[], GitHubClient]:
+    """GitHub clients talking to the fake GitHub in process."""
+
+    def create() -> GitHubClient:
+        return GitHubClient(
+            AppCredentials(APP_ID, private_key),
+            api_url="http://github.test",
+            transport=httpx.ASGITransport(app=github.app),
+        )
+
+    return create
+
+
+@pytest.fixture
+def shop(github: FakeGitHub) -> tuple[str, str]:
+    """acme/shop with pull request 7 (tests/pull_fixture.py): base and head shas."""
+    github.add_repository(GITHUB_REPOSITORY)
+    base = github.add_commit(GITHUB_REPOSITORY, BASE, ref="main")
+    head = github.add_commit(GITHUB_REPOSITORY, HEAD, ref="feature")
+    github.add_pull(GITHUB_REPOSITORY, 7, base, head, title="Change pricing")
+    return base, head
 
 
 def alembic_config(database_url: str = TEST_DATABASE_URL) -> Config:
@@ -81,7 +138,8 @@ async def engine(migrated_database: None, settings: Settings) -> AsyncIterator[A
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE api_test_suggestions, mutant_test_suggestions, mutation_runs, "
+                "TRUNCATE github_imports, github_pull_analyses, api_test_suggestions, "
+                "mutant_test_suggestions, mutation_runs, "
                 "regressions, failure_analyses, test_executions, test_generations, "
                 "code_analyses, repository_analyses, "
                 "analysis_runs, projects CASCADE"

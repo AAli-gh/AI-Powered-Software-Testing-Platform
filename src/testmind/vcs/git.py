@@ -150,7 +150,7 @@ class GitRepository:
         skipped: list[str] = []
         for entry in iter_tree_contents(self._repo.object_store, self._commit(sha).tree):
             path = entry.path.decode("utf-8", "replace")
-            if not _safe(path):
+            if not safe_path(path):
                 skipped.append(f"{path}: unsafe path")
                 continue
             if not stat.S_ISREG(entry.mode):
@@ -184,7 +184,8 @@ def _path(raw: bytes | None) -> str | None:
     return raw.decode("utf-8", "replace") if raw else None
 
 
-def _safe(path: str) -> bool:
+def safe_path(path: str) -> bool:
+    """A relative path without `..`, `.`, `.git`, backslashes or NUL bytes."""
     parts = PurePosixPath(path).parts
     return (
         bool(parts)

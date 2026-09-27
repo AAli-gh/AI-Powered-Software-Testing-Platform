@@ -40,7 +40,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 
 RUN groupadd --system --gid 10001 testmind \
  && useradd --system --uid 10001 --gid testmind --no-create-home --shell /usr/sbin/nologin testmind \
- && mkdir -p /repos && chown testmind:testmind /repos
+ && mkdir -p /repos /imports && chown testmind:testmind /repos /imports
 
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

@@ -26,11 +26,36 @@ def test_defaults() -> None:
     assert settings.log_json is True
 
 
-def test_connection_urls_are_not_leaked_by_repr() -> None:
-    settings = make()
-    assert "secret" not in repr(settings)
-    assert "secret" not in str(settings)
+def test_secrets_are_not_leaked_by_repr() -> None:
+    settings = make(github_webhook_secret="hook-value-1", github_private_key="-----BEGIN key")
+    for text in (repr(settings), str(settings)):
+        assert "user:secret@" not in text
+        assert "hook-value-1" not in text
+        assert "BEGIN key" not in text
     assert settings.database_url.get_secret_value() == VALID_DB
+    assert settings.github_private_key_pem() == "-----BEGIN key"
+
+
+def test_github_settings(tmp_path: Path) -> None:
+    assert make().github_private_key_pem() is None
+    key_file = tmp_path / "app.pem"
+    key_file.write_text("-----BEGIN from file")
+    settings = make(github_private_key_file=key_file, github_allowed_owners="acme, Other ,")
+    assert settings.github_private_key_pem() == "-----BEGIN from file"
+    assert settings.github_allowed_owners == ["acme", "Other"]
+    one_line = make(github_private_key="-----BEGIN KEY-----\\nabc\\n-----END KEY-----")
+    assert one_line.github_private_key_pem() == "-----BEGIN KEY-----\nabc\n-----END KEY-----"
+    multi_line = make(github_private_key="-----BEGIN KEY-----\nabc\\n")
+    assert multi_line.github_private_key_pem() == "-----BEGIN KEY-----\nabc\\n"
+    with pytest.raises(ValidationError, match="github_webhook_secret"):
+        make(github_webhook_secret="  ")
+
+
+def test_empty_variables_are_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TESTMIND_GITHUB_APP_ID", "")
+    monkeypatch.setenv("TESTMIND_GITHUB_WEBHOOK_SECRET", "")
+    settings = make()
+    assert (settings.github_app_id, settings.github_webhook_secret) == (None, None)
 
 
 @pytest.mark.parametrize(

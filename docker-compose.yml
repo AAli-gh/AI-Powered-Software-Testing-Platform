@@ -13,6 +13,13 @@ x-app-environment: &app-environment
   TESTMIND_LLM_MODEL: ${TESTMIND_LLM_MODEL:-claude-opus-5}
   # Read by the Anthropic SDK. Empty = AI features disabled (503 llm_not_configured).
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  # GitHub App (docs/github.md). Empty = the GitHub endpoints answer 503 github_not_configured.
+  TESTMIND_GITHUB_APP_ID: ${TESTMIND_GITHUB_APP_ID:-}
+  TESTMIND_GITHUB_PRIVATE_KEY: ${TESTMIND_GITHUB_PRIVATE_KEY:-}
+  TESTMIND_GITHUB_WEBHOOK_SECRET: ${TESTMIND_GITHUB_WEBHOOK_SECRET:-}
+  TESTMIND_GITHUB_ALLOWED_OWNERS: ${TESTMIND_GITHUB_ALLOWED_OWNERS:-}
+  TESTMIND_GITHUB_IMPORTS_ROOT: /imports
+  TESTMIND_PUBLIC_URL: ${TESTMIND_PUBLIC_URL:-}
 
 x-app-security: &app-security
   read_only: true
@@ -73,6 +80,7 @@ services:
     <<: *app-security
     volumes:
       - ${TESTMIND_HOST_REPOS_DIR:-./examples}:/repos:ro
+      - github-imports:/imports:ro
     ports:
       - "127.0.0.1:${TESTMIND_API_PORT:-8000}:8000"
     depends_on:
@@ -92,6 +100,8 @@ services:
     <<: *app-security
     volumes:
       - ${TESTMIND_HOST_REPOS_DIR:-./examples}:/repos:ro
+      # Imported GitHub repositories: written by the worker only.
+      - github-imports:/imports
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -106,3 +116,4 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  github-imports:

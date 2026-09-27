@@ -43,9 +43,12 @@ class RunExecutor:
         repos_root: Path,
         analyzer: RepositoryAnalyzer | None = None,
         code_analyzer: CodeAnalyzer | None = None,
+        *,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._analyzer = analyzer or RepositoryAnalyzer()
         self._code_analyzer = code_analyzer or CodeAnalyzer()
 
@@ -83,7 +86,9 @@ class RunExecutor:
 
         The analyses are CPU/filesystem-bound, so they run in a worker thread.
         """
-        root = resolve_local_source(self._repos_root, source_location)
+        root = resolve_local_source(
+            self._repos_root, source_location, imports_root=self._imports_root
+        )
         return await asyncio.to_thread(self._analyse, root)
 
     def _analyse(self, root: Path) -> RunResult:

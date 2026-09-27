@@ -27,3 +27,6 @@ htmlcov/
 .vscode/
 *.swp
 .DS_Store
+
+# Repositories imported from GitHub when running outside Docker
+.imports/

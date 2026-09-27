@@ -169,6 +169,26 @@ regression_status=$(curl -s -o /tmp/testmind-regression.json -w '%{http_code}' -
 grep -q not_a_git_repository /tmp/testmind-regression.json || fail "unexpected regression error body"
 echo "  example directories have no git history: honest 409 not_a_git_repository"
 
+echo "→ GitHub integration"
+webhook_status=$(curl -s -o /tmp/testmind-webhook.json -w '%{http_code}' -X POST \
+  -H 'X-GitHub-Event: ping' -H 'X-GitHub-Delivery: smoke' -H 'Content-Type: application/json' \
+  -d '{}' "$API/api/v1/github/webhook")
+case "$webhook_status" in
+  503)
+    grep -q github_not_configured /tmp/testmind-webhook.json || fail "unexpected webhook error body"
+    pull_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+      -d '{"repository": "acme/shop", "pull_number": 1, "installation_id": 1}' \
+      "$API/api/v1/github/pull-analyses")
+    [[ "$pull_status" == "503" ]] || fail "expected 503 without a GitHub App, got $pull_status"
+    echo "  no GitHub App configured: honest 503 github_not_configured"
+    ;;
+  401)
+    grep -q invalid_signature /tmp/testmind-webhook.json || fail "unexpected webhook error body"
+    echo "  GitHub App configured: an unsigned delivery is refused (401 invalid_signature)"
+    ;;
+  *) fail "unexpected webhook answer: $webhook_status" ;;
+esac
+
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
 curl -fsS -X DELETE "$API/api/v1/projects/$buggy_id" -o /dev/null

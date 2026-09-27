@@ -13,6 +13,7 @@ from testmind.services.api_testing_service import ApiTestingService
 from testmind.services.execution_service import ExecutionService
 from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
+from testmind.services.github_service import GitHubService
 from testmind.services.mutation_service import MutationService
 from testmind.services.project_service import ProjectService
 from testmind.services.regression_service import RegressionService
@@ -73,7 +74,12 @@ FailureAnalysisServiceDep = Annotated[FailureAnalysisService, Depends(get_failur
 def get_regression_service(
     request: Request, session: SessionDep, settings: SettingsDep
 ) -> RegressionService:
-    return RegressionService(session, request.app.state.dispatcher, settings.repos_root)
+    return RegressionService(
+        session,
+        request.app.state.dispatcher,
+        settings.repos_root,
+        imports_root=settings.github_imports_root,
+    )
 
 
 RegressionServiceDep = Annotated[RegressionService, Depends(get_regression_service)]
@@ -95,3 +101,14 @@ def get_api_testing_service(
 
 
 ApiTestingServiceDep = Annotated[ApiTestingService, Depends(get_api_testing_service)]
+
+
+def get_github_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> GitHubService:
+    return GitHubService(
+        session, request.app.state.dispatcher, settings, request.app.state.github_clients
+    )
+
+
+GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]

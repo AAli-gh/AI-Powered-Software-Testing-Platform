@@ -48,12 +48,13 @@ src/testmind/
 ├── ai_engine/     LLM interface + providers, versioned prompts, test_generator/ (ai-engine.md)
 ├── sandbox/       isolated execution of untrusted code (Docker), runner images
 ├── test_engine/   test-suite runner and structured reports (test-engine.md)
+├── github/        GitHub App client, webhooks, pull request analysis and its markdown (github.md)
+├── vcs/           read-only git (dulwich), tarball extraction, snapshots (regression.md, github.md)
 ├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
 └── workers/       Celery app, tasks, Celery-backed TaskDispatcher
 ```
 
-Later phases add sibling packages (`integrations/github/`, …)
-when they are implemented. Empty placeholder packages are deliberately
+Later phases add sibling packages when they are implemented. Empty placeholder packages are deliberately
 not created ahead of time.
 
 ### Dependency rule
@@ -263,8 +264,13 @@ erDiagram
 - `mutation_runs.report` holds every mutant with its verdict and the scores per file and
   function; `score` duplicates the total for lists. `mutant_test_suggestions` holds the
   optional AI jobs, each suggestion with its sandbox verdicts.
-- Tables for later phases (reports, GitHub integration) are added by the phases that produce
-  that data.
+- `github_pull_analyses` holds one row per analysed delivery (`delivery_id` is unique, so
+  a re-delivered webhook cannot create a second analysis). It stores the check run and
+  comment ids, the created issues and the `PullReport`. `github_imports` records imports.
+  `projects.source_type` is `local` or `github`: an imported project's `source_location`
+  is `github:<owner>/<repo>/<sha>` under the imports root, and `remote_repository`,
+  `remote_ref` and `remote_commit` record where it came from.
+- Tables for later phases (reports) are added by the phases that produce that data.
 - `tests/integration/test_migrations.py` fails if the ORM models and the migrations drift apart.
 
 ## Configuration and logging

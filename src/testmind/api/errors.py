@@ -14,10 +14,15 @@ from testmind.core.errors import (
     AppError,
     ConflictError,
     DispatchError,
+    GitHubNotConfiguredError,
+    GitHubRequestError,
     InvalidRevisionError,
+    InvalidSignatureError,
     InvalidSourceError,
     LLMUnavailableError,
     NotFoundError,
+    PayloadTooLargeError,
+    RepositoryNotAllowedError,
 )
 from testmind.core.logging import get_logger
 from testmind.schemas.common import ErrorBody, ErrorResponse
@@ -31,6 +36,11 @@ STATUS_BY_ERROR: dict[type[AppError], int] = {
     InvalidRevisionError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     DispatchError: status.HTTP_503_SERVICE_UNAVAILABLE,
     LLMUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
+    GitHubNotConfiguredError: status.HTTP_503_SERVICE_UNAVAILABLE,
+    InvalidSignatureError: status.HTTP_401_UNAUTHORIZED,
+    RepositoryNotAllowedError: status.HTTP_403_FORBIDDEN,
+    PayloadTooLargeError: status.HTTP_413_CONTENT_TOO_LARGE,
+    GitHubRequestError: status.HTTP_502_BAD_GATEWAY,
 }
 
 HTTP_ERROR_CODES: dict[int, str] = {

@@ -28,6 +28,7 @@ dependencies = [
     "pathspec>=0.12",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
+    "pyjwt[crypto]>=2.9",
     "pyyaml>=6.0.1",
     "redis>=5.0",
     "sqlalchemy[asyncio]>=2.0.30",

@@ -29,10 +29,18 @@ logger = get_logger(__name__)
 
 
 class RegressionService:
-    def __init__(self, session: AsyncSession, dispatcher: TaskDispatcher, repos_root: Path) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        dispatcher: TaskDispatcher,
+        repos_root: Path,
+        *,
+        imports_root: Path | None = None,
+    ) -> None:
         self._session = session
         self._dispatcher = dispatcher
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._regressions = RegressionRepository(session)
         self._projects = ProjectRepository(session)
 
@@ -42,7 +50,9 @@ class RegressionService:
         project = await self._projects.get(project_id)
         if project is None:
             raise NotFoundError(f"Project '{project_id}' not found")
-        root = resolve_local_source(self._repos_root, project.source_location)
+        root = resolve_local_source(
+            self._repos_root, project.source_location, imports_root=self._imports_root
+        )
         # Resolve now: the job compares these exact commits even if a branch moves later.
         base_commit, head_commit = _resolve(root, base, head)
         if base_commit == head_commit:

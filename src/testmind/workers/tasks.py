@@ -9,6 +9,7 @@ from testmind.ai_engine.llm.factory import create_provider
 from testmind.core.config import Settings
 from testmind.db.session import create_engine, create_session_factory
 from testmind.domain.enums import RunStatus
+from testmind.github.pull_analysis import PullAnalyzer
 from testmind.mutation_engine.engine import MutationEngine
 from testmind.regression.engine import RegressionEngine
 from testmind.sandbox.docker_sandbox import DockerSandbox
@@ -17,6 +18,8 @@ from testmind.services.api_suggestion_executor import ApiSuggestionExecutor
 from testmind.services.execution_executor import ExecutionExecutor
 from testmind.services.failure_analysis_executor import FailureAnalysisExecutor
 from testmind.services.generation_executor import GenerationExecutor
+from testmind.services.github_executor import ImportExecutor, PullAnalysisExecutor
+from testmind.services.github_service import client_factory
 from testmind.services.mutation_executor import MutationExecutor, SuggestionExecutor
 from testmind.services.regression_executor import RegressionExecutor
 from testmind.services.run_executor import RunExecutor
@@ -30,6 +33,8 @@ ANALYZE_REGRESSION = "testmind.regression.execute"
 RUN_MUTATIONS = "testmind.mutation_run.execute"
 SUGGEST_MUTANT_TESTS = "testmind.mutant_suggestions.execute"
 SUGGEST_API_TESTS = "testmind.api_suggestions.execute"
+ANALYZE_PULL_REQUEST = "testmind.github_pull_analysis.execute"
+IMPORT_GITHUB_REPOSITORY = "testmind.github_import.execute"
 
 
 def register_tasks(app: Celery, settings: Settings) -> None:
@@ -60,6 +65,16 @@ def register_tasks(app: Celery, settings: Settings) -> None:
         status = asyncio.run(_suggest_api_tests(settings, uuid.UUID(suggestion_id)))
         return status.value if status else None
 
+    @app.task(name=ANALYZE_PULL_REQUEST, shared=False)
+    def analyze_pull_request(analysis_id: str) -> str | None:
+        status = asyncio.run(_analyze_pull_request(settings, uuid.UUID(analysis_id)))
+        return status.value if status else None
+
+    @app.task(name=IMPORT_GITHUB_REPOSITORY, shared=False)
+    def import_github_repository(import_id: str) -> str | None:
+        status = asyncio.run(_import_github_repository(settings, app, uuid.UUID(import_id)))
+        return status.value if status else None
+
     @app.task(name=ANALYZE_REGRESSION, shared=False)
     def analyze_regression(regression_id: str) -> str | None:
         status = asyncio.run(_analyze_regression(settings, uuid.UUID(regression_id)))
@@ -81,7 +96,11 @@ async def _execute_analysis_run(settings: Settings, run_id: uuid.UUID) -> RunSta
     # asyncpg connections are bound to the loop that opened them.
     engine = create_engine(settings, pooled=False)
     try:
-        executor = RunExecutor(create_session_factory(engine), settings.repos_root)
+        executor = RunExecutor(
+            create_session_factory(engine),
+            settings.repos_root,
+            imports_root=settings.github_imports_root,
+        )
         return await executor.execute(run_id)
     finally:
         await engine.dispose()
@@ -108,6 +127,7 @@ async def _generate_tests(settings: Settings, generation_id: uuid.UUID) -> RunSt
             max_tokens=settings.llm_max_tokens,
             max_targets=settings.generation_max_targets,
             images=build_image_builder(settings),
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(generation_id)
     finally:
@@ -126,7 +146,10 @@ async def _execute_tests(settings: Settings, execution_id: uuid.UUID) -> RunStat
     engine = create_engine(settings, pooled=False)
     try:
         executor = ExecutionExecutor(
-            create_session_factory(engine), settings.repos_root, build_runner(settings)
+            create_session_factory(engine),
+            settings.repos_root,
+            build_runner(settings),
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(execution_id)
     finally:
@@ -142,6 +165,7 @@ async def _analyze_failures(settings: Settings, analysis_id: uuid.UUID) -> RunSt
             provider_factory=lambda: create_provider(settings),
             max_tokens=settings.llm_max_tokens,
             max_groups=settings.failure_analysis_max_groups,
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(analysis_id)
     finally:
@@ -163,6 +187,7 @@ async def _analyze_regression(settings: Settings, regression_id: uuid.UUID) -> R
             create_session_factory(engine),
             settings.repos_root,
             RegressionEngine(build_runner(settings)),
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(regression_id)
     finally:
@@ -189,6 +214,7 @@ async def _run_mutations(settings: Settings, mutation_run_id: uuid.UUID) -> RunS
             create_session_factory(engine),
             settings.repos_root,
             lambda max_mutants: build_mutation_engine(settings, max_mutants),
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(mutation_run_id)
     finally:
@@ -206,6 +232,7 @@ async def _suggest_mutant_tests(settings: Settings, suggestion_id: uuid.UUID) ->
             images=build_image_builder(settings),
             max_tokens=settings.llm_max_tokens,
             max_suggestions=settings.mutation_max_suggestions,
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(suggestion_id)
     finally:
@@ -223,7 +250,41 @@ async def _suggest_api_tests(settings: Settings, suggestion_id: uuid.UUID) -> Ru
             images=build_image_builder(settings),
             max_tokens=settings.llm_max_tokens,
             max_endpoints=settings.api_max_suggestions,
+            imports_root=settings.github_imports_root,
         )
         return await executor.execute(suggestion_id)
+    finally:
+        await engine.dispose()
+
+
+async def _analyze_pull_request(settings: Settings, analysis_id: uuid.UUID) -> RunStatus | None:
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = PullAnalysisExecutor(
+            create_session_factory(engine),
+            clients=client_factory(settings),
+            analyzer=lambda: PullAnalyzer(RegressionEngine(build_runner(settings))),
+            check_name=settings.github_check_name,
+            public_url=settings.public_url,
+        )
+        return await executor.execute(analysis_id)
+    finally:
+        await engine.dispose()
+
+
+async def _import_github_repository(
+    settings: Settings, app: Celery, import_id: uuid.UUID
+) -> RunStatus | None:
+    from testmind.workers.dispatcher import CeleryTaskDispatcher  # noqa: PLC0415 - import cycle
+
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = ImportExecutor(
+            create_session_factory(engine),
+            clients=client_factory(settings),
+            imports_root=settings.github_imports_root,
+            dispatcher=CeleryTaskDispatcher(app),
+        )
+        return await executor.execute(import_id)
     finally:
         await engine.dispose()

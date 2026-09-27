@@ -15,12 +15,15 @@ write. The platform must assume that code is hostile.
 | Instrumenting the application under test (API capture) and probing it | The `testmind_api` plugin runs only inside the sandbox; it wraps the frameworks' request entry points, always calls the original and never raises. Its records are aggregated and capped in the container, then size-capped, schema-validated and bounded again in TestMind, with test files only mapped to known locations. The probe module is generated from a template (no LLM); repository-derived strings enter it only as Python literals (`repr`) | — |
 | Browser tests (Playwright) | Chromium runs in the browser sandbox image with the same isolation as every sandbox run: no network (the browser only reaches the application on 127.0.0.1), unprivileged, read-only root, resource limits; only `/tmp` is larger (256 MB). Chromium and its libraries are downloaded when the image is built, never when tests run | — |
 | Code execution through a repository's git configuration (`core.fsmonitor`, `diff.external`, filters, hooks) | No git process is ever started. History is read as objects with dulwich (pure Python). `.git` files, symlinked `.git`, `alternates` and `commondir` are refused. Commits are written to temporary directories as regular files only: symlinks, submodules and unsafe names are skipped ([ADR-0009](adr/0009-read-only-git-with-dulwich.md)) | — |
+| Forged or replayed GitHub webhooks | Every delivery must carry `X-Hub-Signature-256`, HMAC-SHA256 of the raw body with the webhook secret, compared in constant time **before** the payload is parsed. Bodies are capped at 5 MB. Re-deliveries are de-duplicated by a unique delivery id. Owners can be restricted (`TESTMIND_GITHUB_ALLOWED_OWNERS`). Every repository name, sha and ref is validated before it becomes part of a URL | — |
+| Hostile archives from GitHub | Tarballs are size-capped while they stream, then extracted by TestMind's own extractor: only regular files and directories. Symlinks, hard links, devices, FIFOs, absolute and `..` paths, duplicates and oversize entries are skipped and listed. No `git` process runs. Imports are written through a partial directory and renamed, to a root separate from the read-only repositories root, which the API mounts read-only ([ADR-0012](adr/0012-github-app-with-tarball-snapshots.md)) | — |
+| Leaking the GitHub App key or tokens | The key comes from an environment variable or a file only (`SecretStr`, never in `repr`). Installation tokens live in the worker's memory for at most their lifetime. Neither is logged, stored in the database or passed to the sandbox. The App's permissions are the minimum listed in [github.md](github.md) | Secret manager integration (Phase 14) |
 | Malicious build scripts in dependencies | Runner images install dependencies with `pip --only-binary=:all:` (wheels only), so no third-party `setup.py` runs. The build happens in a throw-away `docker build`, and tests then run from the image with no network | Private package index / allow-list (Phase 13) |
 | Prompt injection via analysed code | The code is framed as data in the prompt. Acceptance never depends on the model's words (static checks plus sandbox run; a test for a surviving mutant must pass on the original code **and** kill the mutant in the sandbox; an API test counts only when the application's own record shows the request that closes the gap). Forbidden imports/calls are rejected before execution | — |
 | Sensitive values reaching the LLM | Failure analysis sends source excerpts and `repr`s of up to 12 local variables of the failing frame (200 characters each) to the configured provider, and only when an AI analysis is explicitly requested. The deterministic analysis never leaves the platform | Redaction rules for locals (Phase 13) |
 | Leaking the LLM API key | Read only by the Anthropic SDK from its own environment variable; not part of `Settings`, never logged; not passed into the sandbox (tested) | Secret manager integration (Phase 14) |
 | Container breakout / privilege escalation | Non-root user (uid 10001), read-only root FS, `no-new-privileges`, all capabilities dropped | Sandboxes: seccomp profile, optional gVisor runtime |
-| Leaking secrets | Secrets only in environment variables. `.env` git-ignored. `SecretStr` for connection URLs. Generic `500` bodies. gitleaks in pre-commit and CI | LLM/GitHub tokens handled the same way |
+| Leaking secrets | Secrets only in environment variables. `.env` git-ignored. `SecretStr` for connection URLs, the GitHub key and the webhook secret. Generic `500` bodies. gitleaks in pre-commit and CI | — |
 | Vulnerable dependencies | Locked dependencies (`uv.lock`) audited with pip-audit in CI | — |
 | Insecure deserialisation from the broker | Celery accepts JSON only (no pickle) | — |
 | Network exposure | PostgreSQL and Redis not published. API bound to `127.0.0.1` | Authentication and authorisation (users are part of the data model roadmap) |
@@ -32,8 +35,9 @@ write. The platform must assume that code is hostile.
   Docker build context by `.dockerignore`).
 - `docker-compose.yml` refuses to start without `POSTGRES_*` variables (`${VAR:?}`), so it never
   falls back to a default password.
-- Future API keys (LLM providers, GitHub) will be read the same way, through `Settings`, as
-  `SecretStr`.
+- The GitHub App's private key and webhook secret are read through `Settings` as `SecretStr`
+  (`TESTMIND_GITHUB_PRIVATE_KEY` or `…_PRIVATE_KEY_FILE`, `TESTMIND_GITHUB_WEBHOOK_SECRET`).
+  A blank webhook secret is refused. The Anthropic key is read by the SDK itself.
 
 ## Not yet implemented
 

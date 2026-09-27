@@ -94,3 +94,16 @@ def test_stored_location_is_relative_posix(repos_root: Path) -> None:
     (repos_root / "sample" / "pkg").mkdir()
     resolved = resolve_local_source(repos_root, str(repos_root / "sample" / "pkg"))
     assert to_stored_location(repos_root, resolved) == "sample/pkg"
+
+
+def test_imported_repositories_resolve_below_the_imports_root(
+    repos_root: Path, tmp_path: Path
+) -> None:
+    imports = tmp_path / "imports"
+    (imports / "acme" / "shop" / "abc").mkdir(parents=True)
+    resolved = resolve_local_source(repos_root, "github:acme/shop/abc", imports_root=imports)
+    assert resolved == (imports / "acme" / "shop" / "abc").resolve()
+    with pytest.raises(InvalidSourceError, match="must be a directory inside"):
+        resolve_local_source(repos_root, "github:../repos/sample", imports_root=imports)
+    with pytest.raises(InvalidSourceError, match="TESTMIND_GITHUB_IMPORTS_ROOT is not set"):
+        resolve_local_source(repos_root, "github:acme/shop/abc")

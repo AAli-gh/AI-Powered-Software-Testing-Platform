@@ -5,10 +5,10 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
@@ -33,6 +33,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        env_ignore_empty=True,  # `VAR=` (e.g. passed through by docker compose) means unset
         frozen=True,
     )
 
@@ -80,6 +81,31 @@ class Settings(BaseSettings):
     mutation_max_suggestions: int = Field(default=10, ge=1, le=100)
     api_max_suggestions: int = Field(default=10, ge=1, le=100)
 
+    # --- GitHub App (Phase 11). The private key and the webhook secret are secrets: SecretStr,
+    # from the environment only (the key may also be read from a file).
+    github_app_id: int | None = Field(default=None, ge=1)
+    github_private_key: SecretStr | None = None
+    github_private_key_file: Path | None = None
+    github_webhook_secret: SecretStr | None = None
+    github_api_url: str = Field(default="https://api.github.com", pattern=r"^https?://")
+    # Owners (users or organisations) whose repositories may be analysed; empty: any.
+    github_allowed_owners: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    github_check_name: str = Field(default="TestMind", min_length=1, max_length=100)
+    github_max_archive_mb: int = Field(default=200, ge=1, le=2000)
+    # Where imported repositories are written (a directory of their own, never the repositories
+    # root, which is mounted read-only). Unset: imports are disabled.
+    github_imports_root: Path | None = None
+    # The public URL of this API, for links in pull request comments (optional).
+    public_url: str | None = Field(default=None, pattern=r"^https?://")
+
+    def github_private_key_pem(self) -> str | None:
+        """The App's private key, from the variable or the file; None when not configured."""
+        if self.github_private_key is not None:
+            return self.github_private_key.get_secret_value()
+        if self.github_private_key_file is not None:
+            return self.github_private_key_file.read_text("utf-8")
+        return None
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalise_log_level(cls, value: object) -> object:
@@ -101,6 +127,30 @@ class Settings(BaseSettings):
     def _validate_redis_url(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value().startswith(("redis://", "rediss://")):
             raise ValueError("redis_url must start with redis:// or rediss://")
+        return value
+
+    @field_validator("github_private_key")
+    @classmethod
+    def _unescape_private_key(cls, value: SecretStr | None) -> SecretStr | None:
+        """A PEM key on one line (`\\n` for its line breaks), as environment files need it."""
+        if value is None:
+            return None
+        key = value.get_secret_value()
+        return SecretStr(key.replace("\\n", "\n") if "\n" not in key else key)
+
+    @field_validator("github_webhook_secret")
+    @classmethod
+    def _require_a_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().strip():
+            raise ValueError("github_webhook_secret must not be blank")
+        return value
+
+    @field_validator("github_allowed_owners", mode="before")
+    @classmethod
+    def _split_owners(cls, value: object) -> object:
+        """`TESTMIND_GITHUB_ALLOWED_OWNERS=acme,other` (comma-separated)."""
+        if isinstance(value, str):
+            return [owner.strip() for owner in value.split(",") if owner.strip()]
         return value
 
     @field_validator("repos_root")

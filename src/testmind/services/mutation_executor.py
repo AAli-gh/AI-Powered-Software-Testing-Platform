@@ -69,9 +69,12 @@ class MutationExecutor:
         session_factory: async_sessionmaker[AsyncSession],
         repos_root: Path,
         engine_factory: Callable[[int], MutationEngine],
+        *,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._engine_factory = engine_factory  # max_mutants -> engine
 
     async def execute(self, mutation_run_id: uuid.UUID) -> RunStatus | None:
@@ -93,7 +96,7 @@ class MutationExecutor:
         try:
             if repository is None or code is None or location is None:
                 return await self._done(mutation_run_id, RunStatus.FAILED, NO_ANALYSIS)
-            root = resolve_local_source(self._repos_root, location)
+            root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             report = await asyncio.to_thread(
                 self._engine_factory(max_mutants).run,
                 root,
@@ -132,9 +135,11 @@ class SuggestionExecutor:
         images: ImageBuilder,
         max_tokens: int,
         max_suggestions: int,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._provider_factory = provider_factory
         self._sandbox = sandbox
         self._images = images
@@ -167,7 +172,7 @@ class SuggestionExecutor:
         try:
             if report is None or location is None or analysis is None:
                 return await self._done(suggestion_id, RunStatus.FAILED, NO_REPORT)
-            root = resolve_local_source(self._repos_root, location)
+            root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             repository = RepositoryProfile.model_validate(analysis.profile)
             result = await asyncio.to_thread(self._suggest, root, report, repository)
         except (AppError, LLMError) as exc:

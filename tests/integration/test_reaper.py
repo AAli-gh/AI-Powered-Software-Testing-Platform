@@ -13,6 +13,8 @@ from testmind.db.models import (
     AnalysisRun,
     ApiTestSuggestion,
     FailureAnalysis,
+    GitHubImport,
+    GitHubPullAnalysis,
     MutantTestSuggestion,
     MutationRun,
     Project,
@@ -65,7 +67,15 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
         api_suggestion = ApiTestSuggestion(
             execution_id=execution.id, status=RunStatus.RUNNING, started_at=old, provider="x"
         )
-        session.add_all([suggestion, api_suggestion])
+        pull = GitHubPullAnalysis(
+            installation_id=1, repository="acme/shop", pull_number=1, status=RunStatus.RUNNING,
+            started_at=old, issues=[],
+        )  # fmt: skip
+        imported = GitHubImport(
+            installation_id=1, repository="acme/shop", ref="main", status=RunStatus.RUNNING,
+            started_at=old, skipped=[],
+        )  # fmt: skip
+        session.add_all([suggestion, api_suggestion, pull, imported])
         await session.commit()
         return {
             "stuck": stuck_run.id,
@@ -78,6 +88,8 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
             "mut": mutation.id,
             "sug": suggestion.id,
             "api": api_suggestion.id,
+            "pull": pull.id,
+            "import": imported.id,
         }
 
 
@@ -85,7 +97,7 @@ async def test_only_long_running_jobs_are_reaped(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     ids = await seed(session_factory)
-    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 8
+    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 10
 
     async with session_factory() as session:
         stuck = await session.get(AnalysisRun, ids["stuck"])
@@ -98,6 +110,8 @@ async def test_only_long_running_jobs_are_reaped(
         mutation = await session.get(MutationRun, ids["mut"])
         suggestion = await session.get(MutantTestSuggestion, ids["sug"])
         api_suggestion = await session.get(ApiTestSuggestion, ids["api"])
+        pull = await session.get(GitHubPullAnalysis, ids["pull"])
+        imported = await session.get(GitHubImport, ids["import"])
     assert stuck is not None
     assert stuck.status is RunStatus.FAILED
     assert stuck.error_message == ORPHANED_MESSAGE
@@ -120,6 +134,10 @@ async def test_only_long_running_jobs_are_reaped(
     assert suggestion.status is RunStatus.FAILED
     assert api_suggestion is not None
     assert api_suggestion.status is RunStatus.FAILED
+    assert pull is not None
+    assert pull.status is RunStatus.FAILED
+    assert imported is not None
+    assert imported.status is RunStatus.FAILED
 
     assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 0
 
@@ -139,7 +157,7 @@ async def test_worker_startup_hook_reaps(
     sys.modules.pop("testmind.workers.main", None)
     try:
         main = importlib.import_module("testmind.workers.main")  # fresh, with the test env
-        assert await main.reap_on_startup() == 8
+        assert await main.reap_on_startup() == 10
     finally:
         sys.modules.pop("testmind.workers.main", None)
         get_settings.cache_clear()

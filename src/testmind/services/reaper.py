@@ -19,6 +19,8 @@ from testmind.db.models import (
     AnalysisRun,
     ApiTestSuggestion,
     FailureAnalysis,
+    GitHubImport,
+    GitHubPullAnalysis,
     MutantTestSuggestion,
     MutationRun,
     Regression,
@@ -43,6 +45,8 @@ JobT = TypeVar(
     MutationRun,
     MutantTestSuggestion,
     ApiTestSuggestion,
+    GitHubPullAnalysis,
+    GitHubImport,
 )
 
 
@@ -60,6 +64,8 @@ async def reap_orphaned_jobs(
             + await _reap(session, MutationRun, cutoff)
             + await _reap(session, MutantTestSuggestion, cutoff)
             + await _reap(session, ApiTestSuggestion, cutoff)
+            + await _reap(session, GitHubPullAnalysis, cutoff)
+            + await _reap(session, GitHubImport, cutoff)
         )
         await session.commit()
     return reaped

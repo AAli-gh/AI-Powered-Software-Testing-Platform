@@ -47,9 +47,11 @@ class ApiSuggestionExecutor:
         images: ImageBuilder,
         max_tokens: int,
         max_endpoints: int,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._provider_factory = provider_factory
         self._sandbox = sandbox
         self._images = images
@@ -83,7 +85,7 @@ class ApiSuggestionExecutor:
         try:
             if report is None or location is None or repository is None or code is None:
                 return await self._done(suggestion_id, RunStatus.FAILED, NO_API_COVERAGE)
-            root = resolve_local_source(self._repos_root, location)
+            root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             result = await asyncio.to_thread(
                 self._suggest,
                 root,

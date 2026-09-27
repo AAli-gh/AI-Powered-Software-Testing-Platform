@@ -15,6 +15,7 @@ from __future__ import annotations
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from testmind.analyzers.code import CodeAnalyzer, CodeProfile
 from testmind.analyzers.repository import RepositoryAnalyzer, RepositoryProfile
@@ -37,7 +38,7 @@ from testmind.regression.models import (
 from testmind.regression.selection import classify, pytest_targets, select_tests
 from testmind.test_engine.models import ExecutionOutcome, TestTotals
 from testmind.test_engine.runner import SuiteResult, TestSuiteRunner
-from testmind.vcs import CommitInfo, GitRepository, Snapshot
+from testmind.vcs import CommitInfo, FileChange, GitRepository, Snapshot
 
 UNRUNNABLE = frozenset(
     {
@@ -47,6 +48,16 @@ UNRUNNABLE = frozenset(
     }
 )
 NOTHING_SELECTED = "No test is affected by the change; nothing was run at head"
+
+
+class CommitSource(Protocol):
+    """Where the two commits come from: a git repository, or downloaded snapshots."""
+
+    def changes(self, base: str, head: str) -> list[FileChange]: ...
+
+    def read(self, sha: str, path: str) -> str | None: ...
+
+    def materialize(self, sha: str, destination: Path) -> Snapshot: ...
 
 
 class RegressionEngine:
@@ -66,15 +77,20 @@ class RegressionEngine:
     ) -> RegressionReport:
         git = GitRepository(repo_root, self._limits)
         try:
-            base, head = git.resolve(base_ref), git.resolve(head_ref)
-            with tempfile.TemporaryDirectory(prefix="testmind-regression-") as scratch:
-                return self._compare(git, base, head, mode, Path(scratch))
+            return self.compare(git, git.resolve(base_ref), git.resolve(head_ref), mode)
         finally:
             git.close()
 
+    def compare(
+        self, source: CommitSource, base: CommitInfo, head: CommitInfo, mode: RegressionMode
+    ) -> RegressionReport:
+        """Compare two commits of `source` (a git repository or downloaded snapshots)."""
+        with tempfile.TemporaryDirectory(prefix="testmind-regression-") as scratch:
+            return self._compare(source, base, head, mode, Path(scratch))
+
     def _compare(
         self,
-        git: GitRepository,
+        git: CommitSource,
         base: CommitInfo,
         head: CommitInfo,
         mode: RegressionMode,
@@ -169,7 +185,7 @@ class RegressionEngine:
         return repository, code
 
 
-def _materialize(git: GitRepository, sha: str, destination: Path) -> Snapshot:
+def _materialize(git: CommitSource, sha: str, destination: Path) -> Snapshot:
     destination.mkdir()
     return git.materialize(sha, destination)
 

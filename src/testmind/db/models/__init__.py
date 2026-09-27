@@ -4,6 +4,7 @@ from testmind.db.models.analysis_run import AnalysisRun
 from testmind.db.models.api_test_suggestion import ApiTestSuggestion
 from testmind.db.models.code_analysis import CodeAnalysis
 from testmind.db.models.failure_analysis import FailureAnalysis
+from testmind.db.models.github import GitHubImport, GitHubPullAnalysis
 from testmind.db.models.mutation_run import MutantTestSuggestion, MutationRun
 from testmind.db.models.project import Project
 from testmind.db.models.regression import Regression
@@ -16,6 +17,8 @@ __all__ = [
     "ApiTestSuggestion",
     "CodeAnalysis",
     "FailureAnalysis",
+    "GitHubImport",
+    "GitHubPullAnalysis",
     "MutantTestSuggestion",
     "MutationRun",
     "Project",

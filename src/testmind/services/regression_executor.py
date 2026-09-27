@@ -28,9 +28,12 @@ class RegressionExecutor:
         session_factory: async_sessionmaker[AsyncSession],
         repos_root: Path,
         engine: RegressionEngine,
+        *,
+        imports_root: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repos_root = repos_root
+        self._imports_root = imports_root
         self._engine = engine
 
     async def execute(self, regression_id: uuid.UUID) -> RunStatus | None:
@@ -50,7 +53,9 @@ class RegressionExecutor:
             await session.commit()
 
         try:
-            root = resolve_local_source(self._repos_root, location or "")
+            root = resolve_local_source(
+                self._repos_root, location or "", imports_root=self._imports_root
+            )
             report = await asyncio.to_thread(self._engine.run, root, base, head, mode)
         except (AppError, GitError) as exc:
             return await self._finish(regression_id, RunStatus.FAILED, str(exc))
