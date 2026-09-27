@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Protocol
 
 from testmind.analyzers.code.models import CodeProfile
+from testmind.analyzers.repository.frameworks import PLAYWRIGHT
 from testmind.analyzers.repository.models import Dependency, RepositoryProfile
+from testmind.api_engine.capture import ApiCaptureError, RawApiCapture, parse_api_json
+from testmind.api_engine.coverage import build_api_coverage
+from testmind.api_engine.models import ApiCoverageReport, ApiSurface
+from testmind.api_engine.probes import PROBE_FILE, ProbePlan, evaluate_probes, plan_probes
 from testmind.coverage_engine import (
     CoverageParseError,
     CoverageReport,
@@ -23,7 +28,7 @@ from testmind.failure_engine import (
     FailureReport,
     parse_failures_json,
 )
-from testmind.sandbox.docker_sandbox import PytestJob
+from testmind.sandbox.docker_sandbox import DEFAULT_TMPFS, PytestJob
 from testmind.sandbox.models import (
     Outcome,
     SandboxResult,
@@ -42,6 +47,7 @@ from testmind.test_engine.models import (
 )
 
 EXIT_NO_TESTS_COLLECTED = 5
+BROWSER_TMPFS = "256m"  # Chromium's profile and caches live in /tmp
 NO_CODE_ANALYSIS = "The run has no code analysis to map coverage onto"
 
 
@@ -52,7 +58,7 @@ class Sandbox(Protocol):
 
 
 class ImageBuilder(Protocol):
-    def ensure(self, dependencies: list[Dependency]) -> RunnerImage: ...
+    def ensure(self, dependencies: list[Dependency], *, browser: bool = False) -> RunnerImage: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +67,7 @@ class SuiteResult:
     coverage: CoverageReport | None  # None: see report.coverage_error
     failures: FailureReport | None = None  # None when no tests ran
     impact: TestImpact | None = None  # only when per-test contexts were requested
+    api: ApiCoverageReport | None = None  # None: no endpoints and no requests, or no run
 
 
 class TestSuiteRunner:
@@ -86,13 +93,18 @@ class TestSuiteRunner:
         code: CodeProfile | None = None,
         test_contexts: bool = False,
         select: tuple[str, ...] = (),
+        api_probes: bool = False,
     ) -> SuiteResult:
         """Run the suite with coverage and structured failure capture. `code` (the run's code
         analysis) maps coverage and failures onto production modules and functions.
 
         `test_contexts` also records which test executed which function (`impact`); `select`
-        runs only the given test files or pytest nodeids of the project's suite."""
-        generated = generated or {}
+        runs only the given test files or pytest nodeids of the project's suite; `api_probes`
+        adds TestMind's deterministic API probe module (api_engine/probes.py)."""
+        generated = dict(generated or {})
+        probes = plan_probes(code.api) if api_probes and code is not None else None
+        if probes is not None and probes.module is not None:
+            generated[PROBE_FILE] = probes.module
         project_tests = list(profile.test_files)
         env = (
             {"DJANGO_SETTINGS_MODULE": profile.django_settings_module}
@@ -108,8 +120,9 @@ class TestSuiteRunner:
                 base.report(ExecutionOutcome.SANDBOX_UNAVAILABLE, install=None), None
             )
 
+        browser = uses_browser(profile)
         try:
-            image = self._images.ensure(profile.dependencies)
+            image = self._images.ensure(profile.dependencies, browser=browser)
         except DependencyInstallError as exc:
             install = InstallReport(
                 image="", requirements=[], from_cache=False, notes=list(exc.notes), log=exc.log
@@ -131,7 +144,9 @@ class TestSuiteRunner:
             env=env,
             coverage=True,
             capture_failures=True,
+            capture_api=True,
             continue_on_collection_errors=True,
+            tmpfs_size=BROWSER_TMPFS if browser else DEFAULT_TMPFS,
             test_contexts=test_contexts,
             select=select,
         )
@@ -150,7 +165,13 @@ class TestSuiteRunner:
             impact = build_test_impact(raw, code) if test_contexts else None
         report = base.from_result(result, install, coverage_error)
         failures = _failures(result, report, profile, code, coverage)
-        return SuiteResult(report, coverage, failures, impact)
+        api = _api(result, code, probes, report.tests)
+        return SuiteResult(report, coverage, failures, impact, api)
+
+
+def uses_browser(profile: RepositoryProfile) -> bool:
+    """Browser tests (Playwright) run on the browser sandbox image."""
+    return any(d.name == PLAYWRIGHT for d in profile.test_frameworks)
 
 
 def _raw_coverage(
@@ -183,6 +204,34 @@ def _failures(
         failed = analyzer.analyze(None, report.tests)
         return failed.model_copy(update={"notes": [str(exc)]})
     return analyzer.analyze(capture, report.tests)
+
+
+def _api(
+    result: SandboxResult,
+    code: CodeProfile | None,
+    probes: ProbePlan | None,
+    tests: list[TestCaseReport],
+) -> ApiCoverageReport | None:
+    """API coverage from the static endpoints and the requests the tests sent."""
+    surface = code.api if code is not None else ApiSurface()
+    capture: RawApiCapture | None = None
+    notes: list[str] = list(probes.notes) if probes is not None else []
+    if probes is not None and not probes.probes:
+        notes.append(
+            "API probes were requested, but no endpoint of a FastAPI or Flask "
+            "application that a test can import was found"
+        )
+    if result.api_json is None:
+        notes.append("The API capture plugin wrote no records (the run timed out or crashed)")
+    else:
+        try:
+            capture = parse_api_json(result.api_json)
+        except ApiCaptureError as exc:
+            notes.append(str(exc))
+    if not surface.endpoints and (capture is None or not (capture.calls or capture.apps)):
+        return None
+    results = evaluate_probes(probes, capture, tests) if probes is not None else []
+    return build_api_coverage(surface, capture, code=code, probes=results, notes=notes)
 
 
 class _Base:

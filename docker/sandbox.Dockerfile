@@ -12,6 +12,7 @@ RUN pip install "pytest==8.4.2" "coverage==7.16.1" "pytest-cov==7.1.0"
 COPY docker/coveragerc /opt/testmind/coveragerc
 COPY docker/coveragerc_contexts /opt/testmind/coveragerc_contexts
 COPY docker/testmind_failures.py /opt/testmind/testmind_failures.py
+COPY docker/testmind_api.py /opt/testmind/testmind_api.py
 COPY docker/testmind_mutate.py /opt/testmind/testmind_mutate.py
 
 # Runs as nobody; everything the container may write is a tmpfs or the /out bind mount.

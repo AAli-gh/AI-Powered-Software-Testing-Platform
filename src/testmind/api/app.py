@@ -10,6 +10,7 @@ from testmind import __version__
 from testmind.api.errors import install_exception_handlers
 from testmind.api.middleware import RequestContextMiddleware
 from testmind.api.routes import (
+    api_testing,
     code,
     executions,
     failures,
@@ -75,4 +76,5 @@ def create_app(
     app.include_router(failures.router)
     app.include_router(regressions.router)
     app.include_router(mutations.router)
+    app.include_router(api_testing.router)
     return app

@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from testmind.api_engine.models import ApiCoverageReport
 from testmind.core.errors import ConflictError, DispatchError, NotFoundError
 from testmind.core.logging import get_logger
 from testmind.coverage_engine import CoverageReport
@@ -30,7 +31,9 @@ class ExecutionService:
         self._runs = RunRepository(session)
         self._generations = GenerationRepository(session)
 
-    async def create(self, run_id: uuid.UUID, generation_id: uuid.UUID | None) -> TestExecution:
+    async def create(
+        self, run_id: uuid.UUID, generation_id: uuid.UUID | None, *, api_probes: bool = False
+    ) -> TestExecution:
         run = await self._runs.get(run_id)
         if run is None:
             raise NotFoundError(f"Run '{run_id}' not found")
@@ -46,7 +49,12 @@ class ExecutionService:
                 raise ConflictError("Only a succeeded test generation can be included")
 
         execution = await self._executions.add(
-            TestExecution(run_id=run_id, generation_id=generation_id, status=RunStatus.QUEUED)
+            TestExecution(
+                run_id=run_id,
+                generation_id=generation_id,
+                api_probes=api_probes,
+                status=RunStatus.QUEUED,
+            )
         )
         await self._session.commit()
         try:
@@ -81,6 +89,18 @@ class ExecutionService:
                 + _coverage_missing_reason(execution)
             )
         return CoverageReport.model_validate(execution.coverage)
+
+    async def api_coverage(self, execution_id: uuid.UUID) -> ApiCoverageReport:
+        execution = await self.get(execution_id)
+        if execution.api_coverage is None:
+            reason = (
+                f"it has not finished (status: {execution.status.value})"
+                if execution.report is None
+                else "the repository has no HTTP endpoints and its tests sent no requests, "
+                "or the tests did not run"
+            )
+            raise NotFoundError(f"Test execution '{execution_id}' has no API coverage: {reason}")
+        return ApiCoverageReport.model_validate(execution.api_coverage)
 
 
 def _coverage_missing_reason(execution: TestExecution) -> str:

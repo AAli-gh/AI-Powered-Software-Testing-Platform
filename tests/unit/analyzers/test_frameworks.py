@@ -99,3 +99,13 @@ def test_unittest_from_testcase_classes(tmp_path: Path) -> None:
 )
 def test_is_test_file(path: str, source: str, expected: bool) -> None:
     assert is_test_file(scan_python(path, source)) is expected
+
+
+def test_playwright_needs_more_than_a_single_weak_fact(tmp_path: Path) -> None:
+    only_import = analyze(tmp_path / "a", {"src/ui.py": "import playwright\n"})
+    assert "Playwright" not in names_and_confidence(only_import.test_frameworks)
+    test_module = "from playwright.sync_api import Page\n\n\ndef test_x(page: Page): ...\n"
+    imported_in_a_test = analyze(tmp_path / "b", {"tests/test_ui.py": test_module})
+    assert names_and_confidence(imported_in_a_test.test_frameworks)["Playwright"] == 0.4
+    declared = analyze(tmp_path / "c", {"requirements-dev.txt": "pytest-playwright\n"})
+    assert names_and_confidence(declared.test_frameworks) == {"Playwright": 0.5}

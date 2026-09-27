@@ -131,6 +131,36 @@ case "$baseline" in
   *) fail "unexpected mutation baseline outcome: $baseline" ;;
 esac
 
+echo "→ API testing (endpoint discovery and API coverage)"
+api_project=$(curl -fsS -X POST "$API/api/v1/projects" -H 'Content-Type: application/json' \
+  -d "{\"name\": \"$NAME-api\", \"source_location\": \"buggy_api\"}" | json "['id']")
+api_run=$(curl -fsS -X POST "$API/api/v1/projects/$api_project/runs" | json "['id']")
+wait_for_run "$api_run"
+endpoint_count=$(curl -fsS "$API/api/v1/runs/$api_run/api" | json "['endpoints'].__len__()")
+[[ "$endpoint_count" == "6" ]] || fail "expected 6 endpoints in buggy_api, got $endpoint_count"
+api_execution=$(curl -fsS -X POST "$API/api/v1/runs/$api_run/test-executions" \
+  -H 'Content-Type: application/json' -d '{"api_probes": true}' | json "['id']")
+deadline=$((SECONDS + TIMEOUT_SECONDS))
+while (( SECONDS < deadline )); do
+  api_status=$(curl -fsS "$API/api/v1/test-executions/$api_execution" | json "['status']")
+  [[ "$api_status" == "succeeded" || "$api_status" == "failed" ]] && break
+  sleep 1
+done
+[[ "$api_status" == "succeeded" ]] || fail "API test execution ended as $api_status"
+api_outcome=$(curl -fsS "$API/api/v1/test-executions/$api_execution" | json "['outcome']")
+api_coverage=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/test-executions/$api_execution/api-coverage")
+case "$api_outcome" in
+  failed)  # the probes find the example's defects
+    [[ "$api_coverage" == "200" ]] || fail "no API coverage for a finished execution"
+    echo "  6 endpoints found; probes ran: $(curl -fsS "$API/api/v1/test-executions/$api_execution/api-coverage" | json "['probes']")"
+    ;;
+  sandbox_unavailable)
+    [[ "$api_coverage" == "404" ]] || fail "API coverage reported without a sandbox run"
+    echo "  6 endpoints found statically; no Docker access for the containerised worker: honest sandbox_unavailable, no API coverage"
+    ;;
+  *) fail "unexpected API test execution outcome: $api_outcome" ;;
+esac
+
 echo "→ regression analysis"
 regression_status=$(curl -s -o /tmp/testmind-regression.json -w '%{http_code}' -X POST \
   -H 'Content-Type: application/json' -d '{"base": "HEAD~1"}' \
@@ -142,4 +172,5 @@ echo "  example directories have no git history: honest 409 not_a_git_repository
 echo "→ clean up"
 curl -fsS -X DELETE "$API/api/v1/projects/$project_id" -o /dev/null
 curl -fsS -X DELETE "$API/api/v1/projects/$buggy_id" -o /dev/null
+curl -fsS -X DELETE "$API/api/v1/projects/$api_project" -o /dev/null
 echo "SMOKE OK"

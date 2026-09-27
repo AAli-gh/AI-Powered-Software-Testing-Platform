@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from testmind.core.logging import get_logger
 from testmind.db.models import (
     AnalysisRun,
+    ApiTestSuggestion,
     FailureAnalysis,
     MutantTestSuggestion,
     MutationRun,
@@ -41,6 +42,7 @@ JobT = TypeVar(
     Regression,
     MutationRun,
     MutantTestSuggestion,
+    ApiTestSuggestion,
 )
 
 
@@ -57,6 +59,7 @@ async def reap_orphaned_jobs(
             + await _reap(session, Regression, cutoff)
             + await _reap(session, MutationRun, cutoff)
             + await _reap(session, MutantTestSuggestion, cutoff)
+            + await _reap(session, ApiTestSuggestion, cutoff)
         )
         await session.commit()
     return reaped

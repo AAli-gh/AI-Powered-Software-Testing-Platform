@@ -12,6 +12,7 @@ from testmind.core.errors import DispatchError, NotFoundError
 from testmind.core.logging import get_logger
 from testmind.db.models import (
     AnalysisRun,
+    ApiTestSuggestion,
     FailureAnalysis,
     MutantTestSuggestion,
     MutationRun,
@@ -40,6 +41,7 @@ def apply_transition(
         | Regression
         | MutationRun
         | MutantTestSuggestion
+        | ApiTestSuggestion
     ),
     target: RunStatus,
     *,

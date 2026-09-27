@@ -1,0 +1,11 @@
+[project]
+name = "web-counter"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["flask>=3.0"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-playwright>=0.5", "playwright>=1.40"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -21,6 +21,7 @@ class RecordingDispatcher:
         self.regressions: list[uuid.UUID] = []
         self.mutation_runs: list[uuid.UUID] = []
         self.mutant_suggestions: list[uuid.UUID] = []
+        self.api_suggestions: list[uuid.UUID] = []
 
     async def dispatch_analysis_run(self, run_id: uuid.UUID) -> None:
         self.dispatched.append(run_id)
@@ -43,6 +44,9 @@ class RecordingDispatcher:
     async def dispatch_mutant_suggestions(self, suggestion_id: uuid.UUID) -> None:
         self.mutant_suggestions.append(suggestion_id)
 
+    async def dispatch_api_suggestions(self, suggestion_id: uuid.UUID) -> None:
+        self.api_suggestions.append(suggestion_id)
+
 
 class FailingDispatcher:
     async def dispatch_analysis_run(self, run_id: uuid.UUID) -> None:
@@ -64,6 +68,9 @@ class FailingDispatcher:
         raise ConnectionError("broker unavailable")
 
     async def dispatch_mutant_suggestions(self, suggestion_id: uuid.UUID) -> None:
+        raise ConnectionError("broker unavailable")
+
+    async def dispatch_api_suggestions(self, suggestion_id: uuid.UUID) -> None:
         raise ConnectionError("broker unavailable")
 
 

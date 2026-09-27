@@ -50,6 +50,10 @@ test-services-down: ## Stop the test PostgreSQL + Redis
 sandbox-image: ## Build the Docker image used to run untrusted code (generated tests)
 	docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
 
+.PHONY: browser-image
+browser-image: sandbox-image ## Build the sandbox image with a headless Chromium (Playwright tests)
+	docker build -f docker/browser.Dockerfile -t testmind-sandbox-browser:local .
+
 .PHONY: test-unit
 test-unit: ## Run unit tests only (no services, no Docker required)
 	uv run pytest -m "not integration and not sandbox"

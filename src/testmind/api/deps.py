@@ -9,6 +9,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from testmind.core.config import Settings
+from testmind.services.api_testing_service import ApiTestingService
 from testmind.services.execution_service import ExecutionService
 from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
@@ -85,3 +86,12 @@ def get_mutation_service(
 
 
 MutationServiceDep = Annotated[MutationService, Depends(get_mutation_service)]
+
+
+def get_api_testing_service(
+    request: Request, session: SessionDep, settings: SettingsDep
+) -> ApiTestingService:
+    return ApiTestingService(session, request.app.state.dispatcher, settings)
+
+
+ApiTestingServiceDep = Annotated[ApiTestingService, Depends(get_api_testing_service)]

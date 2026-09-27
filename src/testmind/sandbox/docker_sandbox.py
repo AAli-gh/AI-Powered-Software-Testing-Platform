@@ -6,8 +6,8 @@ Isolation (every run):
   the repository and the test files mounted read-only, a wall-clock timeout enforced from outside
   (the container is killed), and no environment variables from the host.
 Only /out (a fresh temporary directory) is writable, and only the JUnit report (and, when
-requested, coverage.py's JSON report and the failure records of TestMind's pytest plugin) is
-read back, with a size cap.
+requested, coverage.py's JSON report and the records of TestMind's pytest plugins: failures
+and API requests) is read back, with a size cap.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ MAX_COVERAGE_BYTES = 50 * 1024 * 1024
 MAX_FAILURES_BYTES = 10 * 1024 * 1024
 COVERAGE_CONFIG = "/opt/testmind/coveragerc"  # baked into the sandbox image
 CONTEXTS_CONFIG = "/opt/testmind/coveragerc_contexts"  # the same, plus per-test contexts
-PLUGIN_DIR = "/opt/testmind"  # testmind_failures.py, baked into the sandbox image
+PLUGIN_DIR = "/opt/testmind"  # testmind_failures.py, testmind_api.py: in the sandbox image
 
 
 class DockerSandbox:
@@ -139,6 +139,9 @@ class DockerSandbox:
                 if job.capture_failures
                 else None
             )
+            api_json = (
+                _read_capped(out_dir / "api.json", MAX_FAILURES_BYTES) if job.capture_api else None
+            )
 
         logger.info(
             "sandbox_finished", exit_code=exit_code, timed_out=timed_out, seconds=round(duration, 2)
@@ -152,6 +155,7 @@ class DockerSandbox:
             coverage_json=coverage_json,
             coverage_error=coverage_error,
             failures_json=failures_json,
+            api_json=api_json,
         )
 
     def _command(
@@ -186,14 +190,16 @@ class DockerSandbox:
             if job.test_contexts:
                 coverage.append("--cov-context=test")
         plugin = ["-p", "testmind_failures"] if job.capture_failures else []
+        if job.capture_api:
+            plugin += ["-p", "testmind_api"]
         if job.continue_on_collection_errors:
             plugin.append("--continue-on-collection-errors")
         # The plugin directory comes first so that no repository module can shadow it.
         pythonpath = "/workspace/src:/workspace/src/src"
-        if job.capture_failures:
+        if job.capture_failures or job.capture_api:
             pythonpath = f"{PLUGIN_DIR}:{pythonpath}"
         return [
-            *self._isolation(name, tmpfs_size=DEFAULT_TMPFS),
+            *self._isolation(name, tmpfs_size=job.tmpfs_size),
             "--workdir", rootdir,
             "--env", f"PYTHONPATH={pythonpath}",
             "--env", "PYTHONDONTWRITEBYTECODE=1",
@@ -311,6 +317,8 @@ class PytestJob:
     # Run only these project tests: files from `project_tests`, or nodeids within them.
     select: tuple[str, ...] = ()
     capture_failures: bool = False  # structured failure records (testmind_failures plugin)
+    capture_api: bool = False  # HTTP requests to in-process applications (testmind_api plugin)
+    tmpfs_size: str = DEFAULT_TMPFS  # the writable /tmp (larger for browser tests)
     # One test module that fails to import must not hide the results of all the others.
     continue_on_collection_errors: bool = False
 

@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     sandbox_memory: str = Field(default="512m", pattern=r"^[0-9]+[kmg]$")
     sandbox_cpus: float = Field(default=1.0, gt=0, le=16)
     sandbox_build_timeout_seconds: int = Field(default=900, ge=30, le=7200)
+    # Sandbox image with a headless Chromium for Playwright tests (docker/browser.Dockerfile).
+    browser_sandbox_image: str | None = Field(default=None, min_length=1, max_length=200)
 
     # --- Coverage: functions below this percentage are reported as coverage gaps.
     coverage_threshold: float = Field(default=80.0, ge=0, le=100)
@@ -76,6 +78,7 @@ class Settings(BaseSettings):
     mutation_mutant_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     mutation_job_timeout_seconds: int = Field(default=1800, ge=60, le=14400)
     mutation_max_suggestions: int = Field(default=10, ge=1, le=100)
+    api_max_suggestions: int = Field(default=10, ge=1, le=100)
 
     @field_validator("log_level", mode="before")
     @classmethod

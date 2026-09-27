@@ -40,6 +40,9 @@ class SandboxResult(BaseModel):
     failures_json: str | None = Field(
         default=None, description="Failure records of the testmind_failures pytest plugin"
     )
+    api_json: str | None = Field(
+        default=None, description="HTTP requests recorded by the testmind_api pytest plugin"
+    )
 
     def count(self, outcome: Outcome) -> int:
         return sum(1 for t in self.tests if t.outcome is outcome)

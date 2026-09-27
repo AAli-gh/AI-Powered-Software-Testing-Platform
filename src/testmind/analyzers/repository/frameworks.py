@@ -62,7 +62,7 @@ def detect_frameworks(inputs: FrameworkInputs) -> tuple[list[Detection], list[De
         )
         if detection is not None
     ]
-    tests = [d for d in (_pytest(inputs), _unittest(inputs)) if d is not None]
+    tests = [d for d in (_pytest(inputs), _unittest(inputs), _playwright(inputs)) if d is not None]
     return _sorted(web), _sorted(tests)
 
 
@@ -166,3 +166,24 @@ def _unittest(inputs: FrameworkInputs) -> Detection | None:
             f"{count} TestCase subclass(es) in {_examples(f.path for f in classes)}",
         )
     return _finish("unittest", DetectionCategory.TEST_FRAMEWORK, score)
+
+
+PLAYWRIGHT = "Playwright"
+
+
+def _playwright(inputs: FrameworkInputs) -> Detection | None:
+    """Browser tests: they need the browser sandbox image (docs/api-testing.md)."""
+    score = _Score()
+    _dependency_fact(inputs, "pytest-playwright", score)
+    _dependency_fact(inputs, "playwright", score)
+    importers = [
+        f.path
+        for f in inputs.python_files
+        if f.path in inputs.test_files and "playwright" in f.imports
+    ]
+    if importers:
+        score.add(
+            W_STRUCTURE, f"'playwright' imported in {len(importers)} test file(s): "
+            f"{_examples(importers)}",
+        )  # fmt: skip
+    return _finish(PLAYWRIGHT, DetectionCategory.TEST_FRAMEWORK, score)

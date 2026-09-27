@@ -159,3 +159,20 @@ def test_generated_tests_run_next_to_the_project_suite(
 def test_invalid_jobs_are_refused(sandbox: DockerSandbox, job: PytestJob) -> None:
     with pytest.raises(ValueError, match="Invalid"):
         sandbox.run(EXAMPLES / "discount_service", job)
+
+
+def test_browser_projects_are_built_on_the_browser_image(sandbox: DockerSandbox) -> None:
+    """The builder logic with a real Docker (the sandbox image stands in for the browser image;
+    Chromium itself is exercised in tests/sandbox/test_browser.py)."""
+    builder = RunnerImageBuilder("testmind-base-not-used", browser_image=sandbox.image)
+    playwright = [dependency("playwright", ">=1.40"), dependency("pytest-playwright")]
+    only_playwright = builder.ensure(playwright, browser=True)
+    assert (only_playwright.tag, only_playwright.requirements) == (sandbox.image, ())
+    assert only_playwright.notes == (
+        f"Playwright and a headless Chromium come from {sandbox.image}",
+    )
+    with_six = builder.ensure([*playwright, dependency("six", "==1.16.0")], browser=True)
+    assert with_six.requirements == ("six==1.16.0",)  # Playwright comes from the image
+    assert sandbox.available(with_six.tag)
+    with pytest.raises(DependencyInstallError, match="no browser sandbox image is configured"):
+        RunnerImageBuilder(sandbox.image).ensure(playwright, browser=True)

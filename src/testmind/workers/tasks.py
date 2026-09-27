@@ -13,6 +13,7 @@ from testmind.mutation_engine.engine import MutationEngine
 from testmind.regression.engine import RegressionEngine
 from testmind.sandbox.docker_sandbox import DockerSandbox
 from testmind.sandbox.runner_image import RunnerImageBuilder
+from testmind.services.api_suggestion_executor import ApiSuggestionExecutor
 from testmind.services.execution_executor import ExecutionExecutor
 from testmind.services.failure_analysis_executor import FailureAnalysisExecutor
 from testmind.services.generation_executor import GenerationExecutor
@@ -28,6 +29,7 @@ ANALYZE_FAILURES = "testmind.failure_analysis.execute"
 ANALYZE_REGRESSION = "testmind.regression.execute"
 RUN_MUTATIONS = "testmind.mutation_run.execute"
 SUGGEST_MUTANT_TESTS = "testmind.mutant_suggestions.execute"
+SUGGEST_API_TESTS = "testmind.api_suggestions.execute"
 
 
 def register_tasks(app: Celery, settings: Settings) -> None:
@@ -51,6 +53,11 @@ def register_tasks(app: Celery, settings: Settings) -> None:
     @app.task(name=SUGGEST_MUTANT_TESTS, shared=False)
     def suggest_mutant_tests(suggestion_id: str) -> str | None:
         status = asyncio.run(_suggest_mutant_tests(settings, uuid.UUID(suggestion_id)))
+        return status.value if status else None
+
+    @app.task(name=SUGGEST_API_TESTS, shared=False)
+    def suggest_api_tests(suggestion_id: str) -> str | None:
+        status = asyncio.run(_suggest_api_tests(settings, uuid.UUID(suggestion_id)))
         return status.value if status else None
 
     @app.task(name=ANALYZE_REGRESSION, shared=False)
@@ -109,7 +116,9 @@ async def _generate_tests(settings: Settings, generation_id: uuid.UUID) -> RunSt
 
 def build_image_builder(settings: Settings) -> RunnerImageBuilder:
     return RunnerImageBuilder(
-        settings.sandbox_image, timeout_seconds=settings.sandbox_build_timeout_seconds
+        settings.sandbox_image,
+        browser_image=settings.browser_sandbox_image,
+        timeout_seconds=settings.sandbox_build_timeout_seconds,
     )
 
 
@@ -197,6 +206,23 @@ async def _suggest_mutant_tests(settings: Settings, suggestion_id: uuid.UUID) ->
             images=build_image_builder(settings),
             max_tokens=settings.llm_max_tokens,
             max_suggestions=settings.mutation_max_suggestions,
+        )
+        return await executor.execute(suggestion_id)
+    finally:
+        await engine.dispose()
+
+
+async def _suggest_api_tests(settings: Settings, suggestion_id: uuid.UUID) -> RunStatus | None:
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = ApiSuggestionExecutor(
+            create_session_factory(engine),
+            settings.repos_root,
+            provider_factory=lambda: create_provider(settings),
+            sandbox=build_sandbox(settings),
+            images=build_image_builder(settings),
+            max_tokens=settings.llm_max_tokens,
+            max_endpoints=settings.api_max_suggestions,
         )
         return await executor.execute(suggestion_id)
     finally:

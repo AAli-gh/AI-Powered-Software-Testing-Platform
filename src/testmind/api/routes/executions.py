@@ -50,7 +50,8 @@ async def create_execution(
     body: Annotated[TestExecutionCreate | None, Body()] = None,
 ) -> TestExecutionRead:
     """Queue a sandboxed run of the project's test suite (optionally plus generated tests)."""
-    execution = await service.create(run_id, body.generation_id if body else None)
+    body = body or TestExecutionCreate()
+    execution = await service.create(run_id, body.generation_id, api_probes=body.api_probes)
     return TestExecutionRead.from_row(execution)
 
 

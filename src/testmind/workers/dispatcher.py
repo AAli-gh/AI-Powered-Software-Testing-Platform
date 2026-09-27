@@ -12,6 +12,7 @@ from testmind.workers.tasks import (
     EXECUTE_TESTS,
     GENERATE_TESTS,
     RUN_MUTATIONS,
+    SUGGEST_API_TESTS,
     SUGGEST_MUTANT_TESTS,
 )
 
@@ -44,3 +45,6 @@ class CeleryTaskDispatcher:
         await asyncio.to_thread(
             self._app.send_task, SUGGEST_MUTANT_TESTS, args=[str(suggestion_id)]
         )
+
+    async def dispatch_api_suggestions(self, suggestion_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._app.send_task, SUGGEST_API_TESTS, args=[str(suggestion_id)])

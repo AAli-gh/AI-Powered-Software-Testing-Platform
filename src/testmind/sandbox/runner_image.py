@@ -5,6 +5,11 @@ Dependencies are installed with `pip --only-binary=:all:` — wheels only — so
 needed there); tests later run from the finished image with no network. Images are cached by a
 hash of the base image's *content id* (so rebuilding the base image invalidates them) and the
 exact requirement list.
+
+Projects with browser tests (Playwright) are built on the browser sandbox image instead, which
+adds a headless Chromium. Playwright itself comes from that image, pinned to the browser
+build it was installed with, so the project's own `playwright` / `pytest-playwright`
+requirements are not installed again.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ MAX_LOG = 20_000
 DOCKER_PROBE_TIMEOUT = 15
 IMAGE_REPOSITORY = "testmind-runner"
 INSTALLED_GROUPS = frozenset({DependencyGroup.RUNTIME, DependencyGroup.DEVELOPMENT})
+BROWSER_PROVIDED = frozenset({"playwright", "pytest-playwright"})
 DOCKERFILE = """\
 FROM {base}
 USER root
@@ -81,9 +87,15 @@ def requirement_lines(dependencies: Iterable[Dependency]) -> tuple[list[str], li
 
 class RunnerImageBuilder:
     def __init__(
-        self, base_image: str, *, docker_binary: str = "docker", timeout_seconds: int = 900
+        self,
+        base_image: str,
+        *,
+        browser_image: str | None = None,
+        docker_binary: str = "docker",
+        timeout_seconds: int = 900,
     ) -> None:
         self._base = base_image
+        self._browser = browser_image
         self._docker = docker_binary
         self._timeout = timeout_seconds
 
@@ -91,16 +103,30 @@ class RunnerImageBuilder:
         digest = hashlib.sha256("\n".join([base_id, *requirements]).encode()).hexdigest()
         return f"{IMAGE_REPOSITORY}:{digest[:16]}"
 
-    def ensure(self, dependencies: Iterable[Dependency]) -> RunnerImage:
+    def ensure(self, dependencies: Iterable[Dependency], *, browser: bool = False) -> RunnerImage:
+        """The runner image for these dependencies; `browser`: built on the browser image."""
+        base = self._base
+        if browser:
+            if self._browser is None:
+                raise DependencyInstallError(
+                    "The project has browser tests, but no browser sandbox image is configured "
+                    "(TESTMIND_BROWSER_SANDBOX_IMAGE)",
+                    "",
+                    (),
+                )
+            base = self._browser
+            dependencies = [d for d in dependencies if d.name not in BROWSER_PROVIDED]
         requirements, notes = requirement_lines(dependencies)
+        if browser:
+            notes.append(f"Playwright and a headless Chromium come from {base}")
         if not requirements:
-            return RunnerImage(self._base, (), True, "", tuple(notes))
-        tag = self.tag_for(requirements, self._base_id(notes))
+            return RunnerImage(base, (), True, "", tuple(notes))
+        tag = self.tag_for(requirements, self._base_id(base, notes))
         if self._exists(tag):
             return RunnerImage(tag, tuple(requirements), True, "", tuple(notes))
 
         with tempfile.TemporaryDirectory(prefix="testmind-runner-") as context:
-            (Path(context) / "Dockerfile").write_text(DOCKERFILE.format(base=self._base))
+            (Path(context) / "Dockerfile").write_text(DOCKERFILE.format(base=base))
             (Path(context) / "requirements.txt").write_text("\n".join(requirements) + "\n")
             try:
                 completed = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
@@ -128,12 +154,12 @@ class RunnerImageBuilder:
         logger.info("runner_image_built", tag=tag, requirements=len(requirements))
         return RunnerImage(tag, tuple(requirements), False, log, tuple(notes))
 
-    def _base_id(self, notes: list[str]) -> str:
+    def _base_id(self, base: str, notes: list[str]) -> str:
         """Content id of the base image: a rebuilt base (e.g. a new pytest or coverage version)
         must not reuse runner images built on the old one."""
         try:
             probe = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
-                [self._docker, "image", "inspect", "--format", "{{.Id}}", self._base],
+                [self._docker, "image", "inspect", "--format", "{{.Id}}", base],
                 capture_output=True,
                 timeout=DOCKER_PROBE_TIMEOUT,
                 check=False,
@@ -144,7 +170,7 @@ class RunnerImageBuilder:
             ) from None
         if probe.returncode != 0:
             raise DependencyInstallError(
-                f"Sandbox base image '{self._base}' is not available",
+                f"Sandbox base image '{base}' is not available",
                 probe.stderr.decode("utf-8", errors="replace")[-MAX_LOG:],
                 tuple(notes),
             )

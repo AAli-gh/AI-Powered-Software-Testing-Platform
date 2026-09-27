@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from testmind.analyzers.repository.models import Issue
+from testmind.api_engine.models import ApiSurface
 
 
 class _Model(BaseModel):
@@ -131,6 +132,9 @@ class CodeProfile(CodeSummary):
     functions: list[FunctionInfo]
     classes: list[ClassInfo]
     findings: list[Finding]
+    api: ApiSurface = Field(
+        default_factory=ApiSurface, description="HTTP endpoints found by static discovery"
+    )
 
     def summary(self) -> CodeSummary:
         return CodeSummary(metrics=self.metrics, issues=self.issues)

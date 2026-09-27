@@ -289,7 +289,7 @@ class RecordingImages:
         self.error = error
         self.calls: list[list[str]] = []
 
-    def ensure(self, dependencies: list[Dependency]) -> RunnerImage:
+    def ensure(self, dependencies: list[Dependency], *, browser: bool = False) -> RunnerImage:
         self.calls.append([d.name for d in dependencies])
         if self.error:
             raise DependencyInstallError("no wheel", "log", ())

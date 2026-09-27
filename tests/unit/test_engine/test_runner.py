@@ -38,8 +38,10 @@ class Sandbox:
 class Images:
     def __init__(self, error: DependencyInstallError | None = None) -> None:
         self.error = error
+        self.browser: list[bool] = []
 
-    def ensure(self, dependencies: list[Dependency]) -> RunnerImage:
+    def ensure(self, dependencies: list[Dependency], *, browser: bool = False) -> RunnerImage:
+        self.browser.append(browser)
         if self.error:
             raise self.error
         return RunnerImage("testmind-runner:abc", ("flask",), False, "installed", ("note",))
@@ -58,6 +60,7 @@ def result(
     coverage_json: str | None = None,
     coverage_error: str | None = None,
     failures_json: str | None = None,
+    api_json: str | None = None,
 ) -> SandboxResult:
     return SandboxResult(
         exit_code=exit_code,
@@ -68,6 +71,7 @@ def result(
         coverage_json=coverage_json,
         coverage_error=coverage_error,
         failures_json=failures_json,
+        api_json=api_json,
     )
 
 

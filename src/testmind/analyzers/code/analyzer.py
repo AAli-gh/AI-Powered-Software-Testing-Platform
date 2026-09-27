@@ -22,9 +22,10 @@ from testmind.analyzers.repository.entry_points import module_name
 from testmind.analyzers.repository.limits import AnalysisLimits
 from testmind.analyzers.repository.models import Issue
 from testmind.analyzers.repository.walker import read_relative
+from testmind.api_engine.discovery import discover
 
 # Bump when the output changes meaningfully; stored with every analysis.
-CODE_ANALYZER_VERSION = "1.0.0"
+CODE_ANALYZER_VERSION = "1.1.0"  # 1.1: API endpoint discovery
 
 
 class CodeAnalyzer:
@@ -42,6 +43,7 @@ class CodeAnalyzer:
         findings: list[Finding] = []
         issues: list[Issue] = []
         skipped_tests = 0
+        parsed: list[tuple[str, ast.Module]] = []
 
         for path in sorted(set(python_files)):
             if path in tests:
@@ -57,6 +59,7 @@ class CodeAnalyzer:
                 issues.append(Issue(path=path, message=f"Syntax error: {exc}"))
                 continue
 
+            parsed.append((path, tree))
             module = module_name(path)
             is_package = PurePosixPath(path).name == "__init__.py"
             table = collect_symbols(tree, path, module)
@@ -94,6 +97,7 @@ class CodeAnalyzer:
             classes=classes,
             findings=sorted(findings, key=lambda f: (f.path, f.line, f.rule_id)),
             issues=issues,
+            api=discover(parsed),
         )
 
 

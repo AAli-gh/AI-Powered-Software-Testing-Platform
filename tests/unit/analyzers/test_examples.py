@@ -14,7 +14,13 @@ EXAMPLES = Path(__file__).resolve().parents[3] / "examples"
 def profiles() -> dict[str, RepositoryProfile]:
     return {
         name: RepositoryAnalyzer().analyze(EXAMPLES / name)
-        for name in ("discount_service", "django_blog", "fastapi_todo", "flask_notes")
+        for name in (
+            "discount_service",
+            "django_blog",
+            "fastapi_todo",
+            "flask_notes",
+            "web_counter",
+        )
     }
 
 
@@ -98,4 +104,16 @@ def test_no_web_framework_false_positives_across_examples(
         "django_blog": {"Django"},
         "fastapi_todo": {"FastAPI"},
         "flask_notes": {"Flask"},
+        "web_counter": {"Flask"},
     }
+
+
+def test_web_counter_has_browser_tests(profiles: dict[str, RepositoryProfile]) -> None:
+    profile = profiles["web_counter"]
+    assert detections(profile) == {"Flask": 1.0, "Playwright": 1.0, "pytest": 1.0}
+    [playwright] = [d for d in profile.test_frameworks if d.name == "Playwright"]
+    assert playwright.evidence == [
+        "'pytest-playwright' declared in pyproject.toml",
+        "'playwright' declared in pyproject.toml",
+        "'playwright' imported in 1 test file(s): tests/test_counter.py",
+    ]

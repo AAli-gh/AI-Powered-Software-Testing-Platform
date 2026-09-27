@@ -54,6 +54,7 @@ class ExecutionExecutor:
             code_analysis = await analyses.get_code_for_run(execution.run_id)
             code = CodeProfile.model_validate(code_analysis.profile) if code_analysis else None
             generated = await generated_files(generations, execution.generation_id)
+            api_probes = execution.api_probes
             apply_transition(execution, RunStatus.RUNNING)
             await session.commit()
 
@@ -62,7 +63,7 @@ class ExecutionExecutor:
                 return await self._finish(execution_id, RunStatus.FAILED, NO_REPOSITORY_ANALYSIS)
             root = resolve_local_source(self._repos_root, location)
             result = await asyncio.to_thread(
-                lambda: self._runner.run(root, profile, generated, code=code)
+                lambda: self._runner.run(root, profile, generated, code=code, api_probes=api_probes)
             )
         except AppError as exc:
             return await self._finish(execution_id, RunStatus.FAILED, exc.message)
@@ -92,6 +93,9 @@ class ExecutionExecutor:
                 if result.coverage is not None:
                     execution.coverage = result.coverage.model_dump(mode="json")
                     execution.coverage_percent = result.coverage.totals.percent
+                if result.api is not None:
+                    execution.api_coverage = result.api.model_dump(mode="json")
+                    execution.api_coverage_percent = result.api.totals.percent
             await session.commit()
         logger.info("execution_finished", execution_id=str(execution_id), status=status.value)
         return status

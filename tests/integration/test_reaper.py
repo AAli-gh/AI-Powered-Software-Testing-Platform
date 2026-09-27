@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from testmind.core.config import get_settings
 from testmind.db.models import (
     AnalysisRun,
+    ApiTestSuggestion,
     FailureAnalysis,
     MutantTestSuggestion,
     MutationRun,
@@ -61,7 +62,10 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
         suggestion = MutantTestSuggestion(
             mutation_run_id=mutation.id, status=RunStatus.RUNNING, started_at=old, provider="x"
         )
-        session.add(suggestion)
+        api_suggestion = ApiTestSuggestion(
+            execution_id=execution.id, status=RunStatus.RUNNING, started_at=old, provider="x"
+        )
+        session.add_all([suggestion, api_suggestion])
         await session.commit()
         return {
             "stuck": stuck_run.id,
@@ -73,6 +77,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, o
             "reg": regression.id,
             "mut": mutation.id,
             "sug": suggestion.id,
+            "api": api_suggestion.id,
         }
 
 
@@ -80,7 +85,7 @@ async def test_only_long_running_jobs_are_reaped(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     ids = await seed(session_factory)
-    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 7
+    assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 8
 
     async with session_factory() as session:
         stuck = await session.get(AnalysisRun, ids["stuck"])
@@ -92,6 +97,7 @@ async def test_only_long_running_jobs_are_reaped(
         regression = await session.get(Regression, ids["reg"])
         mutation = await session.get(MutationRun, ids["mut"])
         suggestion = await session.get(MutantTestSuggestion, ids["sug"])
+        api_suggestion = await session.get(ApiTestSuggestion, ids["api"])
     assert stuck is not None
     assert stuck.status is RunStatus.FAILED
     assert stuck.error_message == ORPHANED_MESSAGE
@@ -112,6 +118,8 @@ async def test_only_long_running_jobs_are_reaped(
     assert mutation.status is RunStatus.FAILED
     assert suggestion is not None
     assert suggestion.status is RunStatus.FAILED
+    assert api_suggestion is not None
+    assert api_suggestion.status is RunStatus.FAILED
 
     assert await reap_orphaned_jobs(session_factory, older_than=timedelta(hours=1)) == 0
 
@@ -131,7 +139,7 @@ async def test_worker_startup_hook_reaps(
     sys.modules.pop("testmind.workers.main", None)
     try:
         main = importlib.import_module("testmind.workers.main")  # fresh, with the test env
-        assert await main.reap_on_startup() == 7
+        assert await main.reap_on_startup() == 8
     finally:
         sys.modules.pop("testmind.workers.main", None)
         get_settings.cache_clear()

@@ -17,3 +17,5 @@ These are fixtures, not part of TestMind itself: they are excluded from TestMind
 | `buggy_inventory/` | Plain Python, **intentionally flawed** | Every code-analysis rule (see its `EXPECTED_FINDINGS.md`), plus code that must *not* be flagged |
 | `failing_suite/` | Plain Python, pytest, **intentionally failing** | Every failure category of the failure analysis: code and library exceptions, assertions, fixture, import and syntax errors, a strict xfail that passes (see its `EXPECTED_FAILURES.md`) |
 | `shipping_rates/` | Plain Python, pytest, **weak tests** | Mutation testing: every line runs, yet boundary and constant mutants survive (see its `EXPECTED_MUTATION.md`) |
+| `buggy_api/` | Flask, pytest, **happy-path tests and API defects** | API testing: endpoint discovery, API coverage, and the probes that find a 500 and unvalidated input (see its `EXPECTED_API.md`) |
+| `web_counter/` | Flask, pytest, **Playwright** | Browser tests in the browser sandbox image, and the page's own requests in the API coverage (see its `EXPECTED_BROWSER.md`) |

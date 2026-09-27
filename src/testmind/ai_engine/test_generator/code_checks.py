@@ -28,8 +28,10 @@ def extract_code(response: str) -> str | None:
     return stripped + "\n" if stripped.startswith(("import ", "from ", "def ", "@")) else None
 
 
-def check_code(code: str, target_module: str) -> list[str]:
-    """Problems that make the code unacceptable; empty when it may be executed."""
+def check_code(code: str, target_module: str | None) -> list[str]:
+    """Problems that make the code unacceptable; empty when it may be executed.
+
+    `target_module` must be imported by the tests (None: no such requirement)."""
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
@@ -43,7 +45,9 @@ def check_code(code: str, target_module: str) -> list[str]:
         problems.append("No test functions (def test_...) were found")
 
     imported = _imported_modules(tree)
-    if not any(m == target_module or m.startswith(target_module + ".") for m in imported):
+    if target_module is not None and not any(
+        m == target_module or m.startswith(target_module + ".") for m in imported
+    ):
         problems.append(f"The module under test ({target_module}) is never imported")
     for module in sorted(imported):
         if module.split(".")[0] in FORBIDDEN_MODULES or module in FORBIDDEN_MODULES:

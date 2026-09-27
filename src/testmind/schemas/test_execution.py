@@ -18,6 +18,10 @@ class TestExecutionCreate(BaseModel):
     generation_id: uuid.UUID | None = Field(
         default=None, description="Also run the test modules of this (succeeded) generation"
     )
+    api_probes: bool = Field(
+        default=False,
+        description="Also run TestMind's deterministic API probes against the application",
+    )
 
 
 class ExecutionSummary(BaseModel):
@@ -38,6 +42,9 @@ class ExecutionSummary(BaseModel):
     failure_groups: int | None = Field(
         description="Failure groups found by the deterministic analysis (see /failures)"
     )
+    api_coverage_percent: float | None = Field(
+        description="Share of the HTTP endpoints the project's tests call (see /api-coverage)"
+    )
 
 
 class TestExecutionRead(BaseModel):
@@ -48,6 +55,7 @@ class TestExecutionRead(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
     generation_id: uuid.UUID | None
+    api_probes: bool
     status: RunStatus
     outcome: ExecutionOutcome | None
     error_message: str | None
@@ -75,11 +83,13 @@ class TestExecutionRead(BaseModel):
                 coverage_percent=row.coverage_percent,
                 coverage_error=report.coverage_error,
                 failure_groups=len(row.failures["groups"]) if row.failures else None,
+                api_coverage_percent=row.api_coverage_percent,
             )
         return cls(
             id=row.id,
             run_id=row.run_id,
             generation_id=row.generation_id,
+            api_probes=row.api_probes,
             status=row.status,
             outcome=row.outcome,
             error_message=row.error_message,

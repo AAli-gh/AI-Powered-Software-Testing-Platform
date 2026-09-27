@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Float, ForeignKey, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Text, false
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,13 @@ class TestExecution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     coverage_percent: Mapped[float | None] = mapped_column(Float)
     # Serialised FailureReport: the deterministic failure analysis, made with every execution.
     failures: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Run TestMind's deterministic API probes with the suite (api_engine/probes.py).
+    api_probes: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    # Serialised ApiCoverageReport, and its share of endpoints the project's tests call.
+    api_coverage: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    api_coverage_percent: Mapped[float | None] = mapped_column(Float)
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
