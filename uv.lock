@@ -2333,6 +2333,7 @@ dependencies = [
     { name = "defusedxml" },
     { name = "dulwich" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "packaging" },
     { name = "pathspec" },
     { name = "pydantic" },
@@ -2349,7 +2350,6 @@ dependencies = [
 dev = [
     { name = "bandit" },
     { name = "celery-types" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -2370,6 +2370,7 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "dulwich", specifier = ">=0.24" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "packaging", specifier = ">=24" },
     { name = "pathspec", specifier = ">=0.12" },
     { name = "pydantic", specifier = ">=2.7" },
@@ -2386,7 +2387,6 @@ requires-dist = [
 dev = [
     { name = "bandit", specifier = ">=1.7" },
     { name = "celery-types", specifier = ">=0.22" },
-    { name = "httpx", specifier = ">=0.27" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pip-audit", specifier = ">=2.7" },
     { name = "pre-commit", specifier = ">=3.7" },
