@@ -59,6 +59,11 @@ USER 65534:65534
 - **Regression runs** additionally record per-test coverage contexts and can run only a
   selection of test files or pytest nodeids ([regression.md](regression.md)). Nodeids are
   validated: they must name one of the project's test files and contain no control characters.
+- **API requests** the tests send to in-process applications are recorded by a second
+  plugin, `testmind_api`, and turned into API coverage; `api_probes` adds TestMind's probe
+  module ([api-testing.md](api-testing.md)).
+- **Browser tests:** projects with Playwright tests get runner images built on the browser
+  sandbox image (headless Chromium), and a 256 MB `/tmp` ([api-testing.md](api-testing.md#6-browser-tests-playwright)).
 - **Mutation runs** use the baseline's per-test contexts to run each mutant against only the
   tests that executed its lines, in one container driven by `docker/testmind_mutate.py`
   ([mutation.md](mutation.md)).

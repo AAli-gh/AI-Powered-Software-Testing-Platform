@@ -14,3 +14,4 @@ Short records of significant decisions: the context, the decision and its conseq
 | [0008](0008-structured-failure-capture.md) | Capture failures as structured data inside the sandbox | Accepted |
 | [0009](0009-read-only-git-with-dulwich.md) | Read git history with dulwich, never with the git command line | Accepted |
 | [0010](0010-single-container-mutation-driver.md) | Run all mutants of a job in one sandbox container | Accepted |
+| [0011](0011-observe-api-usage-inside-the-application.md) | Observe API usage inside the application, and cross-check static discovery with it | Accepted |

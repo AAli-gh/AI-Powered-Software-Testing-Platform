@@ -211,9 +211,9 @@ File `status` values and their meaning are listed in [ai-engine.md](ai-engine.md
 
 | Method | Path | Notes |
 |---|---|---|
-| `POST` | `/api/v1/runs/{run_id}/test-executions` | Body (optional): `{"generation_id": "<uuid>"}` to add that generation's test modules. `202`. `404` unknown run, or a generation that does not belong to it. `409` run or generation not succeeded. `503 dispatch_failed` |
+| `POST` | `/api/v1/runs/{run_id}/test-executions` | Body (optional): `{"generation_id": "<uuid>", "api_probes": true}` to add that generation's test modules and TestMind's API probes. `202`. `404` unknown run, or a generation that does not belong to it. `409` run or generation not succeeded. `503 dispatch_failed` |
 | `GET` | `/api/v1/runs/{run_id}/test-executions` | Paginated summaries, newest first |
-| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict) and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment, `coverage_percent`, `coverage_error`, `failure_groups`) |
+| `GET` | `/api/v1/test-executions/{id}` | `status` (job), `outcome` (test verdict), `api_probes` and `summary` (exit code and meaning, totals, duration, image, install notes, test files, environment, `coverage_percent`, `coverage_error`, `failure_groups`, `api_coverage_percent`) |
 | `GET` | `/api/v1/test-executions/{id}/tests` | Per-test results, filterable by `outcome` (`passed`, `failed`, `error`, `skipped`, `xfailed`) and `generated`. `limit` ≤ 500. `404` until a report exists |
 | `GET` | `/api/v1/test-executions/{id}/logs` | `{"output": pytest console tail, "install_log": pip/docker build tail}` |
 
@@ -242,6 +242,22 @@ On a succeeded run, on request ([details](mutation.md)).
 | `GET` | `/api/v1/mutation-runs/{id}/functions` | `limit` ≤ 500, `offset` | Scores per function, weakest first, unscored last |
 | `POST` | `/api/v1/mutation-runs/{id}/test-suggestions` | | Queue AI tests for the surviving mutants. `202`; `409` no survivors; `503 llm_not_configured`; `503 dispatch_failed` |
 | `GET` | `/api/v1/mutation-runs/{id}/test-suggestions` · `/api/v1/test-suggestions/{id}` | | Status; `result.suggestions[]` with mutant, `status` (`accepted`, `rejected`, `llm_error`, `sandbox_error`), `test_path`, `code`, `attempts[]` (`accepted`, `fails_on_original`, `mutant_survives`, `rejected`, …) |
+
+### API testing
+
+HTTP endpoints of FastAPI, Flask and Django applications, how the tests call them, probes and
+AI API tests ([details](api-testing.md)).
+
+| Method | Path | Parameters | Notes |
+|---|---|---|---|
+| `GET` | `/api/v1/runs/{id}/api` | | Static discovery: `apps` (framework, module, variable or factory), `endpoints` (method or `ANY`, canonical path, params with types, handler, `accepts_body`, app), `notes` |
+| `GET` | `/api/v1/test-executions/{id}/api-coverage` | | `frameworks`, `totals` (endpoints, tested, success_tested, error_tested, percent), `gap_count`, `top_gaps`, `unmatched_requests`, `probes` (count per verdict), `notes`. `404` with the reason when there is none |
+| `GET` | `/api/v1/test-executions/{id}/api-coverage/endpoints` | `tested`, `method`, `source` (`static`, `runtime`, `both`), `limit` ≤ 500, `offset` | Per endpoint: calls, tests, statuses, generated calls, success/error tested, server errors |
+| `GET` | `/api/v1/test-executions/{id}/api-coverage/gaps` | `kind` (`server_error`, `untested`, `error_only`, `success_only`) | Ranked; each with its reason, handler and complexity |
+| `GET` | `/api/v1/test-executions/{id}/api-coverage/probes` | `verdict` (`passed`, `server_error`, `accepted_invalid`, `unexpected`, `not_run`) | Probe, request sent, expected answer, status received, detail |
+| `GET` | `/api/v1/test-executions/{id}/api-coverage/unmatched` | | Requests of the project's tests that no route answered |
+| `POST` | `/api/v1/test-executions/{id}/api-test-suggestions` | | `202`; `404` no API coverage; `409` no gap a test could close; `503 llm_not_configured`; `503 dispatch_failed` |
+| `GET` | `/api/v1/test-executions/{id}/api-test-suggestions` · `/api/v1/api-test-suggestions/{id}` | | Status; `result.suggestions[]` with endpoint, gap, `status` (`accepted`, `rejected`, `llm_error`, `sandbox_error`), `test_path`, `code`, `statuses`, `attempts[]` (`accepted`, `fails_on_original`, `endpoint_not_called`, `gap_not_closed`, `rejected`, …) |
 
 ### Failure analysis
 

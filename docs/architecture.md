@@ -139,6 +139,7 @@ erDiagram
     projects ||--o{ regressions : "compared commits of"
     analysis_runs ||--o{ mutation_runs : "mutation tests of"
     mutation_runs ||--o{ mutant_test_suggestions : "AI tests for survivors of"
+    test_executions ||--o{ api_test_suggestions : "AI API tests for gaps of"
     projects {
         uuid id PK
         varchar name UK
@@ -183,6 +184,19 @@ erDiagram
         jsonb coverage "CoverageReport"
         float coverage_percent
         jsonb failures "FailureReport (deterministic)"
+        boolean api_probes "run the deterministic API probes"
+        jsonb api_coverage "ApiCoverageReport"
+        float api_coverage_percent
+        text error_message
+    }
+    api_test_suggestions {
+        uuid id PK
+        uuid execution_id FK "ON DELETE CASCADE, indexed"
+        varchar status "job lifecycle"
+        varchar provider
+        varchar model
+        varchar prompt_version
+        jsonb result "ApiSuggestionResult (sandbox-verified)"
         text error_message
     }
     regressions {
@@ -242,6 +256,10 @@ erDiagram
   its total so lists and comparisons do not have to load the document.
 - `test_executions.failures` is the deterministic failure report, written with the execution;
   `failure_analyses` holds the optional AI jobs about it.
+- `code_analyses.profile` also holds the statically discovered HTTP endpoints (`api`).
+  `test_executions.api_coverage` is the API coverage of the execution (with the probe
+  verdicts when `api_probes` was requested); `api_test_suggestions` holds the optional AI
+  jobs about it.
 - `mutation_runs.report` holds every mutant with its verdict and the scores per file and
   function; `score` duplicates the total for lists. `mutant_test_suggestions` holds the
   optional AI jobs, each suggestion with its sandbox verdicts.
