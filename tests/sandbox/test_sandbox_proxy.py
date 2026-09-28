@@ -43,10 +43,20 @@ def proxy(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     monkeypatch.setenv("DOCKER_HOST", url)
     monkeypatch.setenv("DOCKER_BUILDKIT", "0")
     yield url
-    loop.call_soon_threadsafe(server.close)
+
+    async def shutdown() -> None:
+        # Connections still being relayed (e.g. a killed CLI's attach) are cancelled, so
+        # each handler closes its streams before the loop goes away.
+        server.close()
+        tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await server.wait_closed()
+
+    asyncio.run_coroutine_threadsafe(shutdown(), loop).result(timeout=30)
     loop.call_soon_threadsafe(loop.stop)
     thread.join(timeout=10)
-    loop.run_until_complete(server.wait_closed())
     loop.close()
 
 

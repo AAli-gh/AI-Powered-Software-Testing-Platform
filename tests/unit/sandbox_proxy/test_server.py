@@ -4,6 +4,7 @@ The real daemon is exercised in tests/sandbox/test_sandbox_proxy.py."""
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -245,6 +246,40 @@ async def test_an_unreachable_daemon_is_a_502(tmp_path: Path) -> None:
     answer = await exchange(port, b"HEAD /_ping HTTP/1.1\r\n\r\n")
     server.close()
     assert answer.startswith(b"HTTP/1.1 502")
+
+
+async def test_a_waiting_connection_survives_garbage_collection() -> None:
+    """Regression (Python 3.11): once the client's connection is lost, asyncio's server no
+    longer references the handler, so a handler still waiting on something nothing else
+    references (here the daemon) was garbage-collected half-way."""
+    entered = asyncio.Event()
+    exited = asyncio.Event()
+
+    async def daemon_that_never_answers() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        entered.set()
+        try:
+            await asyncio.get_running_loop().create_future()  # referenced by nothing else
+        finally:
+            exited.set()
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    policy = Policy(images=frozenset({"testmind-sandbox"}), mount_roots=("/sandbox",))
+    server = await serve(policy, daemon_that_never_answers, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    writer.write(b"HEAD /_ping HTTP/1.1\r\n\r\n")
+    await writer.drain()
+    await asyncio.wait_for(entered.wait(), 5)
+    reset(writer)  # the client vanishes (e.g. a killed Docker CLI)
+    await asyncio.sleep(0.05)
+    gc.collect()
+    assert not exited.is_set()  # still waiting, not collected
+    server.close()
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.wait_for(exited.wait(), 5)
+    del reader
 
 
 async def test_read_head_refuses_a_head_without_an_end() -> None:

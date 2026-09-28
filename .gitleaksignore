@@ -1,0 +1,5 @@
+# Findings gitleaks may ignore, by exact fingerprint (commit:file:rule:line). Only fake,
+# deliberately secret-shaped test fixtures belong here: the redaction tests must show that
+# values looking like credentials are removed from LLM prompts.
+c43623a9d0de4c4e595ca22688e97252dd290ca6:tests/unit/ai_engine/test_redaction.py:generic-api-key:50
+c43623a9d0de4c4e595ca22688e97252dd290ca6:tests/unit/ai_engine/test_redaction.py:generic-api-key:58

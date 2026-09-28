@@ -281,4 +281,13 @@ def unix_opener(socket_path: str) -> Opener:
 
 async def serve(policy: Policy, docker: Opener, host: str, port: int) -> Any:
     proxy = SandboxProxy(policy, docker)
-    return await asyncio.start_server(proxy.handle, host, port, limit=MAX_HEAD)
+    # Python 3.11's server drops its reference to a connection's task once the client is
+    # gone, so a handler still relaying from Docker could be garbage-collected half-way.
+    running: set[asyncio.Task[None]] = set()
+
+    def connected(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        task = asyncio.create_task(proxy.handle(reader, writer))
+        running.add(task)
+        task.add_done_callback(running.discard)
+
+    return await asyncio.start_server(connected, host, port, limit=MAX_HEAD)

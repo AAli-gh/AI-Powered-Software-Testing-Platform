@@ -47,7 +47,7 @@ def test_private_keys_and_url_passwords_are_removed() -> None:
     [
         ('password = "hunter22"', "hunter22"),
         ("DB_PASSWORD='letmein!'", "letmein!"),
-        ('config = {"api_key": "abcd1234efgh"}', "abcd1234efgh"),
+        ('config = {"api_key": "abcd1234efgh"}', "abcd1234efgh"),  # gitleaks:allow (fake fixture)
         ("client_secret: 'zzzz-yyyy'", "zzzz-yyyy"),
         ("token=b'raw-bytes-value'", "raw-bytes-value"),
         ('assert user.access_key == "AK-local-123"', "AK-local-123"),
@@ -55,7 +55,7 @@ def test_private_keys_and_url_passwords_are_removed() -> None:
         # failure analysis sends locals as `name = repr(value)`
         ("password = 'p@ss w0rd', user = 'ann'", "p@ss w0rd"),
         ("SECRET_KEY=django-insecure-abc123", "django-insecure-abc123"),
-        ("export GITHUB_TOKEN=abcdef0123456789", "abcdef0123456789"),
+        ("export GITHUB_TOKEN=abcdef0123456789", "abcdef0123456789"),  # gitleaks:allow
         ("  STRIPE_API_KEY = rk_something_long", "rk_something_long"),
     ],
 )
