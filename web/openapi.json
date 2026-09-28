@@ -7638,7 +7638,7 @@
   "info": {
     "summary": "AI-powered software testing platform",
     "title": "TestMind API",
-    "version": "0.1.0"
+    "version": "1.0.0"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -1,6 +1,6 @@
 [project]
 name = "testmind"
-version = "0.1.0"
+version = "1.0.0"
 description = "AI-powered software testing platform: repository analysis, test generation, execution, coverage, failure/regression analysis and mutation testing."
 readme = "README.md"
 license = "MIT"

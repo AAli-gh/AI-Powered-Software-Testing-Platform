@@ -120,6 +120,7 @@ with TestMind's profile they fail with `EPERM`, and with Docker's default two of
 - `TESTMIND_API_TOKEN` (at least 32 characters, e.g. `openssl rand -hex 32`) protects all of
   `/api/`.
 - The GitHub webhook authenticates with its HMAC signature instead.
+- `/metrics` needs the token too; Prometheus sends it ([monitoring.md](monitoring.md)).
 - `/health`, `/ready` and the API reference stay open.
 - `TESTMIND_ENV=production` refuses to start without a token.
 - Development may run without one, and then the API must stay on localhost.

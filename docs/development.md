@@ -17,10 +17,12 @@ make check            # lint + type check + tests: the same gates as CI
 ## Running the stack
 
 ```bash
-make up       # build images, start everything, wait until healthy
-make smoke    # end-to-end check
-make logs     # follow logs
-make down     # stop (data volumes are kept; `docker compose down -v` removes them)
+make up             # build images, start everything, wait until healthy
+make up-sandbox     # the same, with the sandbox proxy: tests really run (security.md)
+make up-monitoring  # the same, with Prometheus on 127.0.0.1:9090 (monitoring.md)
+make smoke          # end-to-end check
+make logs           # follow logs
+make down           # stop (data volumes are kept; `docker compose down -v` removes them)
 ```
 
 ### Running the API or worker outside Docker
@@ -36,7 +38,8 @@ uv run celery -A testmind.workers.main worker --loglevel=INFO   # or: make worke
 
 A worker on the host can use the local Docker daemon, so test executions and AI test
 validation run in the real sandbox (build it once with `make sandbox-image`). The worker
-inside docker-compose cannot, by design (see [test-engine.md](test-engine.md)).
+inside docker-compose never gets the socket: with `make up-sandbox` it reaches Docker through
+the policy-enforcing sandbox proxy ([test-engine.md](test-engine.md#running-the-sandbox-from-the-worker)).
 
 ## Database migrations
 
@@ -57,7 +60,7 @@ that every migration can be downgraded.
   [architecture.md](architecture.md#dependency-rule).
 - **Errors:** raise a `core.errors.AppError` subclass from services and map it to HTTP in
   `api/errors.py`. Never raise `HTTPException` from services.
-- **Typing:** `mypy --strict` must pass for `src`, `tests` and `migrations`.
+- **Typing:** `mypy --strict` must pass for `src`, `tests`, `migrations` and `scripts`.
 - **Style:** `ruff format` and `ruff check` (config in `pyproject.toml`). Absolute imports only.
 - **Logging:** `get_logger(__name__)` with event-style messages and key-value context
   (`logger.info("run_started", run_id=...)`). Never log secrets or connection URLs.

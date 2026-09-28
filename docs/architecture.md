@@ -1,7 +1,7 @@
 # Architecture
 
-This document describes the architecture **as implemented** (Phase 1) and how later phases fit
-into it. Decisions and their trade-offs are recorded in [ADRs](adr/).
+This document describes the architecture as implemented. Decisions and their trade-offs are
+recorded in [ADRs](adr/).
 
 ## Runtime components
 
@@ -25,16 +25,23 @@ flowchart LR
     worker --> pg
     repos[/host repos dir<br/>mounted read-only at /repos/] --- api
     repos --- worker
+    worker -. sandbox overlay .-> proxy[sandbox-proxy] -.-> docker[(Docker daemon)]
+    prometheus[prometheus<br/>monitoring overlay] -. scrape .-> api
+    prometheus -. scrape .-> worker
 ```
+
+The dotted parts are opt-in overlays: `docker-compose.sandbox.yml` (tests really run) and
+`docker-compose.monitoring.yml` (Prometheus and alerts).
 
 | Service | Image target | Role |
 |---|---|---|
-| `postgres` | `postgres:16-alpine` | System of record: projects, runs (later: results, findings, reports) |
+| `postgres` | `postgres:16-alpine` | System of record: projects, every job and its reports |
 | `redis` | `redis:7-alpine` | Celery broker |
 | `migrate` | `api` | Applies Alembic migrations, then exits. `api` and `worker` start only after it succeeds |
 | `api` | `api` | HTTP API. Never does heavy work in the request path |
 | `web` | `docker/web.Dockerfile` | The dashboard's static files, and a same-origin proxy to the API ([dashboard.md](dashboard.md)) |
 | `worker` | `worker` | Executes queued jobs: analyses, AI test generation, test executions, mutation testing, regression and GitHub analyses |
+| `prometheus` | `prom/prometheus` | Only with `docker-compose.monitoring.yml`: scrapes the API and the worker, evaluates the alert rules ([monitoring.md](monitoring.md)) |
 | `sandbox-proxy` | `sandbox-proxy` | Only with `docker-compose.sandbox.yml`: the one holder of the Docker socket. The worker reaches Docker through it on an internal network, and it allows only locked-down sandbox containers and runner-image builds ([security.md](security.md#sandbox-proxy)) |
 
 ## Code layout
@@ -43,27 +50,31 @@ A single Python package, `src/testmind` ([ADR-0002](adr/0002-single-package-src-
 
 ```text
 src/testmind/
-├── core/          config (pydantic-settings), structured logging, domain exceptions
-├── domain/        pure logic: enums, run state machine (no I/O, no frameworks)
-├── db/            SQLAlchemy base (naming conventions), models, engine/session factories
-├── schemas/       Pydantic API contracts (request/response bodies, error model, pagination)
-├── repositories/  data access. The only place that builds SQL
-├── services/      use cases shared by API and worker (+ the TaskDispatcher port)
-├── analyzers/     deterministic analysers: repository/ (repository-analyzer.md), code/ (code-analyzer.md)
-├── ai_engine/     LLM interface + providers, versioned prompts, test_generator/ (ai-engine.md)
-├── sandbox/       isolated execution of untrusted code (Docker), runner images
-├── test_engine/   test-suite runner and structured reports (test-engine.md)
-├── github/        GitHub App client, webhooks, pull request analysis and its markdown (github.md)
-├── vcs/           read-only git (dulwich), tarball extraction, snapshots (regression.md, github.md)
-├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
-└── workers/       Celery app, tasks, Celery-backed TaskDispatcher
+├── core/            config (pydantic-settings), structured logging, metrics, domain exceptions
+├── domain/          pure logic: enums, run state machine (no I/O, no frameworks)
+├── db/              SQLAlchemy base (naming conventions), models, engine/session factories
+├── schemas/         Pydantic API contracts (request/response bodies, error model, pagination)
+├── repositories/    data access. The only place that builds SQL
+├── services/        use cases shared by API and worker (+ the TaskDispatcher port)
+├── analyzers/       deterministic analysers: repository/ (repository-analyzer.md), code/ (code-analyzer.md)
+├── ai_engine/       LLM interface + providers, versioned prompts, test_generator/ (ai-engine.md)
+├── sandbox/         isolated execution of untrusted code (Docker), runner images, seccomp profile
+├── sandbox_proxy/   the policy-enforcing Docker API proxy (security.md#sandbox-proxy)
+├── test_engine/     test-suite runner and structured reports (test-engine.md)
+├── coverage_engine/ coverage reports mapped onto functions, gaps (coverage.md)
+├── failure_engine/  failure capture, grouping, evidence, AI hypotheses (failure-analysis.md)
+├── regression/      AST diff, test selection, comparison (regression.md)
+├── mutation_engine/ mutant generation, the mutation run, AI tests for survivors (mutation.md)
+├── api_engine/      endpoint discovery, API coverage, probes, AI API tests (api-testing.md)
+├── github/          GitHub App client, webhooks, pull request analysis and its markdown (github.md)
+├── vcs/             read-only git (dulwich), tarball extraction, snapshots (regression.md, github.md)
+├── api/             FastAPI app factory, routes, dependencies, error handlers, middleware
+└── workers/         Celery app, tasks, Celery-backed TaskDispatcher, worker metrics
 ```
 
 The dashboard is a separate TypeScript application in `web/` (React, Vite). Its API types
 are generated from the backend's OpenAPI schema ([ADR-0013](adr/0013-dashboard-spa-typed-from-openapi.md)).
 
-Later phases add sibling packages when they are implemented. Empty placeholder packages are deliberately
-not created ahead of time.
 
 ### Dependency rule
 
@@ -288,6 +299,7 @@ erDiagram
 - `core/logging.py`: structlog and the standard library (uvicorn, Celery, SQLAlchemy) share one
   processor chain, so all output is JSON lines in containers. The API middleware binds a
   `request_id` to every log line of a request and returns it as `X-Request-ID`.
+- `core/metrics.py`: the Prometheus metrics of the API and the worker ([monitoring.md](monitoring.md)).
 
 ## Known limitations (tracked, not hidden)
 

@@ -18,3 +18,4 @@ Short records of significant decisions: the context, the decision and its conseq
 | [0012](0012-github-app-with-tarball-snapshots.md) | Integrate as a GitHub App, and read commits as tarball snapshots | Accepted |
 | [0013](0013-dashboard-spa-typed-from-openapi.md) | A single-page dashboard, typed from the API's OpenAPI schema, on one origin | Accepted |
 | [0014](0014-policy-enforcing-docker-proxy.md) | The containerised worker reaches Docker only through a policy-enforcing proxy | Accepted |
+| [0015](0015-prometheus-metrics-state-read-at-scrape.md) | Prometheus metrics, with the platform's state read at scrape time | Accepted |

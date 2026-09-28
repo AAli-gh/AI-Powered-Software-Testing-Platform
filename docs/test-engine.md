@@ -124,6 +124,6 @@ containers and runner-image builds ([ADR-0014](adr/0014-policy-enforcing-docker-
 
 Jobs are picked up only while `queued`, so a re-delivered message never runs a job twice. If
 a worker dies after moving a job to `running`, the `worker_ready` signal handler marks every
-analysis run, test generation and test execution that has been `running` for longer than
-the Celery task time limit as `failed` ("The worker stopped while this job was running").
+job of every kind that has been `running` for longer than the Celery task time limit as
+`failed` ("The worker stopped while this job was running").
 Celery would have killed such a task anyway.

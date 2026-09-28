@@ -13,22 +13,15 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–13 of 14 are complete: the platform foundation, the deterministic
-> repository and code analyzers, AI test generation with sandboxed validation, the
-> sandboxed test runner, coverage analysis with coverage-guided test generation, failure
-> analysis (deterministic grouping plus evidence-checked AI root causes), regression
-> analysis between git commits with test selection, mutation testing with sandbox-verified
-> AI tests for surviving mutants, and API testing (endpoint discovery, API coverage,
-> deterministic probes, sandbox-verified AI API tests) with minimal Playwright support, and a
-> GitHub App integration (signed webhooks, pull request analysis posted as a check run and a
-> comment, issue suggestions, repository import), tested against a local fake of GitHub, a
-> web dashboard (React + TypeScript) over all of it, and security hardening (the containerised
-> worker runs the sandbox through a policy-enforcing Docker proxy, a stricter seccomp
-> profile, API tokens, rate limiting, secrets redacted from LLM prompts).**
-> The AI stages have been verified end to end with a scripted model. A live call to the
-> Anthropic API has not been run yet because no API key was available (see
-> [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
-> planned.
+> **Status: version 1.0.0. All 14 phases of the [roadmap](#roadmap) are complete.**
+> Repository and code analysis, AI test generation with sandboxed validation, sandboxed test
+> execution, coverage, failure and regression analysis, mutation testing, API testing, a
+> GitHub App, a web dashboard, security hardening, and monitoring with measured performance.
+> What has **not** been verified is stated plainly:
+> - The AI stages were verified end to end with a scripted model. A live call to the
+>   Anthropic API has not been run, because no API key was available
+>   ([docs/ai-engine.md](docs/ai-engine.md)).
+> - The GitHub App was tested against a local fake of GitHub, not against github.com.
 
 ![The dashboard's overview, with real results of the example repositories](docs/images/dashboard-overview.png)
 
@@ -74,6 +67,9 @@ flowchart LR
     worker -->|status + results| pg
     worker -->|read-only| repos[/Repositories root/]
     api -->|validate path| repos
+    worker -->|Docker API| proxy[Sandbox proxy] -->|policy-checked| sandbox[[Sandbox containers]]
+    prometheus[(Prometheus)] -.->|scrape| api
+    prometheus -.->|scrape| worker
 ```
 
 The backend follows a layered (clean) architecture. Dependencies point only downwards, and the API
@@ -236,8 +232,25 @@ Everything listed here is implemented and tested.
   | ![Project page](docs/images/dashboard-project.png) | ![API coverage](docs/images/dashboard-api-coverage.png) |
 - **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
   starts.
+- **Monitoring** ([details](docs/monitoring.md)): Prometheus metrics from the API and the
+  worker.
+  - HTTP requests by route template.
+  - Jobs by status, the oldest waiting and running job, and the queue length, read from the
+    database and Redis at scrape time.
+  - Worker tasks by outcome, sandbox runs by result, LLM requests and tokens.
+  - Ten alert rules with `promtool` unit tests, and a compose overlay with Prometheus
+    (`make up-monitoring`).
+  - CI checks after the smoke test that both targets are scraped and the jobs were recorded.
+- **Measured performance** ([details](docs/performance.md)): a load-test tool, and on 5,000
+  executions (p50, 10 requests in flight):
+  - the platform overview answers in **0.19 s instead of 11.4 s**;
+  - a run's execution list answers in **63 ms instead of 318 ms**.
+
+  Both root causes were found with `EXPLAIN ANALYZE` and fixed in SQL.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
   structured JSON logs with request-ID correlation, uniform error responses and OpenAPI docs.
+  A [deployment guide](docs/deployment.md) covers TLS, backups (restore checked), upgrades and
+  sizing.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
@@ -255,7 +268,7 @@ Everything listed here is implemented and tested.
 | API | FastAPI, Pydantic v2 |
 | Persistence | PostgreSQL 16, SQLAlchemy 2 (async, asyncpg), Alembic |
 | Background jobs | Celery, Redis |
-| Observability | structlog (JSON), request IDs, health/readiness probes |
+| Observability | Prometheus (`prometheus_client`, alert rules tested with `promtool`), structlog (JSON), request IDs, health/readiness probes |
 | Quality | pytest, pytest-asyncio, coverage.py, ruff, mypy (strict) |
 | AI | Anthropic SDK (Claude), versioned prompt files, provider-neutral interface |
 | Version control | dulwich (pure-Python git, read-only object access) |
@@ -264,7 +277,8 @@ Everything listed here is implemented and tested.
 | Coverage | coverage.py 7.16 + pytest-cov in the sandbox image |
 | Mutation testing | Own AST mutant generator + an in-sandbox driver (no third-party mutation tool) |
 | API / browser testing | Own endpoint discovery + an in-sandbox pytest plugin; Playwright 1.56 with headless Chromium (browser image) |
-| Planned | LLM providers (pluggable), GitHub API, React dashboard |
+| Dashboard | React 19, TypeScript, Vite, TanStack Query, openapi-typescript, Vitest, Playwright |
+| GitHub | A GitHub App (JWT via PyJWT, httpx); tarball snapshots |
 
 ## Quick start (Docker)
 
@@ -286,8 +300,11 @@ interactive docs are at <http://127.0.0.1:8000/docs>.
 `sandbox_unavailable`. To run tests for real in the sandbox, use `make up-sandbox` instead.
 It builds the sandbox image and starts the same stack plus the
 [sandbox proxy](docs/security.md#sandbox-proxy), the only container with the Docker socket.
+`make up-monitoring` adds Prometheus with the alert rules on <http://127.0.0.1:9090>.
+
 Set `TESTMIND_API_TOKEN` (32+ characters) in `.env` before exposing anything beyond
-localhost.
+localhost. For a deployment others use (TLS, backups, upgrades), follow
+[docs/deployment.md](docs/deployment.md).
 
 ## Configuration
 
@@ -307,6 +324,8 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_REPOS_ROOT` | — | Directory that projects must live in (`/repos` in containers) |
 | `TESTMIND_HOST_REPOS_DIR` | `./examples` | Host directory mounted read-only at `/repos` |
 | `TESTMIND_CELERY_TASK_TIME_LIMIT_SECONDS` | `3600` | Hard time limit per job |
+| `TESTMIND_WORKER_METRICS_PORT` | `0` (`9100` in compose) | Port of the worker's Prometheus metrics ([docs/monitoring.md](docs/monitoring.md)) |
+| `TESTMIND_PROMETHEUS_PORT` / `…_RETENTION` | `9090` / `15d` | Prometheus of `make up-monitoring`, on `127.0.0.1` |
 | `TESTMIND_COVERAGE_THRESHOLD` | `80` | Functions below this coverage are reported as gaps |
 | `TESTMIND_FAILURE_ANALYSIS_MAX_GROUPS` | `10` | Failure groups the LLM explains per requested analysis |
 | `TESTMIND_MUTATION_MAX_MUTANTS` | `200` | Server cap on mutants per mutation run |
@@ -324,7 +343,8 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 ## Usage
 
 Register one of the bundled [example repositories](examples/), queue a run and read the
-analysis:
+analysis. With `TESTMIND_API_TOKEN` set, add `-H "Authorization: Bearer $TESTMIND_API_TOKEN"`
+to every request.
 
 ```bash
 curl -s -X POST localhost:8000/api/v1/projects \
@@ -386,6 +406,7 @@ Errors always have the same shape:
 |---|---|---|
 | `GET` | `/health` | Liveness (no dependency checks) |
 | `GET` | `/ready` | Readiness: PostgreSQL + Redis (`503` if either is down) |
+| `GET` | `/metrics` | Prometheus metrics (needs the token when one is set) |
 | `POST` | `/api/v1/projects` | Register a project (`201`, `409` duplicate name, `422` invalid source) |
 | `GET` | `/api/v1/projects` | List projects (`limit` ≤ 100, `offset`) |
 | `GET` | `/api/v1/projects/{id}` | Get a project |
@@ -436,6 +457,7 @@ make sandbox-image   # Docker image in which generated tests are executed
 make browser-image   # optional: the same plus a headless Chromium (Playwright tests)
 make check           # ruff + mypy --strict + full test suite with coverage (gate: 85 %)
 make web-check       # dashboard: eslint, prettier, tsc, Vitest with coverage, build
+make monitoring-check  # Prometheus configuration and alert rule unit tests (promtool)
 make openapi         # after an API change: regenerate web/openapi.json and the TypeScript types
 make help            # all targets
 ```
@@ -462,8 +484,10 @@ The real Celery path is covered end to end. See [docs/testing.md](docs/testing.m
 ```text
 lint (ruff) ─┐
 typecheck ───┤
-tests ───────┼─► docker: build images → compose up (healthy) → smoke test → dashboard e2e (Playwright)
-web ─────────┘     tests: Python 3.11 + 3.12, real Postgres/Redis, coverage gate
+tests ───────┼─► docker: promtool checks → build images → compose up with the sandbox proxy and
+web ─────────┘     Prometheus (healthy) → smoke test (tests really run in the sandbox, with an
+                   API token) → monitoring check → dashboard e2e (Playwright)
+                   tests: Python 3.11 + 3.12, real Postgres/Redis, coverage gate
                    web: OpenAPI/types drift check, eslint, prettier, tsc, Vitest, build, npm audit
 security: bandit · pip-audit (locked deps) · gitleaks (full git history)
 ```
@@ -540,7 +564,7 @@ Still open:
 | 11 | GitHub integration: import, PR analysis, comments, issue suggestions | ✅ Done (tested against a local fake of GitHub; not yet against github.com) |
 | 12 | Dashboard: overview, tests, coverage, findings, regressions, mutation | ✅ Done |
 | 13 | Security hardening: sandboxing, limits, network restrictions | ✅ Done (sandbox proxy, seccomp, API token, rate limiting, prompt redaction; no users or gVisor) |
-| 14 | Production quality: monitoring, performance, complete docs | Planned |
+| 14 | Production quality: monitoring, performance, complete docs | ✅ Done (Prometheus metrics and tested alerts, two slow paths measured and fixed, deployment guide) |
 
 ## Documentation
 
@@ -560,6 +584,10 @@ Still open:
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions
 - [Security](docs/security.md): threat model and controls
+- [Monitoring](docs/monitoring.md): metrics, alerts, how they are tested
+- [Performance](docs/performance.md): method, measurements, what was fixed and why
+- [Deployment](docs/deployment.md): configuration, TLS, backups, upgrades, sizing
+- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## License

@@ -7,7 +7,8 @@ interactive docs at `/docs` (Swagger UI) and `/redoc`.
 
 - **Authentication:** with `TESTMIND_API_TOKEN` set (required in production), every `/api/`
   request needs `Authorization: Bearer <token>`. The GitHub webhook authenticates with its own
-  signature instead. `/health/*`, `/openapi.json`, `/docs` and `/redoc` stay open.
+  signature instead. `/metrics` needs the token too. `/health`, `/ready`, `/openapi.json`,
+  `/docs` and `/redoc` stay open.
 - **Rate limiting:** state-changing requests are limited per client and minute
   (`TESTMIND_RATE_LIMIT_PER_MINUTE`, default 60; `0` disables it).
 - **Content type:** JSON everywhere. Unknown fields in request bodies are rejected (`422`).
@@ -56,12 +57,13 @@ Every non-2xx response has this shape:
 
 ## Endpoints
 
-### Health
+### Health and monitoring
 
 | Method | Path | Response |
 |---|---|---|
-| `GET` | `/health` | `200 {"status": "ok", "version": "0.1.0"}`. Process liveness only |
+| `GET` | `/health` | `200 {"status": "ok", "version": "1.0.0"}`. Process liveness only |
 | `GET` | `/ready` | `200 {"status": "ready", "checks": {"database": "ok", "redis": "ok"}}` or `503` with `"not_ready"` and the failing check(s) marked `"unavailable"` |
+| `GET` | `/metrics` | Prometheus metrics (text format). Needs the API token when one is set; not in the OpenAPI schema ([monitoring.md](monitoring.md)) |
 
 ### Projects
 
