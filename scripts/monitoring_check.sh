@@ -18,11 +18,17 @@ result = json.load(sys.stdin)["data"]["result"]
 print(result[0]["value"][1] if result else "")'
 }
 
-# Scrapes happen every 15 s: wait until both targets are up and the tasks have been scraped.
+expect_sandbox="${TESTMIND_EXPECT_SANDBOX:-0}"
+# Scrapes happen every 15 s: wait until both targets are up and the smoke test's work has been
+# scraped. Tasks and sandbox runs can appear in different scrapes, so wait for both.
 for _ in $(seq 1 30); do
   up=$(query 'sum(up{job=~"testmind-api|testmind-worker"})')
   tasks=$(query 'sum(testmind_tasks_total{outcome="succeeded"})')
-  [[ "$up" == "2" && -n "$tasks" && "$tasks" != "0" ]] && break
+  runs=$(query 'sum(testmind_sandbox_runs_total)')
+  if [[ "$up" == "2" && -n "$tasks" && "$tasks" != "0" ]] &&
+     [[ "$expect_sandbox" != "1" || (-n "$runs" && "$runs" != "0") ]]; then
+    break
+  fi
   sleep 2
 done
 [[ "$up" == "2" ]] || fail "targets up: ${up:-none} of 2 (is the API token passed to Prometheus?)"
@@ -30,8 +36,7 @@ echo "→ both targets are scraped (the API with its token)"
 
 [[ -n "$tasks" && "$tasks" != "0" ]] || fail "no succeeded task in the worker's metrics"
 echo "  $tasks worker tasks succeeded"
-runs=$(query 'sum(testmind_sandbox_runs_total)')
-if [[ "${TESTMIND_EXPECT_SANDBOX:-0}" == "1" ]]; then
+if [[ "$expect_sandbox" == "1" ]]; then
   [[ -n "$runs" && "$runs" != "0" ]] || fail "no sandbox run in the worker's metrics"
 fi
 echo "  ${runs:-0} sandbox runs"
