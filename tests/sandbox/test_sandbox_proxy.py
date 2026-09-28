@@ -4,6 +4,7 @@ unchanged, and what a compromised worker would try is refused before Docker sees
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 import tempfile
@@ -15,10 +16,10 @@ from pathlib import Path
 import pytest
 
 from testmind.analyzers.repository.models import Dependency, DependencyGroup
-from testmind.sandbox.docker_sandbox import DockerSandbox
+from testmind.sandbox.docker_sandbox import SECCOMP_PROFILE, DockerSandbox
 from testmind.sandbox.models import Outcome
 from testmind.sandbox.runner_image import IMAGE_REPOSITORY, RunnerImageBuilder
-from testmind.sandbox_proxy.policy import Policy
+from testmind.sandbox_proxy.__main__ import policy_from
 from testmind.sandbox_proxy.server import serve, unix_opener
 from tests.sandbox.conftest import SANDBOX_IMAGE
 from tests.unit.analyzers.helpers import make_repo
@@ -28,11 +29,10 @@ TMP = os.path.realpath(tempfile.gettempdir())
 
 @pytest.fixture
 def proxy(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
-    """The proxy on a free port, and the Docker CLI of this process pointed at it."""
-    policy = Policy(
-        images=frozenset({"testmind-sandbox", "testmind-sandbox-browser", IMAGE_REPOSITORY}),
-        base_images=frozenset({SANDBOX_IMAGE}),
-        mount_roots=(TMP,),
+    """The proxy on a free port, configured as in production, and the Docker CLI of this
+    process pointed at it."""
+    policy = policy_from(
+        {"TESTMIND_PROXY_MOUNT_ROOTS": TMP, "TESTMIND_PROXY_BASE_IMAGES": SANDBOX_IMAGE}
     )
     loop = asyncio.new_event_loop()
     socket = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
@@ -46,6 +46,8 @@ def proxy(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     loop.call_soon_threadsafe(server.close)
     loop.call_soon_threadsafe(loop.stop)
     thread.join(timeout=10)
+    loop.run_until_complete(server.wait_closed())
+    loop.close()
 
 
 def direct(*args: str) -> subprocess.CompletedProcess[str]:
@@ -145,9 +147,6 @@ def test_what_a_compromised_worker_would_try_is_refused(proxy: str, tmp_path: Pa
             f"type=bind,source={link},target=/workspace/etc,readonly", SANDBOX_IMAGE, "true",
         ],
         "root": [*RUN, "--name", name, "--user", "0", SANDBOX_IMAGE, "true"],
-        "seccomp off": [
-            *RUN, "--name", name, "--security-opt", "seccomp=unconfined", SANDBOX_IMAGE, "true",
-        ],
         "other image": [*RUN, "--name", name, "busybox:latest", "true"],
         "pull": ["pull", "alpine:3"],
         "list": ["ps", "--all"],
@@ -160,6 +159,26 @@ def test_what_a_compromised_worker_would_try_is_refused(proxy: str, tmp_path: Pa
     # Nothing was created behind the proxy's back.
     assert direct("ps", "--all", "--filter", f"name={name}", "--quiet").stdout.strip() == ""
     assert proxy.startswith("tcp://127.0.0.1:")
+
+
+@pytest.mark.usefixtures("proxy")
+def test_a_request_to_turn_seccomp_off_gets_testminds_profile() -> None:
+    name = f"testmind-seccomp-{uuid.uuid4().hex[:8]}"
+    kept = [arg for arg in RUN if arg != "--rm"]  # kept, to inspect it afterwards
+    args = [*kept, "--name", name, "--security-opt", "seccomp=unconfined", SANDBOX_IMAGE, "true"]
+    try:
+        result = via_proxy(*args)
+        assert result.returncode == 0, result.stderr
+        inspected = direct("inspect", "--format", "{{json .HostConfig.SecurityOpt}}", name)
+        options = json.loads(inspected.stdout)
+        assert "seccomp=unconfined" not in options
+        seccomp = [o for o in options if o.startswith("seccomp=")]
+        assert len(seccomp) == 1
+        assert json.loads(seccomp[0].removeprefix("seccomp=")) == json.loads(
+            SECCOMP_PROFILE.read_text()
+        )
+    finally:
+        direct("rm", "--force", name)
 
 
 def test_containers_the_proxy_did_not_create_are_out_of_reach(proxy: str) -> None:
