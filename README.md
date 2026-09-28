@@ -254,7 +254,7 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 1277 Python tests with 100 % line and branch coverage in CI, plus 65
+- **Test suite**: 1304 Python tests with 100 % line and branch coverage in CI, plus 65
   dashboard component tests and 3 browser tests through the real stack. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
