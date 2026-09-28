@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Row, Select, func, select
+from sqlalchemy import Row, Select, String, func, literal, select, union_all
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +42,15 @@ JOB_MODELS: tuple[Any, ...] = (
     GitHubPullAnalysis,
     GitHubImport,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class JobStatistics:
+    kind: str  # the job's table name
+    status: RunStatus
+    count: int
+    oldest_created: datetime
+    oldest_started: datetime | None  # None while every job with this status is queued
 
 
 def _execution_columns() -> Select[Any]:
@@ -76,14 +87,41 @@ class OverviewRepository:
         result = await self._session.execute(select(func.count()).select_from(Project))
         return result.scalar_one()
 
-    async def status_counts(
-        self, model: Any, *, project_id: uuid.UUID | None = None
-    ) -> dict[RunStatus, int]:
-        query = select(model.status, func.count()).group_by(model.status)
-        if project_id is not None:
-            query = query.where(model.project_id == project_id)
+    async def status_counts(self, model: Any, *, project_id: uuid.UUID) -> dict[RunStatus, int]:
+        query = (
+            select(model.status, func.count())
+            .where(model.project_id == project_id)
+            .group_by(model.status)
+        )
         rows = await self._session.execute(query)
         return {row[0]: row[1] for row in rows}
+
+    async def job_statistics(self) -> list[JobStatistics]:
+        """Per job kind and status: how many, and the oldest creation and start times.
+
+        One round trip for every job table (UNION ALL), for the overview and for metrics.
+        """
+        parts = [
+            select(
+                literal(model.__tablename__).label("kind"),
+                model.status.cast(String).label("status"),
+                func.count().label("jobs"),
+                func.min(model.created_at).label("oldest_created"),
+                func.min(model.started_at).label("oldest_started"),
+            ).group_by(model.status)
+            for model in JOB_MODELS
+        ]
+        rows = await self._session.execute(union_all(*parts))
+        return [
+            JobStatistics(
+                kind=row.kind,
+                status=RunStatus(row.status),
+                count=row.jobs,
+                oldest_created=row.oldest_created,
+                oldest_started=row.oldest_started,
+            )
+            for row in rows
+        ]
 
     # --------------------------------------------------------------------------- trends
     async def executions(

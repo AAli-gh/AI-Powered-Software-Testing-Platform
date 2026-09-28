@@ -115,7 +115,10 @@ services:
       context: .
       target: worker
     image: testmind-worker:local
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      # Prometheus metrics of the worker (docs/monitoring.md), on the backend network only.
+      TESTMIND_WORKER_METRICS_PORT: "9100"
     <<: *app-security
     volumes:
       - ${TESTMIND_HOST_REPOS_DIR:-./examples}:/repos:ro

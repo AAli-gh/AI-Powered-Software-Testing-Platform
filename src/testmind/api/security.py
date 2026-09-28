@@ -1,9 +1,10 @@
 """API authentication and rate limiting (pure ASGI middleware).
 
 Authentication: with TESTMIND_API_TOKEN set, every /api/ request needs
-`Authorization: Bearer <token>`, compared in constant time. The GitHub webhook is the one
-exception: it authenticates with its own HMAC signature. Liveness, readiness and the API
-reference stay open. Production refuses to start without a token (core/config.py).
+`Authorization: Bearer <token>`, compared in constant time, and so does /metrics (Prometheus
+sends it as its bearer credentials). The GitHub webhook is the one exception: it authenticates
+with its own HMAC signature. Liveness, readiness and the API reference stay open. Production
+refuses to start without a token (core/config.py).
 
 Rate limiting: requests that change state (POST, PUT, PATCH, DELETE under /api/) are counted
 per client and minute in Redis (fixed window, shared by every API process). Beyond the limit
@@ -29,13 +30,14 @@ from testmind.core.logging import get_logger
 logger = get_logger(__name__)
 
 WEBHOOK = "/api/v1/github/webhook"
+METRICS = "/metrics"
 MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 WINDOW_SECONDS = 60
 
 
 def _protected(scope: Scope) -> bool:
     path: str = scope["path"]
-    return path.startswith("/api/") and path != WEBHOOK
+    return (path.startswith("/api/") and path != WEBHOOK) or path == METRICS
 
 
 class TokenAuthMiddleware:

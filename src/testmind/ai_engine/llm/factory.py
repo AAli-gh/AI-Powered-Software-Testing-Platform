@@ -4,6 +4,7 @@ import os
 
 from testmind.ai_engine.llm.anthropic_provider import AnthropicProvider
 from testmind.ai_engine.llm.base import LLMNotConfiguredError, LLMProvider
+from testmind.ai_engine.llm.metering import MeteredProvider
 from testmind.ai_engine.llm.redaction import RedactingProvider
 from testmind.core.config import Settings
 
@@ -23,7 +24,10 @@ def create_provider(settings: Settings) -> LLMProvider:
             "No LLM provider is configured: set TESTMIND_LLM_PROVIDER=anthropic and "
             "ANTHROPIC_API_KEY (see .env.example)"
         )
-    # Every prompt is redacted before it leaves (redaction.py).
-    return RedactingProvider(
-        AnthropicProvider.from_environment(settings.llm_model, settings.llm_timeout_seconds)
+    # Every prompt is redacted before it leaves (redaction.py), and every call is counted
+    # (metering.py).
+    return MeteredProvider(
+        RedactingProvider(
+            AnthropicProvider.from_environment(settings.llm_model, settings.llm_timeout_seconds)
+        )
     )

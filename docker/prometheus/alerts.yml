@@ -1,0 +1,97 @@
+# Alerts for TestMind (docs/monitoring.md#alerts). Unit tests: alerts.test.yml
+# (promtool test rules), run in CI.
+groups:
+  - name: testmind
+    rules:
+      - alert: TestMindApiDown
+        expr: up{job="testmind-api"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: The TestMind API cannot be scraped
+          description: Prometheus has not reached {{ $labels.instance }} for 2 minutes.
+
+      - alert: TestMindWorkerDown
+        expr: up{job="testmind-worker"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: The TestMind worker cannot be scraped
+          description: No job is being executed while the worker is down.
+
+      - alert: TestMindDependencyDown
+        expr: testmind_dependency_up == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "The API cannot reach {{ $labels.dependency }}"
+          description: The API's readiness fails and new jobs cannot be recorded or queued.
+
+      - alert: TestMindJobsWaiting
+        expr: testmind_oldest_job_age_seconds{status="queued"} > 900
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Jobs have been waiting for more than 15 minutes
+          description: >-
+            The oldest queued job is {{ $value | humanizeDuration }} old: the worker is down,
+            busy with long jobs, or the queue lost the message.
+
+      - alert: TestMindJobStuck
+        # Longer than the task time limit (TESTMIND_CELERY_TASK_TIME_LIMIT_SECONDS, 3600 by
+        # default) plus a margin: the worker that ran it has probably died.
+        expr: testmind_oldest_job_age_seconds{status="running"} > 3900
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: A job has been running longer than any task may run
+          description: >-
+            The oldest running job started {{ $value | humanizeDuration }} ago. Restarting the
+            worker fails orphaned jobs.
+
+      - alert: TestMindApiErrors
+        expr: >-
+          sum(rate(testmind_http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(testmind_http_requests_total[5m])) > 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 5 % of API requests fail with a server error
+          description: "{{ $value | humanizePercentage }} of requests answered 5xx."
+
+      - alert: TestMindApiSlow
+        expr: >-
+          histogram_quantile(0.95, sum by (le) (
+            rate(testmind_http_request_duration_seconds_bucket{route!="/metrics"}[5m])
+          )) > 1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: The API's 95th percentile latency is above 1 second
+          description: "p95 latency is {{ $value | humanizeDuration }}."
+
+      - alert: TestMindTaskErrors
+        expr: sum by (task) (increase(testmind_tasks_total{outcome="error"}[15m])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Worker task {{ $labels.task }} raised an error"
+          description: >-
+            A task ended with an exception instead of recording a failed job. The worker's
+            logs have the traceback.
+
+      - alert: TestMindSandboxTimeouts
+        expr: sum(increase(testmind_sandbox_runs_total{result="timeout"}[1h])) > 3
+        labels: {severity: info}
+        annotations:
+          summary: Several sandbox runs hit their timeout in the last hour
+          description: Test suites may need a longer TESTMIND_SANDBOX_TIMEOUT_SECONDS.
+
+      - alert: TestMindLlmErrors
+        expr: >-
+          sum(rate(testmind_llm_requests_total{outcome="error"}[15m]))
+          / sum(rate(testmind_llm_requests_total[15m])) > 0.2
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 20 % of LLM requests fail
+          description: The provider is failing or the credentials are invalid.

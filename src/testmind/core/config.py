@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=60, ge=0, le=100_000)
 
     celery_task_time_limit_seconds: int = Field(default=3600, ge=10)
+    # Port on which the worker serves its Prometheus metrics (0: not served). Requires
+    # PROMETHEUS_MULTIPROC_DIR (docs/monitoring.md).
+    worker_metrics_port: int = Field(default=0, ge=0, le=65535)
 
     # --- AI test generation. The API key itself is NOT a TestMind setting: the Anthropic SDK
     # reads ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile) directly,

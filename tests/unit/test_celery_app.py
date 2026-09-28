@@ -80,3 +80,21 @@ def test_worker_entrypoint_builds_app_from_environment() -> None:
 
     main._configure_worker_logging()
     assert logging.getLogger().level == logging.WARNING
+
+
+@pytest.mark.usefixtures("worker_env")
+def test_worker_serves_metrics_only_when_a_port_is_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    from testmind.workers import metrics  # noqa: PLC0415
+
+    served: list[int] = []
+    monkeypatch.setattr(metrics, "serve", served.append)
+    main = importlib.import_module("testmind.workers.main")
+    main._serve_metrics()
+    assert served == []
+
+    sys.modules.pop("testmind.workers.main", None)
+    monkeypatch.setenv("TESTMIND_WORKER_METRICS_PORT", "9100")
+    get_settings.cache_clear()
+    main = importlib.import_module("testmind.workers.main")
+    main._serve_metrics()
+    assert served == [9100]

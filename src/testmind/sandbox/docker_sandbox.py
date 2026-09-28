@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from testmind.core.logging import get_logger
+from testmind.core.metrics import observe_sandbox
 from testmind.sandbox.junit import parse_junit
 from testmind.sandbox.models import SandboxResult, SandboxUnavailableError
 
@@ -152,6 +153,7 @@ class DockerSandbox:
         logger.info(
             "sandbox_finished", exit_code=exit_code, timed_out=timed_out, seconds=round(duration, 2)
         )
+        observe_sandbox("pytest", duration, exit_code, timed_out=timed_out)
         return SandboxResult(
             exit_code=exit_code,
             timed_out=timed_out,
@@ -294,10 +296,12 @@ class DockerSandbox:
                 timed_out, exit_code, output = True, -1, ""
                 self._kill(name)
             results = _read_capped(out_dir / "mutation.json", MAX_FAILURES_BYTES)
+        duration = time.monotonic() - started
+        observe_sandbox("mutation", duration, exit_code, timed_out=timed_out)
         return MutationResult(
             exit_code=exit_code,
             timed_out=timed_out,
-            duration_seconds=round(time.monotonic() - started, 3),
+            duration_seconds=round(duration, 3),
             results_json=results,
             output=output[-MAX_OUTPUT:],
         )

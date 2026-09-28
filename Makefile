@@ -5,6 +5,7 @@ COMPOSE      := docker compose
 COMPOSE_TEST := docker compose -f docker-compose.test.yml
 # The stack whose worker runs tests in the sandbox, through the sandbox proxy.
 SANDBOX_DIR  ?= $(CURDIR)/.sandbox
+PROMETHEUS_IMAGE := prom/prometheus:v3.5.0
 COMPOSE_SANDBOX := TESTMIND_SANDBOX_DIR=$(SANDBOX_DIR) \
 	TESTMIND_HOST_REPOS_DIR=$(abspath $(or $(TESTMIND_HOST_REPOS_DIR),examples)) \
 	docker compose -f docker-compose.yml -f docker-compose.sandbox.yml
@@ -84,6 +85,17 @@ up-sandbox: sandbox-image ## The stack with sandboxed test execution (worker -> 
 .PHONY: down-sandbox
 down-sandbox: ## Stop the sandbox stack
 	$(COMPOSE_SANDBOX) down
+
+.PHONY: up-monitoring
+up-monitoring: ## The stack with Prometheus on 127.0.0.1:9090 (metrics and alerts)
+	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build --wait
+
+.PHONY: monitoring-check
+monitoring-check: ## Validate the Prometheus configuration and unit-test the alert rules
+	docker run --rm --entrypoint promtool -v $(CURDIR)/docker/prometheus:/cfg:ro -w /cfg \
+		-v /dev/null:/run/secrets/testmind_api_token:ro $(PROMETHEUS_IMAGE) check config prometheus.yml
+	docker run --rm --entrypoint promtool -v $(CURDIR)/docker/prometheus:/cfg:ro -w /cfg \
+		$(PROMETHEUS_IMAGE) test rules alerts.test.yml
 
 .PHONY: down
 down: ## Stop the stack (keeps volumes)

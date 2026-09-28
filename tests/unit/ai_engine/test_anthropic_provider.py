@@ -8,6 +8,7 @@ import pytest
 from testmind.ai_engine.llm import LLMError, LLMRefusalError, LLMRequest
 from testmind.ai_engine.llm.anthropic_provider import FALLBACK_BETA, AnthropicProvider
 from testmind.ai_engine.llm.factory import create_provider, llm_available
+from testmind.ai_engine.llm.metering import MeteredProvider
 from testmind.ai_engine.llm.redaction import RedactingProvider
 from testmind.core.config import Settings
 
@@ -156,7 +157,8 @@ def test_available_with_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "placeholder-value")
     assert llm_available(settings()) is True
     provider = create_provider(settings(llm_model="claude-opus-5"))
-    # Every provider is wrapped: prompts are redacted before they leave.
-    assert isinstance(provider, RedactingProvider)
-    assert isinstance(provider._inner, AnthropicProvider)
+    # Every provider is wrapped: calls are counted, prompts are redacted before they leave.
+    assert isinstance(provider, MeteredProvider)
+    assert isinstance(provider._inner, RedactingProvider)
+    assert isinstance(provider._inner._inner, AnthropicProvider)
     assert provider.name == "anthropic"

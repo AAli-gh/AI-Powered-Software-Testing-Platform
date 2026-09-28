@@ -1,0 +1,110 @@
+# promtool test rules alerts.test.yml (make monitoring-check, CI).
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: the API down for 2 minutes alerts; a short blip does not
+    interval: 1m
+    input_series:
+      - series: 'up{job="testmind-api", instance="api:8000"}'
+        values: "1 0 0 0 0 1 0 1"
+    alert_rule_test:
+      - {eval_time: 2m, alertname: TestMindApiDown, exp_alerts: []}
+      - eval_time: 3m
+        alertname: TestMindApiDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: testmind-api, instance: "api:8000"}
+            exp_annotations:
+              summary: The TestMind API cannot be scraped
+              description: Prometheus has not reached api:8000 for 2 minutes.
+      - {eval_time: 7m, alertname: TestMindApiDown, exp_alerts: []}
+
+  - name: a dependency the API cannot reach
+    interval: 1m
+    input_series:
+      - series: 'testmind_dependency_up{dependency="redis"}'
+        values: "0x5"
+      - series: 'testmind_dependency_up{dependency="database"}'
+        values: "1x5"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TestMindDependencyDown
+        exp_alerts:
+          - exp_labels: {severity: critical, dependency: redis}
+            exp_annotations:
+              summary: The API cannot reach redis
+              description: The API's readiness fails and new jobs cannot be recorded or queued.
+
+  - name: a job waiting more than 15 minutes, and one running past the time limit
+    interval: 1m
+    input_series:
+      - series: 'testmind_oldest_job_age_seconds{status="queued"}'
+        values: "600+60x10"  # 10 to 20 minutes old over 0-10m; the last value holds at 11m
+      - series: 'testmind_oldest_job_age_seconds{status="running"}'
+        values: "3600+60x10"
+    alert_rule_test:
+      - {eval_time: 5m, alertname: TestMindJobsWaiting, exp_alerts: []}  # 900 s: not above
+      - eval_time: 11m
+        alertname: TestMindJobsWaiting
+        exp_alerts:
+          - exp_labels: {severity: warning, status: queued}
+            exp_annotations:
+              summary: Jobs have been waiting for more than 15 minutes
+              description: >-
+                The oldest queued job is 20m 0s old: the worker is down,
+                busy with long jobs, or the queue lost the message.
+      - eval_time: 11m
+        alertname: TestMindJobStuck
+        exp_alerts:
+          - exp_labels: {severity: warning, status: running}
+            exp_annotations:
+              summary: A job has been running longer than any task may run
+              description: >-
+                The oldest running job started 1h 10m 0s ago. Restarting the
+                worker fails orphaned jobs.
+
+  - name: server errors above 5 % of requests
+    interval: 1m
+    input_series:
+      - series: 'testmind_http_requests_total{method="GET", route="/api/v1/runs", status="200"}'
+        values: "0+90x20"
+      - series: 'testmind_http_requests_total{method="GET", route="/api/v1/runs", status="500"}'
+        values: "0+10x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TestMindApiErrors
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: More than 5 % of API requests fail with a server error
+              description: "10% of requests answered 5xx."
+
+  - name: few server errors do not alert
+    interval: 1m
+    input_series:
+      - series: 'testmind_http_requests_total{method="GET", route="/api/v1/runs", status="200"}'
+        values: "0+99x20"
+      - series: 'testmind_http_requests_total{method="GET", route="/api/v1/runs", status="500"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - {eval_time: 20m, alertname: TestMindApiErrors, exp_alerts: []}
+
+  - name: a task that raised
+    interval: 1m
+    input_series:
+      - series: 'testmind_tasks_total{task="testmind.test_execution.execute", outcome="error"}'
+        values: "0 0 1 1 1"
+      - series: 'testmind_tasks_total{task="testmind.test_execution.execute", outcome="succeeded"}'
+        values: "0 5 10 15 20"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TestMindTaskErrors
+        exp_alerts:
+          - exp_labels: {severity: warning, task: testmind.test_execution.execute}
+            exp_annotations:
+              summary: Worker task testmind.test_execution.execute raised an error
+              description: >-
+                A task ended with an exception instead of recording a failed job. The worker's
+                logs have the traceback.

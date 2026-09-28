@@ -145,12 +145,13 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   docker:
-    name: Docker build + smoke test (sandboxed worker)
+    name: Docker build + smoke test (sandboxed worker, monitoring)
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test, web]
     env:
-      # The stack whose containerised worker runs tests through the sandbox proxy.
-      COMPOSE_FILE: docker-compose.yml:docker-compose.sandbox.yml
+      # The stack whose containerised worker runs tests through the sandbox proxy, with
+      # Prometheus scraping the API and the worker.
+      COMPOSE_FILE: docker-compose.yml:docker-compose.sandbox.yml:docker-compose.monitoring.yml
       TESTMIND_SANDBOX_DIR: ${{ github.workspace }}/.sandbox
       TESTMIND_HOST_REPOS_DIR: ${{ github.workspace }}/examples
     steps:
@@ -163,6 +164,8 @@ jobs:
           token="$(openssl rand -hex 32)"
           echo "::add-mask::$token"
           echo "TESTMIND_API_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Prometheus configuration and alert rule unit tests (promtool)
+        run: make monitoring-check
       - name: Build the sandbox image (on the host daemon, used through the proxy)
         run: docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
       - name: Build images
@@ -173,6 +176,10 @@ jobs:
         env:
           TESTMIND_EXPECT_SANDBOX: "1"
         run: ./scripts/smoke_test.sh
+      - name: Monitoring (Prometheus scrapes both targets, the smoke test's jobs are recorded)
+        env:
+          TESTMIND_EXPECT_SANDBOX: "1"
+        run: ./scripts/monitoring_check.sh
       - uses: actions/setup-node@v5
         with:
           node-version: "22"

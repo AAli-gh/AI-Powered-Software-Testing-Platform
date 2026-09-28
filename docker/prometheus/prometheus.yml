@@ -1,0 +1,22 @@
+# Prometheus for the TestMind stack (docker-compose.monitoring.yml, docs/monitoring.md).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  # The API's own metrics, and the platform's state read from PostgreSQL and Redis.
+  - job_name: testmind-api
+    metrics_path: /metrics
+    authorization:
+      # TESTMIND_API_TOKEN, as a compose secret (empty when the API has no token).
+      credentials_file: /run/secrets/testmind_api_token
+    static_configs:
+      - targets: ["api:8000"]
+
+  # Tasks, sandbox runs and LLM calls, from every process of the worker's pool.
+  - job_name: testmind-worker
+    static_configs:
+      - targets: ["worker:9100"]

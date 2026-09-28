@@ -40,12 +40,10 @@ class OverviewService:
         self._projects = ProjectRepository(session)
 
     async def platform(self) -> PlatformOverview:
-        jobs = [
-            JobCounts(
-                kind=model.__tablename__, counts=_counts(await self._overview.status_counts(model))
-            )
-            for model in JOB_MODELS
-        ]
+        by_kind: dict[str, dict[RunStatus, int]] = {model.__tablename__: {} for model in JOB_MODELS}
+        for row in await self._overview.job_statistics():
+            by_kind[row.kind][row.status] = row.count
+        jobs = [JobCounts(kind=kind, counts=_counts(counts)) for kind, counts in by_kind.items()]
         projects = await self._overview.recent_projects(limit=MAX_PROJECTS)
         ids = [p.id for p in projects]
         runs = await self._overview.latest_runs(ids)

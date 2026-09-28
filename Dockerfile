@@ -89,6 +89,10 @@ FROM runtime AS worker
 # builder is used for runner images: BuildKit's sessions cannot be checked by the proxy.
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 ENV DOCKER_BUILDKIT=0
+# Metrics of the pool's processes, served together by the main process when
+# TESTMIND_WORKER_METRICS_PORT is set (docs/monitoring.md). /tmp is a tmpfs in compose.
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp/testmind-metrics
+EXPOSE 9100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD ["sh", "-c", "celery -A testmind.workers.main inspect ping -d celery@$HOSTNAME --timeout 5"]
 CMD ["celery", "-A", "testmind.workers.main", "worker", \
