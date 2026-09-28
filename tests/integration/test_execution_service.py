@@ -184,12 +184,13 @@ async def test_dispatch_failure(
     async with session_factory() as session:
         with pytest.raises(DispatchError):
             await ExecutionService(session, FailingDispatcher()).create(run_id, None)
-        [execution], total = await ExecutionService(session, RecordingDispatcher()).list_for_run(
+        [row], total = await ExecutionService(session, RecordingDispatcher()).list_for_run(
             run_id, offset=0, limit=5
         )
     assert total == 1
-    assert execution.status is RunStatus.FAILED
-    assert execution.error_message == DISPATCH_FAILED_MESSAGE
+    assert row.execution.status is RunStatus.FAILED
+    assert row.execution.error_message == DISPATCH_FAILED_MESSAGE
+    assert (row.report, row.failure_groups) == (None, None)
 
 
 async def test_dispatch_failure_after_concurrent_delete(

@@ -103,8 +103,8 @@ class OverviewService:
                     created_at=r.created_at,
                     finished_at=r.finished_at,
                     score=r.score,
-                    mutants=r.mutants,
-                    survived=r.survived,
+                    mutants=(r.totals or {}).get("total"),
+                    survived=(r.totals or {}).get("survived"),
                 )
                 for r in reversed(mutations)
             ],
@@ -134,12 +134,13 @@ def _run(run: AnalysisRun | None) -> AnalysisRunRead | None:
 
 def _execution(row: Row[Any]) -> ExecutionPoint:
     tests = None
-    if row.total is not None:
+    totals: dict[str, int] = row.totals or {}
+    if totals.get("total") is not None:
         tests = TestTotalsPoint(
-            total=row.total,
-            passed=row.passed or 0,
-            failed=(row.failed or 0) + (row.errors or 0),
-            skipped=row.skipped or 0,
+            total=totals["total"],
+            passed=totals.get("passed") or 0,
+            failed=(totals.get("failed") or 0) + (totals.get("errors") or 0),
+            skipped=totals.get("skipped") or 0,
         )
     return ExecutionPoint(
         id=row.id,

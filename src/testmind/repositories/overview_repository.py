@@ -54,7 +54,6 @@ class JobStatistics:
 
 
 def _execution_columns() -> Select[Any]:
-    totals = TestExecution.report["totals"]
     return (
         select(
             TestExecution.id,
@@ -65,17 +64,26 @@ def _execution_columns() -> Select[Any]:
             TestExecution.outcome,
             TestExecution.created_at,
             TestExecution.finished_at,
-            totals["total"].as_integer().label("total"),
-            totals["passed"].as_integer().label("passed"),
-            totals["failed"].as_integer().label("failed"),
-            totals["errors"].as_integer().label("errors"),
-            totals["skipped"].as_integer().label("skipped"),
+            # The small totals object as one value: each JSON operator in SQL decompresses
+            # the whole report again, so its fields are read in Python.
+            TestExecution.report["totals"].label("totals"),
             TestExecution.coverage_percent,
             TestExecution.api_coverage_percent,
         )
         .join(AnalysisRun, AnalysisRun.id == TestExecution.run_id)
         .join(Project, Project.id == AnalysisRun.project_id)
     )
+
+
+def _execution_rows(chosen: Select[Any]) -> Select[Any]:
+    """The execution columns of the executions `chosen` selects by id.
+
+    Choosing (filter, sort, limit) happens on narrow columns first, so the totals are read
+    from the JSON reports of the chosen executions only. In a single query PostgreSQL would
+    extract them from every candidate's report before sorting (docs/performance.md).
+    """
+    picked = chosen.subquery()
+    return _execution_columns().join(picked, picked.c.id == TestExecution.id)
 
 
 class OverviewRepository:
@@ -128,16 +136,27 @@ class OverviewRepository:
         self, *, project_id: uuid.UUID | None = None, limit: int
     ) -> Sequence[Row[Any]]:
         """Newest first."""
-        query = _execution_columns()
+        chosen = select(TestExecution.id)
         if project_id is not None:
-            query = query.where(AnalysisRun.project_id == project_id)
-        query = query.order_by(TestExecution.created_at.desc(), TestExecution.id).limit(limit)
+            chosen = chosen.join(AnalysisRun, AnalysisRun.id == TestExecution.run_id).where(
+                AnalysisRun.project_id == project_id
+            )
+        newest = (TestExecution.created_at.desc(), TestExecution.id)
+        query = _execution_rows(chosen.order_by(*newest).limit(limit)).order_by(*newest)
         rows: Sequence[Row[Any]] = (await self._session.execute(query)).all()
         return rows
 
     async def mutation_runs(self, project_id: uuid.UUID, *, limit: int) -> Sequence[Row[Any]]:
-        """Newest first."""
-        totals = MutationRun.report["totals"]
+        """Newest first. Like executions, the runs are chosen before their totals are read."""
+        newest = (MutationRun.created_at.desc(), MutationRun.id)
+        picked = (
+            select(MutationRun.id)
+            .join(AnalysisRun, AnalysisRun.id == MutationRun.run_id)
+            .where(AnalysisRun.project_id == project_id)
+            .order_by(*newest)
+            .limit(limit)
+            .subquery()
+        )
         query = (
             select(
                 MutationRun.id,
@@ -146,13 +165,10 @@ class OverviewRepository:
                 MutationRun.created_at,
                 MutationRun.finished_at,
                 MutationRun.score,
-                totals["total"].as_integer().label("mutants"),
-                totals["survived"].as_integer().label("survived"),
+                MutationRun.report["totals"].label("totals"),  # read once, as for executions
             )
-            .join(AnalysisRun, AnalysisRun.id == MutationRun.run_id)
-            .where(AnalysisRun.project_id == project_id)
-            .order_by(MutationRun.created_at.desc(), MutationRun.id)
-            .limit(limit)
+            .join(picked, picked.c.id == MutationRun.id)
+            .order_by(*newest)
         )
         return (await self._session.execute(query)).all()
 
@@ -217,8 +233,9 @@ class OverviewRepository:
         self, project_ids: Sequence[uuid.UUID]
     ) -> dict[uuid.UUID, Row[Any]]:
         """Each project's latest execution that ran its suite."""
-        query = (
-            _execution_columns()
+        chosen = (
+            select(TestExecution.id)
+            .join(AnalysisRun, AnalysisRun.id == TestExecution.run_id)
             .where(
                 AnalysisRun.project_id.in_(project_ids),
                 TestExecution.status == RunStatus.SUCCEEDED,
@@ -226,6 +243,7 @@ class OverviewRepository:
             .order_by(AnalysisRun.project_id, TestExecution.created_at.desc(), TestExecution.id)
             .ext(distinct_on(AnalysisRun.project_id))
         )
+        query = _execution_rows(chosen)
         return {row.project_id: row for row in (await self._session.execute(query)).all()}
 
     async def latest_mutation_scores(

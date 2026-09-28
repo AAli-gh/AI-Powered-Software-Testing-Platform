@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from testmind.coverage_engine import CoverageGap, CoverageReport, CoverageTotals
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
+from testmind.repositories.execution_repository import ExecutionSummaryRow
 from testmind.test_engine.models import ExecutionOutcome, TestRunReport, TestTotals
 
 
@@ -66,7 +67,27 @@ class TestExecutionRead(BaseModel):
 
     @classmethod
     def from_row(cls, row: TestExecution) -> TestExecutionRead:
+        """From an execution with its documents loaded."""
         report = TestRunReport.model_validate(row.report) if row.report else None
+        groups = len(row.failures["groups"]) if row.failures else None
+        return cls._build(row, report, groups)
+
+    @classmethod
+    def from_summary(cls, row: ExecutionSummaryRow) -> TestExecutionRead:
+        """From a summary row: the report without its per-test list and logs, which are put
+        back empty so the report model validates it as it validates a whole one."""
+        report = None
+        if row.report is not None:
+            document = {**row.report, "tests": [], "output": ""}
+            if document.get("install") is not None:
+                document["install"] = {**document["install"], "log": ""}
+            report = TestRunReport.model_validate(document)
+        return cls._build(row.execution, report, row.failure_groups)
+
+    @classmethod
+    def _build(
+        cls, row: TestExecution, report: TestRunReport | None, failure_groups: int | None
+    ) -> TestExecutionRead:
         summary = None
         if report is not None:
             summary = ExecutionSummary(
@@ -82,7 +103,7 @@ class TestExecutionRead(BaseModel):
                 environment=report.environment,
                 coverage_percent=row.coverage_percent,
                 coverage_error=report.coverage_error,
-                failure_groups=len(row.failures["groups"]) if row.failures else None,
+                failure_groups=failure_groups,
                 api_coverage_percent=row.api_coverage_percent,
             )
         return cls(

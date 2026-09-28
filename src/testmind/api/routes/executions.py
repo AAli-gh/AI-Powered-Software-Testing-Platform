@@ -64,7 +64,7 @@ async def list_executions(
 ) -> Page[TestExecutionRead]:
     items, total = await service.list_for_run(run_id, offset=offset, limit=limit)
     return Page[TestExecutionRead](
-        items=[TestExecutionRead.from_row(e) for e in items],
+        items=[TestExecutionRead.from_summary(e) for e in items],
         total=total,
         limit=limit,
         offset=offset,
@@ -73,7 +73,7 @@ async def list_executions(
 
 @router.get("/test-executions/{execution_id}", responses=NOT_FOUND)
 async def get_execution(execution_id: uuid.UUID, service: ExecutionServiceDep) -> TestExecutionRead:
-    return TestExecutionRead.from_row(await service.get(execution_id))
+    return TestExecutionRead.from_summary(await service.summary(execution_id))
 
 
 @router.get("/test-executions/{execution_id}/tests", responses=NOT_FOUND)

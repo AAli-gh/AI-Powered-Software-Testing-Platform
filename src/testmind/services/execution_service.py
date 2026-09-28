@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +12,10 @@ from testmind.core.logging import get_logger
 from testmind.coverage_engine import CoverageReport
 from testmind.db.models import TestExecution
 from testmind.domain.enums import RunStatus
-from testmind.repositories.execution_repository import ExecutionRepository
+from testmind.repositories.execution_repository import (
+    ExecutionRepository,
+    ExecutionSummaryRow,
+)
 from testmind.repositories.generation_repository import GenerationRepository
 from testmind.repositories.run_repository import RunRepository
 from testmind.services.dispatcher import TaskDispatcher
@@ -74,12 +76,20 @@ class ExecutionService:
             raise NotFoundError(f"Test execution '{execution_id}' not found")
         return execution
 
+    async def summary(self, execution_id: uuid.UUID) -> ExecutionSummaryRow:
+        """The execution without its documents: the report's summary fields only."""
+        row = await self._executions.summary(execution_id)
+        if row is None:
+            raise NotFoundError(f"Test execution '{execution_id}' not found")
+        return row
+
     async def list_for_run(
         self, run_id: uuid.UUID, *, offset: int, limit: int
-    ) -> tuple[Sequence[TestExecution], int]:
+    ) -> tuple[list[ExecutionSummaryRow], int]:
+        """Newest first, as summaries (see `summary`)."""
         if await self._runs.get(run_id) is None:
             raise NotFoundError(f"Run '{run_id}' not found")
-        return await self._executions.list_for_run(run_id, offset=offset, limit=limit)
+        return await self._executions.summaries_for_run(run_id, offset=offset, limit=limit)
 
     async def coverage(self, execution_id: uuid.UUID) -> CoverageReport:
         execution = await self.get(execution_id)
