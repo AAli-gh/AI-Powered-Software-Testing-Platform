@@ -113,6 +113,7 @@ def test_get_settings_reads_prefixed_environment(
     monkeypatch.setenv("TESTMIND_REDIS_URL", VALID_REDIS)
     monkeypatch.setenv("TESTMIND_REPOS_ROOT", str(tmp_path))
     monkeypatch.setenv("TESTMIND_ENV", "production")
+    monkeypatch.setenv("TESTMIND_API_TOKEN", "p" * 40)  # production requires one
     get_settings.cache_clear()
     try:
         settings = get_settings()
@@ -121,3 +122,14 @@ def test_get_settings_reads_prefixed_environment(
         assert get_settings() is settings
     finally:
         get_settings.cache_clear()
+
+
+def test_api_token_rules() -> None:
+    assert make().api_token is None
+    assert make(api_token="k" * 32).api_token is not None
+    with pytest.raises(ValidationError, match="at least 32"):
+        make(api_token="short")
+    with pytest.raises(ValidationError, match="TESTMIND_API_TOKEN is required"):
+        make(env="production")
+    assert make(env="production", api_token="k" * 40).env == "production"
+    assert "k" * 40 not in repr(make(api_token="k" * 40))

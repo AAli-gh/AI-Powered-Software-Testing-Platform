@@ -76,6 +76,7 @@ def settings(repos_root: Path) -> Settings:
         redis_url=TEST_REDIS_URL,  # type: ignore[arg-type]
         repos_root=repos_root,
         log_json=False,
+        rate_limit_per_minute=0,  # tests/api/test_security_api.py enables it where tested
     )
 
 

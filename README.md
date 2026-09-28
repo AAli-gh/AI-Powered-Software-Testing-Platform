@@ -13,7 +13,7 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–12 of 14 are complete: the platform foundation, the deterministic
+> **Status: Phases 1–13 of 14 are complete: the platform foundation, the deterministic
 > repository and code analyzers, AI test generation with sandboxed validation, the
 > sandboxed test runner, coverage analysis with coverage-guided test generation, failure
 > analysis (deterministic grouping plus evidence-checked AI root causes), regression
@@ -21,8 +21,10 @@ summarising findings. Every AI output comes with its evidence and a confidence l
 > AI tests for surviving mutants, and API testing (endpoint discovery, API coverage,
 > deterministic probes, sandbox-verified AI API tests) with minimal Playwright support, and a
 > GitHub App integration (signed webhooks, pull request analysis posted as a check run and a
-> comment, issue suggestions, repository import), tested against a local fake of GitHub, and a
-> web dashboard (React + TypeScript) over all of it.**
+> comment, issue suggestions, repository import), tested against a local fake of GitHub, a
+> web dashboard (React + TypeScript) over all of it, and security hardening (the containerised
+> worker runs the sandbox through a policy-enforcing Docker proxy, a stricter seccomp
+> profile, API tokens, rate limiting, secrets redacted from LLM prompts).**
 > The AI stages have been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
@@ -280,6 +282,13 @@ The dashboard is at <http://127.0.0.1:8080>. The API listens on <http://127.0.0.
 interactive docs are at <http://127.0.0.1:8000/docs>.
 `make down` stops everything.
 
+`make up` runs without Docker access for the worker: test executions report
+`sandbox_unavailable`. To run tests for real in the sandbox, use `make up-sandbox` instead.
+It builds the sandbox image and starts the same stack plus the
+[sandbox proxy](docs/security.md#sandbox-proxy), the only container with the Docker socket.
+Set `TESTMIND_API_TOKEN` (32+ characters) in `.env` before exposing anything beyond
+localhost.
+
 ## Configuration
 
 All settings are environment variables with the `TESTMIND_` prefix (see
@@ -292,6 +301,9 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_LOG_JSON` | `true` | JSON logs (`false` = human-readable) |
 | `TESTMIND_DATABASE_URL` | — | `postgresql+asyncpg://…` (built automatically in docker-compose) |
 | `TESTMIND_REDIS_URL` | — | `redis://…` |
+| `TESTMIND_API_TOKEN` | unset (required in production) | Bearer token for every `/api/` request, 32+ characters |
+| `TESTMIND_RATE_LIMIT_PER_MINUTE` | `60` | State-changing requests per client and minute (`0` = off) |
+| `TESTMIND_SANDBOX_DIR` | — | `make up-sandbox` only: absolute host directory for the worker's scratch space and imports |
 | `TESTMIND_REPOS_ROOT` | — | Directory that projects must live in (`/repos` in containers) |
 | `TESTMIND_HOST_REPOS_DIR` | `./examples` | Host directory mounted read-only at `/repos` |
 | `TESTMIND_CELERY_TASK_TIME_LIMIT_SECONDS` | `3600` | Hard time limit per job |
@@ -473,8 +485,19 @@ In place today:
 - CI runs bandit, pip-audit and gitleaks.
 
 - **Untrusted code runs only in a Docker sandbox** with no network, all capabilities dropped,
-  `no-new-privileges`, user `nobody`, a read-only root filesystem and a read-only repository,
-  CPU/memory/pids limits and a hard timeout. The JUnit output is parsed with `defusedxml`.
+  `no-new-privileges`, a seccomp profile stricter than Docker's default (no `ptrace`,
+  `process_vm_*`, `name_to_handle_at`), user `nobody`, a read-only root filesystem and a
+  read-only repository, CPU/memory/pids limits and a hard timeout. The JUnit output is parsed
+  with `defusedxml`.
+- **The containerised worker never gets the Docker socket.** A policy-enforcing proxy is the
+  only holder, and it lets through nothing but locked-down sandbox containers and runner
+  images built from TestMind's own template. Every field of a container is checked, unknown
+  ones fail closed, and bind-mount sources are checked for symlinks. Tested against the real
+  daemon with the attacks it must refuse
+  ([ADR-0014](docs/adr/0014-policy-enforcing-docker-proxy.md)).
+- **API token** (`TESTMIND_API_TOKEN`, required in production), **rate limiting** of changes
+  per client and minute, and **redaction of secrets** (keys, tokens, passwords) from every
+  LLM prompt ([details](docs/security.md)).
 - LLM output is never trusted: static checks and a sandboxed pytest run decide; in failure
   analysis every cited line is checked against what the model was shown; a test suggested
   for a surviving mutant counts only if the sandbox shows it passes on the original code and
@@ -495,14 +518,10 @@ In place today:
   third-party build scripts run.
 
 Still open:
-- **Authentication and authorisation** are not implemented. The API and the dashboard are
-  published on `127.0.0.1` only, and must not be exposed beyond a trusted network until
-  users exist: anyone who can open them can start jobs.
-- Giving the **containerised** worker access to Docker for the sandbox. It needs a socket
-  proxy or rootless runtime, not the raw Docker socket. Until then, the compose stack reports
-  `sandbox_unavailable` for executions and `unverified` for generated tests, while a worker
-  on a Docker host (`make worker`, CI) runs them for real. This is planned for Phase 13
-  ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
+- **Users and roles.** Authentication is one shared API token: anyone holding it has full
+  access. The API and dashboard are published on `127.0.0.1` only.
+- **TLS** must be terminated in front of TestMind for any deployment beyond localhost.
+- A user-space kernel (gVisor) for sandboxes is not integrated.
 
 ## Roadmap
 
@@ -520,7 +539,7 @@ Still open:
 | 10 | API & E2E testing: endpoint discovery, API tests, Playwright | ✅ Done (AI API tests verified with a scripted model; Playwright: running existing browser tests, verified in CI) |
 | 11 | GitHub integration: import, PR analysis, comments, issue suggestions | ✅ Done (tested against a local fake of GitHub; not yet against github.com) |
 | 12 | Dashboard: overview, tests, coverage, findings, regressions, mutation | ✅ Done |
-| 13 | Security hardening: sandboxing, limits, network restrictions | Planned |
+| 13 | Security hardening: sandboxing, limits, network restrictions | ✅ Done (sandbox proxy, seccomp, API token, rate limiting, prompt redaction; no users or gVisor) |
 | 14 | Production quality: monitoring, performance, complete docs | Planned |
 
 ## Documentation

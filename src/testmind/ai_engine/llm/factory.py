@@ -4,6 +4,7 @@ import os
 
 from testmind.ai_engine.llm.anthropic_provider import AnthropicProvider
 from testmind.ai_engine.llm.base import LLMNotConfiguredError, LLMProvider
+from testmind.ai_engine.llm.redaction import RedactingProvider
 from testmind.core.config import Settings
 
 ANTHROPIC_CREDENTIAL_VARIABLES = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE")
@@ -22,4 +23,7 @@ def create_provider(settings: Settings) -> LLMProvider:
             "No LLM provider is configured: set TESTMIND_LLM_PROVIDER=anthropic and "
             "ANTHROPIC_API_KEY (see .env.example)"
         )
-    return AnthropicProvider.from_environment(settings.llm_model, settings.llm_timeout_seconds)
+    # Every prompt is redacted before it leaves (redaction.py).
+    return RedactingProvider(
+        AnthropicProvider.from_environment(settings.llm_model, settings.llm_timeout_seconds)
+    )

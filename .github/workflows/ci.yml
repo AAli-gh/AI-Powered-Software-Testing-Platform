@@ -145,18 +145,33 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   docker:
-    name: Docker build + smoke test
+    name: Docker build + smoke test (sandboxed worker)
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test, web]
+    env:
+      # The stack whose containerised worker runs tests through the sandbox proxy.
+      COMPOSE_FILE: docker-compose.yml:docker-compose.sandbox.yml
+      TESTMIND_SANDBOX_DIR: ${{ github.workspace }}/.sandbox
+      TESTMIND_HOST_REPOS_DIR: ${{ github.workspace }}/examples
     steps:
       - uses: actions/checkout@v5
-      - name: Prepare environment file
-        run: cp .env.example .env
+      - name: Prepare environment file and sandbox directory
+        run: |
+          cp .env.example .env
+          mkdir -p "$TESTMIND_SANDBOX_DIR"
+          # A fresh API token per run, so the smoke and browser tests go through authentication.
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          echo "TESTMIND_API_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Build the sandbox image (on the host daemon, used through the proxy)
+        run: docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
       - name: Build images
         run: docker compose build
       - name: Start stack
         run: docker compose up -d --wait --wait-timeout 180
-      - name: Smoke test
+      - name: Smoke test (tests must really run in the sandbox)
+        env:
+          TESTMIND_EXPECT_SANDBOX: "1"
         run: ./scripts/smoke_test.sh
       - uses: actions/setup-node@v5
         with:

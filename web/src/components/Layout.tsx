@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { NavLink, Outlet } from "react-router";
+
+import { readToken, saveToken, subscribeToken } from "../api/client";
 
 type Theme = "system" | "light" | "dark";
 const THEME_KEY = "testmind.theme";
@@ -44,6 +47,23 @@ export function ThemeSelect() {
   );
 }
 
+function ForgetToken() {
+  const client = useQueryClient();
+  const present = useSyncExternalStore(subscribeToken, () => readToken() !== null);
+  if (!present) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        saveToken(null);
+        void client.resetQueries();
+      }}
+    >
+      Forget API token
+    </button>
+  );
+}
+
 const LINKS = [
   { to: "/", label: "Overview", end: true },
   { to: "/projects", label: "Projects", end: false },
@@ -70,6 +90,7 @@ export function Layout() {
         ))}
         <div className="sidebar-footer">
           <ThemeSelect />
+          <ForgetToken />
           <a href="/docs" target="_blank" rel="noreferrer">
             API reference
           </a>

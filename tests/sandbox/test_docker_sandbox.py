@@ -5,6 +5,7 @@ import pytest
 
 from testmind.sandbox.docker_sandbox import DockerSandbox, PytestJob
 from testmind.sandbox.models import Outcome, SandboxUnavailableError
+from tests.sandbox.conftest import SANDBOX_IMAGE
 from tests.unit.analyzers.helpers import make_repo
 
 
@@ -132,3 +133,38 @@ def test_broken_docker_binary(tmp_path: Path) -> None:
     fake.write_text("this is not an executable format")
     fake.chmod(0o755)
     assert DockerSandbox("x", timeout_seconds=5, docker_binary=str(fake)).available() is False
+
+
+SYSCALLS = """\
+import ctypes, errno
+
+libc = ctypes.CDLL(None, use_errno=True)
+
+
+def refused(result):
+    return result == -1 and ctypes.get_errno() == errno.EPERM
+
+
+def test_ptrace_is_refused():
+    assert refused(libc.ptrace(0, 0, None, None))  # PTRACE_TRACEME
+
+
+def test_process_vm_readv_is_refused():
+    assert refused(libc.process_vm_readv(1, None, 0, None, 0, 0))
+
+
+def test_name_to_handle_at_is_refused():
+    assert refused(libc.name_to_handle_at(-100, b"/", None, None, 0))
+"""
+
+
+def test_seccomp_refuses_what_dockers_default_profile_allows(repo: Path) -> None:
+    strict = DockerSandbox(SANDBOX_IMAGE, timeout_seconds=60)
+    result = strict.run_pytest(repo, {"test_syscalls.py": SYSCALLS})
+    assert set(outcomes(result).values()) == {Outcome.PASSED}, result.output
+    assert len(result.tests) == 3
+    # Docker's own default profile lets these through: the stricter profile is what stops them.
+    default = DockerSandbox(SANDBOX_IMAGE, timeout_seconds=60, seccomp_profile=None)
+    result = default.run_pytest(repo, {"test_syscalls.py": SYSCALLS})
+    assert outcomes(result)["test_ptrace_is_refused"] is Outcome.FAILED
+    assert outcomes(result)["test_process_vm_readv_is_refused"] is Outcome.FAILED

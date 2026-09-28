@@ -22,6 +22,7 @@ export interface Recorded {
   path: string;
   search: string;
   body: unknown;
+  authorization: string | null;
 }
 
 /**
@@ -38,6 +39,7 @@ export function mockApi(table: Routes) {
       path: url.pathname,
       search: url.search,
       body: text ? (JSON.parse(text) as unknown) : undefined,
+      authorization: input.headers.get("Authorization"),
     });
     const route = table[`${input.method} ${url.pathname}`];
     if (route === undefined) {

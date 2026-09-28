@@ -3,6 +3,11 @@ SHELL := /bin/bash
 
 COMPOSE      := docker compose
 COMPOSE_TEST := docker compose -f docker-compose.test.yml
+# The stack whose worker runs tests in the sandbox, through the sandbox proxy.
+SANDBOX_DIR  ?= $(CURDIR)/.sandbox
+COMPOSE_SANDBOX := TESTMIND_SANDBOX_DIR=$(SANDBOX_DIR) \
+	TESTMIND_HOST_REPOS_DIR=$(abspath $(or $(TESTMIND_HOST_REPOS_DIR),examples)) \
+	docker compose -f docker-compose.yml -f docker-compose.sandbox.yml
 
 .PHONY: help
 help: ## Show available targets
@@ -70,6 +75,15 @@ check: lint typecheck test ## Everything CI runs before building images
 .PHONY: up
 up: ## Build and start the full stack
 	$(COMPOSE) up -d --build --wait
+
+.PHONY: up-sandbox
+up-sandbox: sandbox-image ## The stack with sandboxed test execution (worker -> sandbox proxy -> Docker)
+	mkdir -p $(SANDBOX_DIR)
+	$(COMPOSE_SANDBOX) up -d --build --wait
+
+.PHONY: down-sandbox
+down-sandbox: ## Stop the sandbox stack
+	$(COMPOSE_SANDBOX) down
 
 .PHONY: down
 down: ## Stop the stack (keeps volumes)

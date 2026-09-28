@@ -13,6 +13,10 @@ x-app-environment: &app-environment
   TESTMIND_LLM_MODEL: ${TESTMIND_LLM_MODEL:-claude-opus-5}
   # Read by the Anthropic SDK. Empty = AI features disabled (503 llm_not_configured).
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  # API token (all of /api/ except the signed GitHub webhook) and the limit on changes per
+  # client and minute (docs/security.md). Empty token: no authentication (development only).
+  TESTMIND_API_TOKEN: ${TESTMIND_API_TOKEN:-}
+  TESTMIND_RATE_LIMIT_PER_MINUTE: ${TESTMIND_RATE_LIMIT_PER_MINUTE:-60}
   # GitHub App (docs/github.md). Empty = the GitHub endpoints answer 503 github_not_configured.
   TESTMIND_GITHUB_APP_ID: ${TESTMIND_GITHUB_APP_ID:-}
   TESTMIND_GITHUB_PRIVATE_KEY: ${TESTMIND_GITHUB_PRIVATE_KEY:-}

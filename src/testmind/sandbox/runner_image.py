@@ -130,7 +130,7 @@ class RunnerImageBuilder:
             (Path(context) / "requirements.txt").write_text("\n".join(requirements) + "\n")
             try:
                 completed = subprocess.run(  # noqa: S603  # nosec B603 - fixed argv, no shell
-                    [self._docker, "build", "--progress", "plain", "--tag", tag, context],
+                    [self._docker, "build", "--tag", tag, context],
                     capture_output=True,
                     timeout=self._timeout,
                     check=False,

@@ -28,6 +28,47 @@ export const api = createClient<paths>({
   fetch: (request: Request) => globalThis.fetch(request),
 });
 
+const TOKEN_KEY = "testmind.token";
+
+/** The API token of this browser tab (sessionStorage: it is gone when the tab closes). */
+export function readToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+const tokenListeners = new Set<() => void>();
+
+export function saveToken(token: string | null): void {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage unavailable (private mode): the API answers 401 and asks again.
+  }
+  tokenListeners.forEach((listener) => {
+    listener();
+  });
+}
+
+/** For useSyncExternalStore: components showing whether a token is set stay current. */
+export function subscribeToken(listener: () => void): () => void {
+  tokenListeners.add(listener);
+  return () => {
+    tokenListeners.delete(listener);
+  };
+}
+
+api.use({
+  onRequest({ request }) {
+    const token = readToken();
+    if (token) request.headers.set("Authorization", `Bearer ${token}`);
+    return request;
+  },
+});
+
 interface Answer<T> {
   data?: T;
   error?: unknown;

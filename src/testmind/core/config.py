@@ -7,11 +7,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+MIN_TOKEN_LENGTH = 32
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
@@ -46,6 +47,13 @@ class Settings(BaseSettings):
     redis_url: SecretStr
 
     repos_root: Path
+
+    # --- API security (Phase 13). With a token, every /api/ request needs
+    # `Authorization: Bearer <token>` (the GitHub webhook signs its deliveries instead).
+    # Production refuses to start without one.
+    api_token: SecretStr | None = None
+    # State-changing requests per client and minute (0: unlimited).
+    rate_limit_per_minute: int = Field(default=60, ge=0, le=100_000)
 
     celery_task_time_limit_seconds: int = Field(default=3600, ge=10)
 
@@ -144,6 +152,22 @@ class Settings(BaseSettings):
         if value is not None and not value.get_secret_value().strip():
             raise ValueError("github_webhook_secret must not be blank")
         return value
+
+    @field_validator("api_token")
+    @classmethod
+    def _strong_token(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < MIN_TOKEN_LENGTH:
+            raise ValueError(
+                f"api_token must have at least {MIN_TOKEN_LENGTH} characters "
+                "(e.g. `openssl rand -hex 32`)"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _production_needs_a_token(self) -> Settings:
+        if self.env is Environment.PRODUCTION and self.api_token is None:
+            raise ValueError("TESTMIND_API_TOKEN is required when TESTMIND_ENV=production")
+        return self
 
     @field_validator("github_allowed_owners", mode="before")
     @classmethod

@@ -1,0 +1,120 @@
+{
+ "AttachStderr": true,
+ "AttachStdin": false,
+ "AttachStdout": true,
+ "Cmd": [
+  "python",
+  "-m",
+  "pytest"
+ ],
+ "Domainname": "",
+ "Entrypoint": null,
+ "Env": [
+  "PYTHONPATH=/workspace/src"
+ ],
+ "HostConfig": {
+  "AutoRemove": true,
+  "Binds": null,
+  "BlkioDeviceReadBps": [],
+  "BlkioDeviceReadIOps": [],
+  "BlkioDeviceWriteBps": [],
+  "BlkioDeviceWriteIOps": [],
+  "BlkioWeight": 0,
+  "BlkioWeightDevice": [],
+  "CapAdd": null,
+  "CapDrop": [
+   "ALL"
+  ],
+  "Cgroup": "",
+  "CgroupParent": "",
+  "CgroupnsMode": "",
+  "ConsoleSize": [
+   0,
+   0
+  ],
+  "ContainerIDFile": "",
+  "CpuCount": 0,
+  "CpuPercent": 0,
+  "CpuPeriod": 0,
+  "CpuQuota": 0,
+  "CpuRealtimePeriod": 0,
+  "CpuRealtimeRuntime": 0,
+  "CpuShares": 0,
+  "CpusetCpus": "",
+  "CpusetMems": "",
+  "DeviceCgroupRules": null,
+  "DeviceRequests": null,
+  "Devices": [],
+  "Dns": null,
+  "DnsOptions": [],
+  "DnsSearch": [],
+  "ExtraHosts": null,
+  "GroupAdd": null,
+  "IOMaximumBandwidth": 0,
+  "IOMaximumIOps": 0,
+  "IpcMode": "",
+  "Isolation": "",
+  "Links": null,
+  "LogConfig": {
+   "Config": {},
+   "Type": ""
+  },
+  "MaskedPaths": null,
+  "Memory": 268435456,
+  "MemoryReservation": 0,
+  "MemorySwap": 268435456,
+  "MemorySwappiness": -1,
+  "Mounts": [
+   {
+    "ReadOnly": true,
+    "Source": "/sandbox/job/src",
+    "Target": "/workspace/src",
+    "Type": "bind"
+   },
+   {
+    "Source": "/sandbox/job/out",
+    "Target": "/out",
+    "Type": "bind"
+   }
+  ],
+  "NanoCpus": 1000000000,
+  "NetworkMode": "none",
+  "OomKillDisable": false,
+  "OomScoreAdj": 0,
+  "PidMode": "",
+  "PidsLimit": 64,
+  "PortBindings": {},
+  "Privileged": false,
+  "PublishAllPorts": false,
+  "ReadonlyPaths": null,
+  "ReadonlyRootfs": true,
+  "RestartPolicy": {
+   "MaximumRetryCount": 0,
+   "Name": "no"
+  },
+  "SecurityOpt": [
+   "no-new-privileges"
+  ],
+  "ShmSize": 0,
+  "Tmpfs": {
+   "/tmp": "rw,noexec,nosuid,size=64m"
+  },
+  "UTSMode": "",
+  "Ulimits": [],
+  "UsernsMode": "",
+  "VolumeDriver": "",
+  "VolumesFrom": null
+ },
+ "Hostname": "",
+ "Image": "testmind-sandbox:local",
+ "Labels": {},
+ "NetworkingConfig": {
+  "EndpointsConfig": {}
+ },
+ "OpenStdin": false,
+ "StdinOnce": false,
+ "Tty": false,
+ "User": "65534:65534",
+ "Volumes": {},
+ "WorkingDir": "/workspace/src"
+}

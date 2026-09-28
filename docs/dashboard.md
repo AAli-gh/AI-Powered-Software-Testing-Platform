@@ -99,9 +99,11 @@ make web-e2e                  # browser tests against a running stack (TESTMIND_
   reported.
 - **Untrusted text.** Repository content (test names, messages, tracebacks, file paths) is
   rendered as text by React. Nothing is inserted as HTML.
-- **No authentication yet.** Like the API, the dashboard must stay on localhost or a trusted
-  network until authentication exists (Phase 13 or 14). Anyone who can open it can start
-  jobs and, with the GitHub App configured, create issues.
+- **API token.** With `TESTMIND_API_TOKEN` set, the first `401` shows a token form. The
+  token is kept in `sessionStorage` (gone when the tab closes), sent as
+  `Authorization: Bearer …` on every API request, and can be forgotten from the header.
+  There are no user accounts: whoever has the token can start jobs and, with the GitHub App
+  configured, create issues. Serve it over TLS when it leaves localhost.
 
 ## Tests
 

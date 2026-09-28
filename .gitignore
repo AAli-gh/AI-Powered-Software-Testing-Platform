@@ -30,3 +30,6 @@ htmlcov/
 
 # Repositories imported from GitHub when running outside Docker
 .imports/
+
+# Scratch space and imports of the sandbox stack (make up-sandbox)
+.sandbox/

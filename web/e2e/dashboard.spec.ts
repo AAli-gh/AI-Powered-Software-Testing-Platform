@@ -1,8 +1,19 @@
 import { expect, test } from "@playwright/test";
 
 // No test doubles: every request goes to the real API, every job runs in the real worker.
-// The sandbox may be unavailable (the compose stack has no Docker access); the test then
-// checks the honest outcome instead of test results.
+// The sandbox may be unavailable (the plain compose stack has no Docker access); the test then
+// checks the honest outcome instead of test results. With TESTMIND_API_TOKEN (the stack's
+// token), the tab starts with it, as after entering it once.
+
+const token = process.env.TESTMIND_API_TOKEN;
+
+test.beforeEach(async ({ page }) => {
+  if (token) {
+    await page.addInitScript((value) => {
+      sessionStorage.setItem("testmind.token", value);
+    }, token);
+  }
+});
 
 test("register a project, analyse it, run its tests and follow the results", async ({ page }) => {
   const name = `e2e-discount-${Date.now()}`;
@@ -60,4 +71,21 @@ test("the API's refusals are shown as they are", async ({ page }) => {
   await expect(page.getByText("Not available")).toBeVisible();
   await page.goto("/no/such/page");
   await expect(page.getByText("Page not found")).toBeVisible();
+});
+
+test("without the token the dashboard asks for it, and only the right one works", async ({
+  browser,
+}) => {
+  test.skip(!token, "the stack runs without an API token");
+  const page = await (await browser.newContext()).newPage();
+  await page.goto("/");
+  await expect(page.getByText("This TestMind needs an API token")).toBeVisible();
+  await page.getByLabel("API token").fill("not-the-token");
+  await page.getByRole("button", { name: "Use token" }).click();
+  await expect(page.getByText("The API token was not accepted")).toBeVisible();
+  await page.getByLabel("API token").fill(token ?? "");
+  await page.getByRole("button", { name: "Use token" }).click();
+  await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
+  await page.getByRole("button", { name: "Forget API token" }).click();
+  await expect(page.getByText("This TestMind needs an API token")).toBeVisible();
 });

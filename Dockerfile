@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# One image definition, two runtime targets:
-#   docker build --target api    -t testmind-api .
-#   docker build --target worker -t testmind-worker .
+# One image definition, three runtime targets:
+#   docker build --target api           -t testmind-api .
+#   docker build --target worker        -t testmind-worker .
+#   docker build --target sandbox-proxy -t testmind-sandbox-proxy .
 
 ARG PYTHON_VERSION=3.12
 
@@ -25,6 +26,30 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY README.md LICENSE ./
 COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
+
+# ------------------------------------------------------------------ docker CLI
+# Only the client binary, pinned by version and checksum. The worker uses it to reach the
+# sandbox proxy (DOCKER_HOST); it never gets the Docker socket itself.
+FROM python:${PYTHON_VERSION}-slim AS docker-cli
+ARG TARGETARCH
+ARG DOCKER_CLI_VERSION=29.8.1
+ARG DOCKER_CLI_SHA256_AMD64=d8db66739d2e28d4933786d73e918d9be643a67fbd835db1bf740d650a259e70
+ARG DOCKER_CLI_SHA256_ARM64=667395fbffab52901b80181dfbb39ea76da2fbd7642c4fbddd24e42146b07b48
+RUN python - <<'PY'
+import hashlib, io, os, tarfile, urllib.request
+arch = {"amd64": ("x86_64", os.environ["DOCKER_CLI_SHA256_AMD64"]),
+        "arm64": ("aarch64", os.environ["DOCKER_CLI_SHA256_ARM64"])}[os.environ.get("TARGETARCH") or "amd64"]
+url = f"https://download.docker.com/linux/static/stable/{arch[0]}/docker-{os.environ['DOCKER_CLI_VERSION']}.tgz"
+data = urllib.request.urlopen(url, timeout=120).read()
+digest = hashlib.sha256(data).hexdigest()
+if digest != arch[1]:
+    raise SystemExit(f"checksum mismatch for {url}: {digest}")
+with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+    member = tar.getmember("docker/docker")
+    with open("/usr/local/bin/docker", "wb") as out:
+        out.write(tar.extractfile(member).read())
+os.chmod("/usr/local/bin/docker", 0o755)
+PY
 
 # ------------------------------------------------------------------ runtime base
 FROM python:${PYTHON_VERSION}-slim AS runtime
@@ -60,7 +85,21 @@ CMD ["uvicorn", "--factory", "testmind.api.app:create_app", \
 
 # ------------------------------------------------------------------ worker
 FROM runtime AS worker
+# The Docker CLI, pointed at the sandbox proxy by docker-compose.sandbox.yml. The classic
+# builder is used for runner images: BuildKit's sessions cannot be checked by the proxy.
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+ENV DOCKER_BUILDKIT=0
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD ["sh", "-c", "celery -A testmind.workers.main inspect ping -d celery@$HOSTNAME --timeout 5"]
 CMD ["celery", "-A", "testmind.workers.main", "worker", \
      "--loglevel=INFO", "--concurrency=2", "--without-gossip", "--without-mingle"]
+
+# ------------------------------------------------------------------ sandbox proxy
+# The only container with the Docker socket (docker-compose.sandbox.yml). It runs as root
+# only so it can open the socket (owned by root); every capability is dropped.
+FROM runtime AS sandbox-proxy
+USER root
+EXPOSE 2375
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 \
+    CMD ["python", "-c", "import socket; socket.create_connection(('127.0.0.1', 2375), 2).close()"]
+CMD ["python", "-m", "testmind.sandbox_proxy"]

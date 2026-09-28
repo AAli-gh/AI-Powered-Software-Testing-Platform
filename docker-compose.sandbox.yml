@@ -1,0 +1,96 @@
+# Runs repository tests in the Docker sandbox from the containerised worker (Phase 13).
+#
+#   make up-sandbox     # or, with absolute paths:
+#   TESTMIND_SANDBOX_DIR=/srv/testmind/sandbox TESTMIND_HOST_REPOS_DIR=/srv/repos \
+#     docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up -d --build --wait
+#
+# The worker never gets the Docker socket. Only the sandbox proxy has it, and it lets through
+# nothing but locked-down sandbox containers and runner-image builds from TestMind's template
+# (docs/security.md#sandbox-proxy).
+#
+# Bind-mount sources are resolved by the Docker daemon on the host. The directories the
+# sandbox mounts are therefore mounted at the same absolute paths on the host, in the worker
+# and (read-only) in the proxy, which checks every mount source against them:
+#   TESTMIND_SANDBOX_DIR     the worker's scratch space (tmp/) and GitHub imports (imports/)
+#   TESTMIND_HOST_REPOS_DIR  the repositories root (must be absolute here)
+
+x-sandbox-dirs: &sandbox-dirs
+  TESTMIND_SANDBOX_DIR: ${TESTMIND_SANDBOX_DIR:?set to an absolute host directory}
+  TESTMIND_HOST_REPOS_DIR: ${TESTMIND_HOST_REPOS_DIR:?set to an absolute host directory}
+
+services:
+  # Prepares the scratch and import directories for the worker's user (uid 10001), then exits.
+  sandbox-init:
+    image: testmind-sandbox-proxy:local
+    build:
+      context: .
+      target: sandbox-proxy
+    user: "0"
+    command:
+      - sh
+      - -c
+      - install -d -o 10001 -g 10001 -m 0750 "$$TESTMIND_SANDBOX_DIR/tmp" "$$TESTMIND_SANDBOX_DIR/imports"
+    environment: *sandbox-dirs
+    volumes:
+      - ${TESTMIND_SANDBOX_DIR}:${TESTMIND_SANDBOX_DIR}
+    network_mode: none
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+
+  sandbox-proxy:
+    image: testmind-sandbox-proxy:local
+    environment:
+      TESTMIND_LOG_JSON: "true"
+      TESTMIND_PROXY_MOUNT_ROOTS: ${TESTMIND_SANDBOX_DIR},${TESTMIND_HOST_REPOS_DIR}
+      TESTMIND_PROXY_BASE_IMAGES: ${TESTMIND_SANDBOX_IMAGE:-testmind-sandbox:local},${TESTMIND_BROWSER_SANDBOX_IMAGE:-testmind-sandbox-browser:local}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${TESTMIND_SANDBOX_DIR}:${TESTMIND_SANDBOX_DIR}:ro
+      - ${TESTMIND_HOST_REPOS_DIR}:${TESTMIND_HOST_REPOS_DIR}:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # To see inside the worker's private temporary directories (mode 0700) when it checks
+      # a mount source. Read and traverse only; it already holds the Docker socket.
+      - DAC_READ_SEARCH
+    depends_on:
+      sandbox-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [sandbox]
+
+  worker:
+    environment:
+      DOCKER_HOST: tcp://sandbox-proxy:2375
+      TESTMIND_SANDBOX_IMAGE: ${TESTMIND_SANDBOX_IMAGE:-testmind-sandbox:local}
+      TESTMIND_REPOS_ROOT: ${TESTMIND_HOST_REPOS_DIR}
+      TESTMIND_GITHUB_IMPORTS_ROOT: ${TESTMIND_SANDBOX_DIR}/imports
+      TMPDIR: ${TESTMIND_SANDBOX_DIR}/tmp
+    volumes:
+      - ${TESTMIND_HOST_REPOS_DIR}:${TESTMIND_HOST_REPOS_DIR}:ro
+      - ${TESTMIND_SANDBOX_DIR}:${TESTMIND_SANDBOX_DIR}
+    depends_on:
+      sandbox-proxy:
+        condition: service_healthy
+    networks: [backend, sandbox]
+
+  api:
+    environment:
+      TESTMIND_GITHUB_IMPORTS_ROOT: ${TESTMIND_SANDBOX_DIR}/imports
+    volumes:
+      - ${TESTMIND_SANDBOX_DIR}/imports:${TESTMIND_SANDBOX_DIR}/imports:ro
+
+networks:
+  # Only the worker and the proxy; no route outside.
+  sandbox:
+    internal: true

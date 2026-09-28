@@ -23,6 +23,7 @@ from testmind.api.routes import (
     regressions,
     runs,
 )
+from testmind.api.security import RateLimitMiddleware, TokenAuthMiddleware
 from testmind.core.config import Settings, get_settings
 from testmind.core.logging import configure_logging
 from testmind.db.session import create_engine, create_session_factory
@@ -73,6 +74,9 @@ def create_app(
         summary="AI-powered software testing platform",
         lifespan=lifespan,
     )
+    # Last added runs first: request id and access log, then authentication, then the limit.
+    app.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute)
+    app.add_middleware(TokenAuthMiddleware, token=settings.api_token)
     app.add_middleware(RequestContextMiddleware)
     install_exception_handlers(app)
     app.include_router(health.router)

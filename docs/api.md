@@ -5,6 +5,11 @@ interactive docs at `/docs` (Swagger UI) and `/redoc`.
 
 ## Conventions
 
+- **Authentication:** with `TESTMIND_API_TOKEN` set (required in production), every `/api/`
+  request needs `Authorization: Bearer <token>`. The GitHub webhook authenticates with its own
+  signature instead. `/health/*`, `/openapi.json`, `/docs` and `/redoc` stay open.
+- **Rate limiting:** state-changing requests are limited per client and minute
+  (`TESTMIND_RATE_LIMIT_PER_MINUTE`, default 60; `0` disables it).
 - **Content type:** JSON everywhere. Unknown fields in request bodies are rejected (`422`).
 - **IDs:** UUIDv4. A malformed ID in the path returns `422`.
 - **Timestamps:** ISO-8601 with a UTC offset.
@@ -30,6 +35,7 @@ Every non-2xx response has this shape:
 | HTTP | `code` | When |
 |---|---|---|
 | 400 | `invalid_payload` | A signed GitHub delivery that is not a usable event; an invalid repository name or ref |
+| 401 | `unauthorized` | `TESTMIND_API_TOKEN` is set and the request has no valid `Authorization: Bearer <token>` |
 | 401 | `invalid_signature` | A GitHub webhook delivery without a valid `X-Hub-Signature-256` |
 | 403 | `repository_not_allowed` | The repository's owner is not in `TESTMIND_GITHUB_ALLOWED_OWNERS` |
 | 404 | `not_found` | Unknown project, run or route |
@@ -41,6 +47,7 @@ Every non-2xx response has this shape:
 | 422 | `invalid_source` | `source_location` missing, not a directory, or outside the repositories root |
 | 422 | `invalid_revision` | Unknown or malformed git revision, or base = head |
 | 413 | `payload_too_large` | A webhook delivery over 5 MB |
+| 429 | `rate_limited` | More state-changing requests (POST, PUT, PATCH, DELETE) per minute than `TESTMIND_RATE_LIMIT_PER_MINUTE`; `Retry-After` says when to retry |
 | 502 | `github_error` | GitHub refused a request (its status and message are included) |
 | 503 | `github_not_configured` | A GitHub feature was requested but the App (or the imports root) is not configured |
 | 503 | `llm_not_configured` | An AI feature was requested but no LLM provider is configured |

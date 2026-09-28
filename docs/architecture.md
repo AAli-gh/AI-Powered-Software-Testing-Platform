@@ -34,7 +34,8 @@ flowchart LR
 | `migrate` | `api` | Applies Alembic migrations, then exits. `api` and `worker` start only after it succeeds |
 | `api` | `api` | HTTP API. Never does heavy work in the request path |
 | `web` | `docker/web.Dockerfile` | The dashboard's static files, and a same-origin proxy to the API ([dashboard.md](dashboard.md)) |
-| `worker` | `worker` | Executes queued jobs: analysis runs, AI test generations, test executions (later: mutation testing) |
+| `worker` | `worker` | Executes queued jobs: analyses, AI test generation, test executions, mutation testing, regression and GitHub analyses |
+| `sandbox-proxy` | `sandbox-proxy` | Only with `docker-compose.sandbox.yml`: the one holder of the Docker socket. The worker reaches Docker through it on an internal network, and it allows only locked-down sandbox containers and runner-image builds ([security.md](security.md#sandbox-proxy)) |
 
 ## Code layout
 
@@ -292,10 +293,11 @@ erDiagram
 
 - **Cancellation** is supported only before a run starts. Running jobs are bounded by the
   Celery time limit and the sandbox timeout.
-- **Docker access for the containerised worker** is not configured (see
-  [test-engine.md](test-engine.md#running-the-sandbox-from-the-worker)).
+- **Authentication** is one shared API token (`TESTMIND_API_TOKEN`). There are no users,
+  roles or audit trail, and no TLS: put a TLS-terminating proxy in front before exposing it.
 
-Resolved: runs orphaned by a hard worker crash are now failed at worker start-up
-([test-engine.md](test-engine.md#orphaned-jobs)).
-- **Authentication** is not implemented yet. The API is bound to `127.0.0.1` by default and
-  must not be exposed publicly until user management lands.
+Resolved:
+- Runs orphaned by a hard worker crash are failed at worker start-up
+  ([test-engine.md](test-engine.md#orphaned-jobs)).
+- The containerised worker runs the sandbox through the policy-enforcing proxy
+  (`make up-sandbox`, [ADR-0014](adr/0014-policy-enforcing-docker-proxy.md)).

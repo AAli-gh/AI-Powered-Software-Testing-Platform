@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode, type SyntheticEvent } from "react";
 
-import { ApiError } from "../api/client";
+import { ApiError, readToken, saveToken } from "../api/client";
 import { words } from "../lib/format";
 import { toneOf, type StatusKind } from "../lib/status";
 
@@ -84,9 +85,50 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
   );
 }
 
+/** Asks for the API token (TESTMIND_API_TOKEN) when the API answers 401. */
+export function TokenForm() {
+  const client = useQueryClient();
+  const [token, setToken] = useState("");
+  const rejected = readToken() !== null;
+  const submit = (event: SyntheticEvent) => {
+    event.preventDefault();
+    saveToken(token.trim());
+    setToken(""); // the token lives in session storage only
+    void client.resetQueries();
+  };
+  return (
+    <form className="notice error stack" role="alert" onSubmit={submit}>
+      <strong>
+        {rejected ? "The API token was not accepted" : "This TestMind needs an API token"}
+      </strong>
+      <span>Enter the value of TESTMIND_API_TOKEN. It is kept only in this browser tab.</span>
+      <div className="form-row">
+        <label className="field">
+          API token
+          <input
+            type="password"
+            autoComplete="off"
+            required
+            value={token}
+            onChange={(e) => {
+              setToken(e.target.value);
+            }}
+          />
+        </label>
+        <button className="primary" type="submit">
+          Use token
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** An API error with the API's own message; a 404 reads as "not available", not a failure. */
 export function ErrorView({ error }: { error: unknown }) {
   if (error instanceof ApiError) {
+    if (error.status === 401) {
+      return <TokenForm />;
+    }
     if (error.notFound) {
       return <Notice title="Not available">{error.message}</Notice>;
     }

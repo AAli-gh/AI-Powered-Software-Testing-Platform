@@ -8,7 +8,16 @@ TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-60}"
 NAME="smoke-$(date +%s)-$RANDOM"
 
 fail() { echo "SMOKE FAILED: $*" >&2; exit 1; }
+# TESTMIND_EXPECT_SANDBOX=1 (the stack with docker-compose.sandbox.yml): tests must really run.
+no_sandbox() {
+  [[ "${TESTMIND_EXPECT_SANDBOX:-0}" == "1" ]] && fail "the sandbox was expected to run: $1"
+  return 0
+}
 json() { python3 -c "import json,sys; print(json.load(sys.stdin)$1)"; }
+# With TESTMIND_API_TOKEN (the stack's token), every API call below sends it.
+if [[ -n "${TESTMIND_API_TOKEN:-}" ]]; then
+  curl() { command curl -H "Authorization: Bearer $TESTMIND_API_TOKEN" "$@"; }
+fi
 
 wait_for_run() {
   local deadline=$((SECONDS + TIMEOUT_SECONDS)) status=""
@@ -26,6 +35,16 @@ wait_for_run() {
 echo "→ readiness"
 curl -fsS "$API/ready" | tee /dev/stderr | grep -q '"status":"ready"' || fail "API not ready"
 echo
+
+if [[ -n "${TESTMIND_API_TOKEN:-}" ]]; then
+  echo "→ authentication"
+  unauthenticated=$(command curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/projects")
+  [[ "$unauthenticated" == "401" ]] || fail "expected 401 without the API token, got $unauthenticated"
+  wrong=$(command curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer wrong" \
+    "$API/api/v1/projects")
+  [[ "$wrong" == "401" ]] || fail "expected 401 with a wrong API token, got $wrong"
+  echo "  the API refuses requests without the token"
+fi
 
 echo "→ create project"
 project_id=$(curl -fsS -X POST "$API/api/v1/projects" \
@@ -106,6 +125,7 @@ case "$outcome" in
     echo "  project tests passed in the sandbox, coverage ${percent}%"
     ;;
   sandbox_unavailable)
+    no_sandbox "test execution"
     [[ "$coverage_status" == "404" ]] || fail "coverage reported without a sandbox run"
     [[ "$failures_status" == "404" ]] || fail "failure report without a sandbox run"
     echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no coverage or failure report"
@@ -127,7 +147,10 @@ done
 baseline=$(echo "$mutation" | json "['summary']['baseline_outcome']")
 case "$baseline" in
   passed) echo "  mutation score $(echo "$mutation" | json "['score']")" ;;
-  sandbox_unavailable) echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no score" ;;
+  sandbox_unavailable)
+    no_sandbox "mutation testing"
+    echo "  no Docker access for the containerised worker: honest sandbox_unavailable, no score"
+    ;;
   *) fail "unexpected mutation baseline outcome: $baseline" ;;
 esac
 
@@ -155,6 +178,7 @@ case "$api_outcome" in
     echo "  6 endpoints found; probes ran: $(curl -fsS "$API/api/v1/test-executions/$api_execution/api-coverage" | json "['probes']")"
     ;;
   sandbox_unavailable)
+    no_sandbox "API testing"
     [[ "$api_coverage" == "404" ]] || fail "API coverage reported without a sandbox run"
     echo "  6 endpoints found statically; no Docker access for the containerised worker: honest sandbox_unavailable, no API coverage"
     ;;

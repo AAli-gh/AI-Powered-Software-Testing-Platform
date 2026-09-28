@@ -110,11 +110,15 @@ real defect in the example, and the missing migration was added.
 The sandbox needs a Docker daemon. When the worker runs on a host with Docker
 (`make worker`, and in CI), executions and AI test validation run for real.
 
-The **containerised** worker in `docker-compose.yml` deliberately has **no** access to the
-Docker socket, because mounting it would give the worker root on the host
-([ADR-0003](adr/0003-sandboxed-execution.md)). Its executions complete with outcome
-`sandbox_unavailable`, and the smoke test checks exactly that. Safe access for the
-containerised worker (socket proxy or rootless runtime) is planned for Phase 13.
+The **containerised** worker never gets the Docker socket, because mounting it would give the
+worker root on the host ([ADR-0003](adr/0003-sandboxed-execution.md)). With
+`docker-compose.yml` alone its executions complete with outcome `sandbox_unavailable`.
+
+With the sandbox override (`make up-sandbox`, `docker-compose.sandbox.yml`) the worker talks
+to Docker through `sandbox-proxy`, which allows only TestMind's locked-down sandbox
+containers and runner-image builds ([ADR-0014](adr/0014-policy-enforcing-docker-proxy.md),
+[security.md](security.md#sandbox-proxy)). CI runs the smoke test on that stack with
+`TESTMIND_EXPECT_SANDBOX=1`, which fails if any step reports `sandbox_unavailable`.
 
 ## Orphaned jobs
 
