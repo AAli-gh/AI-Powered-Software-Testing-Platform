@@ -16,3 +16,4 @@ Short records of significant decisions: the context, the decision and its conseq
 | [0010](0010-single-container-mutation-driver.md) | Run all mutants of a job in one sandbox container | Accepted |
 | [0011](0011-observe-api-usage-inside-the-application.md) | Observe API usage inside the application, and cross-check static discovery with it | Accepted |
 | [0012](0012-github-app-with-tarball-snapshots.md) | Integrate as a GitHub App, and read commits as tarball snapshots | Accepted |
+| [0013](0013-dashboard-spa-typed-from-openapi.md) | A single-page dashboard, typed from the API's OpenAPI schema, on one origin | Accepted |

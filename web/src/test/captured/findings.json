@@ -1,0 +1,73 @@
+{
+  "items": [
+    {
+      "rule_id": "TM010",
+      "category": "dangerous_pattern",
+      "severity": "critical",
+      "confidence": 1.0,
+      "path": "inventory/io.py",
+      "line": 25,
+      "symbol": "evaluate_rule",
+      "message": "eval() executes arbitrary code built from a function argument",
+      "evidence": "return eval(expression)"
+    },
+    {
+      "rule_id": "TM011",
+      "category": "dangerous_pattern",
+      "severity": "high",
+      "confidence": 1.0,
+      "path": "inventory/io.py",
+      "line": 9,
+      "symbol": "load_snapshot",
+      "message": "pickle.loads() can execute arbitrary code when given untrusted data",
+      "evidence": "return pickle.loads(blob)"
+    },
+    {
+      "rule_id": "TM013",
+      "category": "dangerous_pattern",
+      "severity": "high",
+      "confidence": 1.0,
+      "path": "inventory/io.py",
+      "line": 13,
+      "symbol": "load_config",
+      "message": "yaml.load() without a safe Loader can construct arbitrary Python objects; use yaml.safe_load()",
+      "evidence": "return yaml.load(text)"
+    },
+    {
+      "rule_id": "TM012",
+      "category": "dangerous_pattern",
+      "severity": "high",
+      "confidence": 1.0,
+      "path": "inventory/io.py",
+      "line": 21,
+      "symbol": "backup",
+      "message": "subprocess.run(shell=True) enables command injection; pass an argument list instead",
+      "evidence": "subprocess.run(f\"tar czf backup.tgz {path}\", shell=True, check=True)"
+    },
+    {
+      "rule_id": "TM002",
+      "category": "error_handling",
+      "severity": "high",
+      "confidence": 1.0,
+      "path": "inventory/io.py",
+      "line": 32,
+      "symbol": "read_quantity",
+      "message": "Exception is silently swallowed (broad catch hides unrelated bugs)",
+      "evidence": "except:"
+    },
+    {
+      "rule_id": "TM014",
+      "category": "dangerous_pattern",
+      "severity": "high",
+      "confidence": 0.6,
+      "path": "inventory/stock.py",
+      "line": 6,
+      "symbol": null,
+      "message": "Possible hard-coded secret in 'API_TOKEN'; load it from the environment",
+      "evidence": "API_TOKEN = \"fixture-token-not-a-real-secret\""
+    }
+  ],
+  "total": 17,
+  "limit": 6,
+  "offset": 0
+}

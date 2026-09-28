@@ -1,0 +1,18 @@
+{
+  "metrics": {
+    "modules": 1,
+    "test_modules_skipped": 1,
+    "lines": 46,
+    "functions": 7,
+    "methods": 0,
+    "classes": 0,
+    "average_complexity": 1.71,
+    "max_complexity": 3,
+    "complexity_ranks": {
+      "A": 7
+    },
+    "findings_by_severity": {},
+    "findings_by_category": {}
+  },
+  "issues": []
+}

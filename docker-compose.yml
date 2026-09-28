@@ -91,6 +91,21 @@ services:
     restart: unless-stopped
     networks: [backend]
 
+  # The dashboard: static files and a same-origin proxy to the API (nginx, unprivileged).
+  web:
+    build:
+      context: ./web
+      dockerfile: ../docker/web.Dockerfile
+    image: testmind-web:local
+    <<: *app-security
+    ports:
+      - "127.0.0.1:${TESTMIND_WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [backend]
+
   worker:
     build:
       context: .

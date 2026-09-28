@@ -112,10 +112,42 @@ jobs:
           docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.28.0 \
             git /repo --redact --verbose
 
+  web:
+    name: Dashboard (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: The committed OpenAPI schema and TypeScript types match the API's code
+        run: |
+          uv run --project .. python ../scripts/export_openapi.py --check
+          npm run openapi
+          git diff --exit-code -- src/api/schema.ts
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - name: Component tests (coverage gate in vite.config.ts)
+        run: npm run test:coverage
+      - run: npm run build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
   docker:
     name: Docker build + smoke test
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    needs: [lint, typecheck, test, web]
     steps:
       - uses: actions/checkout@v5
       - name: Prepare environment file
@@ -126,6 +158,25 @@ jobs:
         run: docker compose up -d --wait --wait-timeout 180
       - name: Smoke test
         run: ./scripts/smoke_test.sh
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Dashboard end-to-end tests (real browser, through the web container)
+        working-directory: web
+        env:
+          TESTMIND_WEB_URL: http://127.0.0.1:8080
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          if-no-files-found: ignore
       - name: Container logs
         if: always()
         run: docker compose logs --no-color

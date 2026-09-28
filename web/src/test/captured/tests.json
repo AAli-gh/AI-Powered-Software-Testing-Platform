@@ -1,0 +1,161 @@
+{
+  "items": [
+    {
+      "nodeid": "tests/test_books.py::test_list_books",
+      "file": "tests/test_books.py",
+      "line": 11,
+      "name": "test_list_books",
+      "outcome": "passed",
+      "duration_seconds": 0.025,
+      "message": null,
+      "traceback": null,
+      "generated": false
+    },
+    {
+      "nodeid": "tests/test_books.py::test_add_book",
+      "file": "tests/test_books.py",
+      "line": 15,
+      "name": "test_add_book",
+      "outcome": "passed",
+      "duration_seconds": 0.011,
+      "message": null,
+      "traceback": null,
+      "generated": false
+    },
+    {
+      "nodeid": "tests/test_books.py::test_get_book",
+      "file": "tests/test_books.py",
+      "line": 20,
+      "name": "test_get_book",
+      "outcome": "passed",
+      "duration_seconds": 0.009,
+      "message": null,
+      "traceback": null,
+      "generated": false
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_001_unknown_path",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 10,
+      "name": "test_probe_001_unknown_path",
+      "outcome": "passed",
+      "duration_seconds": 0.002,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_002_wrong_method",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 16,
+      "name": "test_probe_002_wrong_method",
+      "outcome": "passed",
+      "duration_seconds": 0.002,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_003_wrong_method",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 22,
+      "name": "test_probe_003_wrong_method",
+      "outcome": "passed",
+      "duration_seconds": 0.002,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_004_wrong_method",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 28,
+      "name": "test_probe_004_wrong_method",
+      "outcome": "passed",
+      "duration_seconds": 0.002,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_005_empty_body",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 34,
+      "name": "test_probe_005_empty_body",
+      "outcome": "failed",
+      "duration_seconds": 0.002,
+      "message": "KeyError: 'title'",
+      "traceback": "def test_probe_005_empty_body():\n        \"\"\"empty_body: POST /books with body {} must be answered 4xx.\"\"\"\n>       response = client_0.open('/books', method='POST', data='{}', headers={'Content-Type': 'application/json'})\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n../tests/testmind/test_api_probes.py:36: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n/usr/local/lib/python3.12/site-packages/flask/testing.py:235: in open\n    response = super().open(\n/usr/local/lib/python3.12/site-packages/werkzeug/test.py:1116: in open\n    response_parts = self.run_wsgi_app(request.environ, buffered=buffered)\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/werkzeug/test.py:988: in run_wsgi_app\n    rv = run_wsgi_app(self.application, environ, buffered=buffered)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/werkzeug/test.py:1264: in run_wsgi_app\n    app_rv = app(environ, start_response)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/flask/app.py:1536: in __call__\n    return self.wsgi_app(environ, start_response)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/flask/app.py:1514: in wsgi_app\n    response = self.handle_exception(e)\n               ^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/flask/app.py:1511: in wsgi_app\n    response = self.full_dispatch_request()\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/opt/testmind/testmind_api.py:236: in full_dispatch_request\n    response = original(self)\n               ^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/flask/app.py:919: in full_dispatch_request\n    rv = self.handle_user_exception(e)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/flask/app.py:917: in full_dispatch_request\n    rv = self.dispatch_request()\n         ^^^^^^^^^^^^^^^^^^^^^^^\n/usr/local/lib/python3.12/site-packages/flask/app.py:902: in dispatch_request\n    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\n    @app.post(\"/books\")\n    def add_book():\n        payload = request.get_json()\n>       title = payload[\"title\"]  # defect: a body without \"title\" is a 500, not a 400\n                ^^^^^^^^^^^^^^^^\nE       KeyError: 'title'\n\nlibrary/__init__.py:17: KeyError",
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_006_malformed_body",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 40,
+      "name": "test_probe_006_malformed_body",
+      "outcome": "passed",
+      "duration_seconds": 0.002,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_007_invalid_param",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 46,
+      "name": "test_probe_007_invalid_param",
+      "outcome": "passed",
+      "duration_seconds": 0.002,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_008_invalid_param",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 52,
+      "name": "test_probe_008_invalid_param",
+      "outcome": "passed",
+      "duration_seconds": 0.001,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_009_invalid_param",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 58,
+      "name": "test_probe_009_invalid_param",
+      "outcome": "passed",
+      "duration_seconds": 0.001,
+      "message": null,
+      "traceback": null,
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_010_empty_body",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 64,
+      "name": "test_probe_010_empty_body",
+      "outcome": "failed",
+      "duration_seconds": 0.003,
+      "message": "AssertionError: 200\nassert 400 <= 200\n +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code",
+      "traceback": "def test_probe_010_empty_body():\n        \"\"\"empty_body: PUT /books/1 with body {} must be answered 4xx.\"\"\"\n        response = client_0.open('/books/1', method='PUT', data='{}', headers={'Content-Type': 'application/json'})\n>       assert 400 <= response.status_code < 500, response.status_code\nE       AssertionError: 200\nE       assert 400 <= 200\nE        +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code\n\n../tests/testmind/test_api_probes.py:67: AssertionError",
+      "generated": true
+    },
+    {
+      "nodeid": "tests/testmind/test_api_probes.py::test_probe_011_malformed_body",
+      "file": "tests/testmind/test_api_probes.py",
+      "line": 70,
+      "name": "test_probe_011_malformed_body",
+      "outcome": "failed",
+      "duration_seconds": 0.002,
+      "message": "AssertionError: 200\nassert 400 <= 200\n +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code",
+      "traceback": "def test_probe_011_malformed_body():\n        \"\"\"malformed_body: PUT /books/1 with body {\"unterminated must be answered 4xx.\"\"\"\n        response = client_0.open('/books/1', method='PUT', data='{\"unterminated', headers={'Content-Type': 'application/json'})\n>       assert 400 <= response.status_code < 500, response.status_code\nE       AssertionError: 200\nE       assert 400 <= 200\nE        +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code\n\n../tests/testmind/test_api_probes.py:73: AssertionError",
+      "generated": true
+    }
+  ],
+  "total": 14,
+  "limit": 25,
+  "offset": 0
+}

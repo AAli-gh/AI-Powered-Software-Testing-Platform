@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "statements": 34,
+      "covered_lines": 28,
+      "branches": 4,
+      "covered_branches": 2,
+      "line_percent": 82.35,
+      "branch_percent": 50.0,
+      "percent": 78.95,
+      "path": "library/__init__.py",
+      "missing_lines": [25, 31, 38, 39, 43, 44],
+      "missing": ["25", "31", "38-39", "43-44"],
+      "missing_branches_detail": ["24->25", "30->31"]
+    }
+  ],
+  "total": 1,
+  "limit": 25,
+  "offset": 0
+}

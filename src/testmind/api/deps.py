@@ -15,6 +15,7 @@ from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
 from testmind.services.github_service import GitHubService
 from testmind.services.mutation_service import MutationService
+from testmind.services.overview_service import OverviewService
 from testmind.services.project_service import ProjectService
 from testmind.services.regression_service import RegressionService
 from testmind.services.run_service import RunService
@@ -112,3 +113,10 @@ def get_github_service(
 
 
 GitHubServiceDep = Annotated[GitHubService, Depends(get_github_service)]
+
+
+def get_overview_service(session: SessionDep) -> OverviewService:
+    return OverviewService(session)
+
+
+OverviewServiceDep = Annotated[OverviewService, Depends(get_overview_service)]

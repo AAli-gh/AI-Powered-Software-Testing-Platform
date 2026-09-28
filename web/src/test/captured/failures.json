@@ -1,0 +1,18 @@
+{
+  "failed_tests": 13,
+  "analysed_tests": 13,
+  "unanalysed_tests": [],
+  "notes": [],
+  "groups": 10,
+  "by_category": {
+    "exception_in_code": 2,
+    "assertion_failure": 2,
+    "exception_in_library": 1,
+    "exception_in_test": 1,
+    "fixture_error": 1,
+    "import_error": 1,
+    "syntax_error": 1,
+    "unexpected_pass": 1
+  },
+  "decided": 3
+}

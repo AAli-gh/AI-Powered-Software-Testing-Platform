@@ -13,7 +13,7 @@ Playwright), not a replacement for them. Deterministic tools do everything they 
 LLMs are used only where they add real value: writing tests, hypothesising root causes, and
 summarising findings. Every AI output comes with its evidence and a confidence level.
 
-> **Status: Phases 1–11 of 14 are complete: the platform foundation, the deterministic
+> **Status: Phases 1–12 of 14 are complete: the platform foundation, the deterministic
 > repository and code analyzers, AI test generation with sandboxed validation, the
 > sandboxed test runner, coverage analysis with coverage-guided test generation, failure
 > analysis (deterministic grouping plus evidence-checked AI root causes), regression
@@ -21,11 +21,14 @@ summarising findings. Every AI output comes with its evidence and a confidence l
 > AI tests for surviving mutants, and API testing (endpoint discovery, API coverage,
 > deterministic probes, sandbox-verified AI API tests) with minimal Playwright support, and a
 > GitHub App integration (signed webhooks, pull request analysis posted as a check run and a
-> comment, issue suggestions, repository import), tested against a local fake of GitHub.**
+> comment, issue suggestions, repository import), tested against a local fake of GitHub, and a
+> web dashboard (React + TypeScript) over all of it.**
 > The AI stages have been verified end to end with a scripted model. A live call to the
 > Anthropic API has not been run yet because no API key was available (see
 > [docs/ai-engine.md](docs/ai-engine.md)). The [roadmap](#roadmap) shows exactly what exists today and what is
 > planned.
+
+![The dashboard's overview, with real results of the example repositories](docs/images/dashboard-overview.png)
 
 ---
 
@@ -60,7 +63,9 @@ Repository → Repository Analyzer → Code Analyzer (AST, static analysis)
 
 ```mermaid
 flowchart LR
-    client([Client / Dashboard]) -->|HTTP| api[FastAPI API]
+    browser([Browser]) -->|HTTP| web[Dashboard: nginx + React]
+    web -->|same-origin proxy| api[FastAPI API]
+    client([API clients]) -->|HTTP| api
     api -->|SQL| pg[(PostgreSQL)]
     api -->|enqueue| redis[(Redis broker)]
     redis --> worker[Celery worker]
@@ -212,6 +217,21 @@ Everything listed here is implemented and tested.
     ([ADR-0012](docs/adr/0012-github-app-with-tarball-snapshots.md));
   - tested against a local fake of the GitHub API that verifies the App JWT and the
     installation tokens. **Not yet exercised against github.com.**
+- **Dashboard** ([details](docs/dashboard.md)): a React + TypeScript single-page application
+  over the API.
+  - Pages: the platform overview; project trends (tests, code and API coverage, mutation
+    score); runs; test executions; regressions; mutation runs; pull request analyses.
+  - Actions: register a project, analyse it, run its tests, compare commits, create GitHub
+    issues from suggestions.
+  - Types are generated from the API's OpenAPI schema and checked in CI, so the dashboard
+    cannot drift from the API.
+  - Served by an unprivileged nginx on the same origin as the API, with a strict CSP.
+  - Tested with component tests on captured real answers, and a Playwright test through
+    the real stack ([ADR-0013](docs/adr/0013-dashboard-spa-typed-from-openapi.md)).
+
+  | Project trends (dark mode) | API coverage of an execution |
+  |---|---|
+  | ![Project page](docs/images/dashboard-project.png) | ![API coverage](docs/images/dashboard-api-coverage.png) |
 - **Orphaned-job recovery:** jobs left `running` by a crashed worker are failed when a worker
   starts.
 - **Operations**: liveness (`/health`) and readiness (`/ready`, real DB + Redis checks) probes,
@@ -219,7 +239,8 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 1064 tests with 100 % line and branch coverage in CI. They run against real
+- **Test suite**: 1067 Python tests with 100 % line and branch coverage in CI, plus 64
+  dashboard component tests and 2 browser tests through the real stack. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
@@ -251,11 +272,12 @@ Requirements: Docker with Compose v2.
 git clone https://github.com/AAli-gh/AI-Powered-Software-Testing-Platform.git
 cd AI-Powered-Software-Testing-Platform
 cp .env.example .env          # then change POSTGRES_PASSWORD
-make up                       # build + start postgres, redis, migrate, api, worker (waits for healthy)
+make up                       # build + start postgres, redis, migrate, api, worker, web (waits for healthy)
 make smoke                    # end-to-end check against the running stack
 ```
 
-The API listens on <http://127.0.0.1:8000>. Interactive docs are at <http://127.0.0.1:8000/docs>.
+The dashboard is at <http://127.0.0.1:8080>. The API listens on <http://127.0.0.1:8000>, and its
+interactive docs are at <http://127.0.0.1:8000/docs>.
 `make down` stops everything.
 
 ## Configuration
@@ -284,6 +306,7 @@ All settings are environment variables with the `TESTMIND_` prefix (see
 | `TESTMIND_GITHUB_ALLOWED_OWNERS` | empty (any) | Owners whose repositories may be analysed |
 | `TESTMIND_GITHUB_IMPORTS_ROOT` | unset | Where imported repositories are written (`/imports` volume in compose) |
 | `TESTMIND_PUBLIC_URL` | unset | Links from pull request comments to the report |
+| `TESTMIND_WEB_PORT` / `TESTMIND_API_PORT` | `8080` / `8000` | Ports of the dashboard and the API, published on `127.0.0.1` only |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | — | Database container credentials |
 
 ## Usage
@@ -354,6 +377,7 @@ Errors always have the same shape:
 | `POST` | `/api/v1/projects` | Register a project (`201`, `409` duplicate name, `422` invalid source) |
 | `GET` | `/api/v1/projects` | List projects (`limit` ≤ 100, `offset`) |
 | `GET` | `/api/v1/projects/{id}` | Get a project |
+| `GET` | `/api/v1/overview` · `/api/v1/projects/{id}/overview` | Dashboard aggregates: jobs by status, projects with their latest results; a project's trends (executions, coverage, mutation scores, regressions, pull requests) |
 | `DELETE` | `/api/v1/projects/{id}` | Delete (`409` while runs are queued/running) |
 | `POST` | `/api/v1/projects/{id}/runs` | Queue an analysis run (`202`, `503` if the queue is down) |
 | `GET` | `/api/v1/projects/{id}/runs` | List a project's runs |
@@ -399,6 +423,8 @@ make test-services   # throw-away PostgreSQL + Redis on localhost:55432 / 56379
 make sandbox-image   # Docker image in which generated tests are executed
 make browser-image   # optional: the same plus a headless Chromium (Playwright tests)
 make check           # ruff + mypy --strict + full test suite with coverage (gate: 85 %)
+make web-check       # dashboard: eslint, prettier, tsc, Vitest with coverage, build
+make openapi         # after an API change: regenerate web/openapi.json and the TypeScript types
 make help            # all targets
 ```
 
@@ -409,6 +435,7 @@ make help            # all targets
 | Integration | `tests/integration/` | Real PostgreSQL + Redis + an in-process Celery worker |
 | API | `tests/api/` | The FastAPI app over HTTP (httpx) with a real database |
 | GitHub | `tests/github_fake.py` | A local fake of the GitHub REST API (JWT verification, installation tokens, tarballs), used by the GitHub tests of every suite |
+| Dashboard | `web/src/**/*.test.tsx`, `web/e2e/` | Vitest + Testing Library (the API replaced at `fetch` with captured real answers), and Playwright in Chromium through the real stack |
 | Smoke / E2E | `scripts/smoke_test.sh` | The running docker-compose stack |
 
 Only external boundaries have test doubles: the task queue (in tests that do not need a
@@ -422,8 +449,10 @@ The real Celery path is covered end to end. See [docs/testing.md](docs/testing.m
 
 ```text
 lint (ruff) ─┐
-typecheck ───┼─► docker: build images → compose up (healthy) → smoke test
-tests ───────┘     (Python 3.11 + 3.12, real Postgres/Redis, coverage gate)
+typecheck ───┤
+tests ───────┼─► docker: build images → compose up (healthy) → smoke test → dashboard e2e (Playwright)
+web ─────────┘     tests: Python 3.11 + 3.12, real Postgres/Redis, coverage gate
+                   web: OpenAPI/types drift check, eslint, prettier, tsc, Vitest, build, npm audit
 security: bandit · pip-audit (locked deps) · gitleaks (full git history)
 ```
 
@@ -457,16 +486,23 @@ In place today:
   App's private key and installation tokens never reach the database, logs or the sandbox.
   Commits arrive as size-capped tarballs, extracted without links, special files or unsafe
   paths ([docs/github.md](docs/github.md)).
+- The dashboard is served by an unprivileged nginx (read-only filesystem, no capabilities) on
+  the API's origin, with a strict Content-Security-Policy (`'self'` only, no inline code) and
+  `nosniff` / `no-referrer` headers. Repository text is rendered as text, never as HTML.
 - Git history is read with dulwich, never with the git command line, so a repository's
   configuration cannot run commands ([ADR-0009](docs/adr/0009-read-only-git-with-dulwich.md)).
 - Project dependencies are installed **wheels only** (`pip --only-binary=:all:`), so no
   third-party build scripts run.
 
-Still open: giving the **containerised** worker access to Docker for the sandbox. It needs a
-socket proxy or rootless runtime, not the raw Docker socket. Until then, the compose stack
-reports `sandbox_unavailable` for executions and `unverified` for generated tests, while a
-worker on a Docker host (`make worker`, CI) runs them for real. This is planned for
-Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
+Still open:
+- **Authentication and authorisation** are not implemented. The API and the dashboard are
+  published on `127.0.0.1` only, and must not be exposed beyond a trusted network until
+  users exist: anyone who can open them can start jobs.
+- Giving the **containerised** worker access to Docker for the sandbox. It needs a socket
+  proxy or rootless runtime, not the raw Docker socket. Until then, the compose stack reports
+  `sandbox_unavailable` for executions and `unverified` for generated tests, while a worker
+  on a Docker host (`make worker`, CI) runs them for real. This is planned for Phase 13
+  ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 
 ## Roadmap
 
@@ -483,7 +519,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 | 9 | Mutation testing: mutants, score, survivors | ✅ Done (AI suggestions verified with a scripted model) |
 | 10 | API & E2E testing: endpoint discovery, API tests, Playwright | ✅ Done (AI API tests verified with a scripted model; Playwright: running existing browser tests, verified in CI) |
 | 11 | GitHub integration: import, PR analysis, comments, issue suggestions | ✅ Done (tested against a local fake of GitHub; not yet against github.com) |
-| 12 | Dashboard: overview, tests, coverage, findings, regressions, mutation | Planned |
+| 12 | Dashboard: overview, tests, coverage, findings, regressions, mutation | ✅ Done |
 | 13 | Security hardening: sandboxing, limits, network restrictions | Planned |
 | 14 | Production quality: monitoring, performance, complete docs | Planned |
 
@@ -500,6 +536,7 @@ Phase 13 ([ADR-0003](docs/adr/0003-sandboxed-execution.md)).
 - [Mutation testing](docs/mutation.md): operators, targeting, the in-sandbox driver, scores, AI tests for survivors
 - [API and browser testing](docs/api-testing.md): endpoint discovery, runtime capture, API coverage, probes, AI API tests, Playwright
 - [GitHub integration](docs/github.md): the App, webhooks, pull request analysis, issues, imports
+- [Dashboard](docs/dashboard.md): pages, architecture, charts, security, tests
 - [API](docs/api.md): endpoints, error model, pagination
 - [Testing](docs/testing.md): test strategy and how to run each suite
 - [Development](docs/development.md): local setup, migrations, conventions

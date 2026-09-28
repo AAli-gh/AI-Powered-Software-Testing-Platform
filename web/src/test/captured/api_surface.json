@@ -1,0 +1,115 @@
+{
+  "apps": [
+    {
+      "framework": "flask",
+      "module": "library",
+      "path": "library/__init__.py",
+      "line": 7,
+      "variable": null,
+      "factory": "create_app",
+      "factory_needs_arguments": false
+    }
+  ],
+  "endpoints": [
+    {
+      "framework": "flask",
+      "method": "GET",
+      "path": "/books",
+      "params": [],
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.list_books",
+        "path": "library/__init__.py",
+        "line": 11
+      },
+      "accepts_body": false,
+      "app": "library:create_app()"
+    },
+    {
+      "framework": "flask",
+      "method": "POST",
+      "path": "/books",
+      "params": [],
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.add_book",
+        "path": "library/__init__.py",
+        "line": 15
+      },
+      "accepts_body": true,
+      "app": "library:create_app()"
+    },
+    {
+      "framework": "flask",
+      "method": "DELETE",
+      "path": "/books/{book_id}",
+      "params": [
+        {
+          "name": "book_id",
+          "type": "int"
+        }
+      ],
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.delete_book",
+        "path": "library/__init__.py",
+        "line": 37
+      },
+      "accepts_body": false,
+      "app": "library:create_app()"
+    },
+    {
+      "framework": "flask",
+      "method": "GET",
+      "path": "/books/{book_id}",
+      "params": [
+        {
+          "name": "book_id",
+          "type": "int"
+        }
+      ],
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.get_book",
+        "path": "library/__init__.py",
+        "line": 23
+      },
+      "accepts_body": false,
+      "app": "library:create_app()"
+    },
+    {
+      "framework": "flask",
+      "method": "PUT",
+      "path": "/books/{book_id}",
+      "params": [
+        {
+          "name": "book_id",
+          "type": "int"
+        }
+      ],
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.update_book",
+        "path": "library/__init__.py",
+        "line": 29
+      },
+      "accepts_body": true,
+      "app": "library:create_app()"
+    },
+    {
+      "framework": "flask",
+      "method": "GET",
+      "path": "/stats",
+      "params": [],
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.stats",
+        "path": "library/__init__.py",
+        "line": 42
+      },
+      "accepts_body": false,
+      "app": "library:create_app()"
+    }
+  ],
+  "notes": []
+}

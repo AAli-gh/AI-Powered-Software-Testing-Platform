@@ -18,6 +18,7 @@ from testmind.api.routes import (
     github,
     health,
     mutations,
+    overview,
     projects,
     regressions,
     runs,
@@ -76,6 +77,7 @@ def create_app(
     install_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(projects.router)
+    app.include_router(overview.router)
     app.include_router(runs.router)
     app.include_router(code.router)
     app.include_router(generations.router)

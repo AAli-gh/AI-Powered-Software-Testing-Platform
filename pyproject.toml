@@ -91,7 +91,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src", "tests", "migrations"]
+files = ["src", "tests", "migrations", "scripts"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 

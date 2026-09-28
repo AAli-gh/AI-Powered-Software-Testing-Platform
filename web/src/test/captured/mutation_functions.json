@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "total": 4,
+      "killed": 2,
+      "survived": 2,
+      "timeout": 0,
+      "no_coverage": 0,
+      "errors": 0,
+      "score": 50.0,
+      "covered_score": 50.0,
+      "path": "shipping/rates.py",
+      "function": "is_free"
+    },
+    {
+      "total": 16,
+      "killed": 10,
+      "survived": 6,
+      "timeout": 0,
+      "no_coverage": 0,
+      "errors": 0,
+      "score": 62.5,
+      "covered_score": 62.5,
+      "path": "shipping/rates.py",
+      "function": "shipping_cost"
+    }
+  ],
+  "total": 2,
+  "limit": 10,
+  "offset": 0
+}

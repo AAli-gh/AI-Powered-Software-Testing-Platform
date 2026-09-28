@@ -1,0 +1,680 @@
+{
+  "items": [
+    {
+      "id": "4f8cdfbe8829",
+      "category": "exception_in_code",
+      "exception_type": "ZeroDivisionError",
+      "message": "division by zero",
+      "crash": {
+        "path": "shop/stock.py",
+        "line": 5,
+        "function": "average",
+        "code": "return total / count",
+        "location": "production"
+      },
+      "raised_at": {
+        "path": "shop/stock.py",
+        "line": 5,
+        "function": "average",
+        "code": "return total / count",
+        "location": "production"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 11,
+          "function": "test_zero_division",
+          "code": "assert average(10, 0) == 0",
+          "location": "test"
+        },
+        {
+          "path": "shop/stock.py",
+          "line": 5,
+          "function": "average",
+          "code": "return total / count",
+          "location": "production"
+        }
+      ],
+      "locals": {
+        "count": "0",
+        "total": "10"
+      },
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_zero_division",
+          "file": "tests/test_stock.py",
+          "name": "test_zero_division",
+          "line": 10,
+          "phase": "call",
+          "generated": false
+        },
+        {
+          "nodeid": "tests/test_stock.py::test_zero_division_again",
+          "file": "tests/test_stock.py",
+          "name": "test_zero_division_again",
+          "line": 14,
+          "phase": "call",
+          "generated": false
+        },
+        {
+          "nodeid": "tests/test_stock.py::test_method",
+          "file": "tests/test_stock.py",
+          "name": "test_method",
+          "line": 51,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": {
+        "path": "shop/stock.py",
+        "qualname": "average",
+        "line": 4,
+        "end_line": 5,
+        "complexity": 1,
+        "findings": ["TM040"],
+        "coverage_percent": 100.0
+      },
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "ZeroDivisionError at shop/stock.py:5 in average: return total / count",
+          "path": "shop/stock.py",
+          "line": 5
+        },
+        {
+          "kind": "locals",
+          "detail": "Local variables in average: total = 10, count = 0",
+          "path": "shop/stock.py",
+          "line": 5
+        },
+        {
+          "kind": "finding",
+          "detail": "Static analysis flagged the failing line: TM040 (medium, confidence 0.5): 'count' is used as a divisor without being validated (possible ZeroDivisionError)",
+          "path": "shop/stock.py",
+          "line": 5
+        },
+        {
+          "kind": "repetition",
+          "detail": "3 tests fail the same way at the same place",
+          "path": null,
+          "line": null
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "98a7211d1981",
+      "category": "assertion_failure",
+      "exception_type": "AssertionError",
+      "message": "assert 'positive' == 'negative'\n  \n  - negative\n  + positive",
+      "crash": {
+        "path": "tests/test_stock.py",
+        "line": 47,
+        "function": "test_param",
+        "code": "assert label(n) == \"negative\"",
+        "location": "test"
+      },
+      "raised_at": {
+        "path": "tests/test_stock.py",
+        "line": 47,
+        "function": "test_param",
+        "code": "assert label(n) == \"negative\"",
+        "location": "test"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 47,
+          "function": "test_param",
+          "code": "assert label(n) == \"negative\"",
+          "location": "test"
+        }
+      ],
+      "locals": {
+        "n": "1"
+      },
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_param[1]",
+          "file": "tests/test_stock.py",
+          "name": "test_param[1]",
+          "line": 45,
+          "phase": "call",
+          "generated": false
+        },
+        {
+          "nodeid": "tests/test_stock.py::test_param[2]",
+          "file": "tests/test_stock.py",
+          "name": "test_param[2]",
+          "line": 45,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "AssertionError at tests/test_stock.py:47 in test_param: assert label(n) == \"negative\"",
+          "path": "tests/test_stock.py",
+          "line": 47
+        },
+        {
+          "kind": "assertion",
+          "detail": "assert 'positive' == 'negative'\n  \n  - negative\n  + positive",
+          "path": null,
+          "line": null
+        },
+        {
+          "kind": "locals",
+          "detail": "Local variables in test_param: n = 1",
+          "path": "tests/test_stock.py",
+          "line": 47
+        },
+        {
+          "kind": "repetition",
+          "detail": "2 tests fail the same way at the same place",
+          "path": null,
+          "line": null
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "ee9ce6a396b4",
+      "category": "assertion_failure",
+      "exception_type": "AssertionError",
+      "message": "assert 'negative' == 'zero'\n  \n  - zero\n  + negative",
+      "crash": {
+        "path": "tests/test_stock.py",
+        "line": 7,
+        "function": "test_assertion",
+        "code": "assert label(0) == \"zero\"",
+        "location": "test"
+      },
+      "raised_at": {
+        "path": "tests/test_stock.py",
+        "line": 7,
+        "function": "test_assertion",
+        "code": "assert label(0) == \"zero\"",
+        "location": "test"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 7,
+          "function": "test_assertion",
+          "code": "assert label(0) == \"zero\"",
+          "location": "test"
+        }
+      ],
+      "locals": {},
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_assertion",
+          "file": "tests/test_stock.py",
+          "name": "test_assertion",
+          "line": 6,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "AssertionError at tests/test_stock.py:7 in test_assertion: assert label(0) == \"zero\"",
+          "path": "tests/test_stock.py",
+          "line": 7
+        },
+        {
+          "kind": "assertion",
+          "detail": "assert 'negative' == 'zero'\n  \n  - zero\n  + negative",
+          "path": null,
+          "line": null
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "afce25e81128",
+      "category": "exception_in_code",
+      "exception_type": "RuntimeError",
+      "message": "bad value",
+      "crash": {
+        "path": "shop/stock.py",
+        "line": 23,
+        "function": "run",
+        "code": "raise RuntimeError(\"bad value\") from exc",
+        "location": "production"
+      },
+      "raised_at": {
+        "path": "shop/stock.py",
+        "line": 23,
+        "function": "run",
+        "code": "raise RuntimeError(\"bad value\") from exc",
+        "location": "production"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 28,
+          "function": "test_chain",
+          "code": "Wrapper().run(\"x\")",
+          "location": "test"
+        },
+        {
+          "path": "shop/stock.py",
+          "line": 23,
+          "function": "run",
+          "code": "raise RuntimeError(\"bad value\") from exc",
+          "location": "production"
+        }
+      ],
+      "locals": {
+        "self": "<shop.stock.Wrapper object at 0x7fbe13b922d0>",
+        "value": "'x'"
+      },
+      "chain": ["ValueError: invalid literal for int() with base 10: 'x'"],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_chain",
+          "file": "tests/test_stock.py",
+          "name": "test_chain",
+          "line": 27,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": {
+        "path": "shop/stock.py",
+        "qualname": "Wrapper.run",
+        "line": 19,
+        "end_line": 23,
+        "complexity": 2,
+        "findings": [],
+        "coverage_percent": 100.0
+      },
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "RuntimeError at shop/stock.py:23 in run: raise RuntimeError(\"bad value\") from exc",
+          "path": "shop/stock.py",
+          "line": 23
+        },
+        {
+          "kind": "locals",
+          "detail": "Local variables in run: self = <shop.stock.Wrapper object at 0x7fbe13b922d0>, value = 'x'",
+          "path": "shop/stock.py",
+          "line": 23
+        },
+        {
+          "kind": "chain",
+          "detail": "Caused by ValueError: invalid literal for int() with base 10: 'x'",
+          "path": null,
+          "line": null
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "62f7d4b44b7d",
+      "category": "exception_in_library",
+      "exception_type": "json.decoder.JSONDecodeError",
+      "message": "Expecting value: line 1 column 1 (char 0)",
+      "crash": {
+        "path": "shop/stock.py",
+        "line": 9,
+        "function": "load",
+        "code": "return json.loads(text)",
+        "location": "production"
+      },
+      "raised_at": {
+        "path": "/usr/local/lib/python3.12/json/decoder.py",
+        "line": 356,
+        "function": "raw_decode",
+        "code": "raise JSONDecodeError(\"Expecting value\", s, err.value) from None",
+        "location": "external"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 19,
+          "function": "test_library",
+          "code": "load(\"not json\")",
+          "location": "test"
+        },
+        {
+          "path": "shop/stock.py",
+          "line": 9,
+          "function": "load",
+          "code": "return json.loads(text)",
+          "location": "production"
+        },
+        {
+          "path": "/usr/local/lib/python3.12/json/__init__.py",
+          "line": 346,
+          "function": "loads",
+          "code": "return _default_decoder.decode(s)",
+          "location": "external"
+        },
+        {
+          "path": "/usr/local/lib/python3.12/json/decoder.py",
+          "line": 338,
+          "function": "decode",
+          "code": "obj, end = self.raw_decode(s, idx=_w(s, 0).end())",
+          "location": "external"
+        },
+        {
+          "path": "/usr/local/lib/python3.12/json/decoder.py",
+          "line": 356,
+          "function": "raw_decode",
+          "code": "raise JSONDecodeError(\"Expecting value\", s, err.value) from None",
+          "location": "external"
+        }
+      ],
+      "locals": {
+        "text": "'not json'"
+      },
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_library",
+          "file": "tests/test_stock.py",
+          "name": "test_library",
+          "line": 18,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": {
+        "path": "shop/stock.py",
+        "qualname": "load",
+        "line": 8,
+        "end_line": 9,
+        "complexity": 1,
+        "findings": ["TM041"],
+        "coverage_percent": 100.0
+      },
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "json.decoder.JSONDecodeError raised inside /usr/local/lib/python3.12/json/decoder.py (raw_decode), called from shop/stock.py:9: return json.loads(text)",
+          "path": "shop/stock.py",
+          "line": 9
+        },
+        {
+          "kind": "locals",
+          "detail": "Local variables in load: text = 'not json'",
+          "path": "shop/stock.py",
+          "line": 9
+        },
+        {
+          "kind": "finding",
+          "detail": "Static analysis flagged the failing line: TM041 (low, confidence 0.4): 'text' is converted with json.loads() without error handling (invalid input raises)",
+          "path": "shop/stock.py",
+          "line": 9
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "67e0b087e78b",
+      "category": "exception_in_test",
+      "exception_type": "IndexError",
+      "message": "list index out of range",
+      "crash": {
+        "path": "tests/test_stock.py",
+        "line": 24,
+        "function": "test_in_test",
+        "code": "assert items[0] == 1",
+        "location": "test"
+      },
+      "raised_at": {
+        "path": "tests/test_stock.py",
+        "line": 24,
+        "function": "test_in_test",
+        "code": "assert items[0] == 1",
+        "location": "test"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 24,
+          "function": "test_in_test",
+          "code": "assert items[0] == 1",
+          "location": "test"
+        }
+      ],
+      "locals": {
+        "items": "[]"
+      },
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_in_test",
+          "file": "tests/test_stock.py",
+          "name": "test_in_test",
+          "line": 22,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "IndexError at tests/test_stock.py:24 in test_in_test: assert items[0] == 1",
+          "path": "tests/test_stock.py",
+          "line": 24
+        },
+        {
+          "kind": "locals",
+          "detail": "Local variables in test_in_test: items = []",
+          "path": "tests/test_stock.py",
+          "line": 24
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "4d1ff5a5e87d",
+      "category": "fixture_error",
+      "exception_type": "KeyError",
+      "message": "'config'",
+      "crash": {
+        "path": "tests/test_stock.py",
+        "line": 33,
+        "function": "broken",
+        "code": "raise KeyError(\"config\")",
+        "location": "test"
+      },
+      "raised_at": {
+        "path": "tests/test_stock.py",
+        "line": 33,
+        "function": "broken",
+        "code": "raise KeyError(\"config\")",
+        "location": "test"
+      },
+      "frames": [
+        {
+          "path": "tests/test_stock.py",
+          "line": 33,
+          "function": "broken",
+          "code": "raise KeyError(\"config\")",
+          "location": "test"
+        }
+      ],
+      "locals": {},
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_fixture",
+          "file": "tests/test_stock.py",
+          "name": "test_fixture",
+          "line": 36,
+          "phase": "setup",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "KeyError at tests/test_stock.py:33 in broken: raise KeyError(\"config\")",
+          "path": "tests/test_stock.py",
+          "line": 33
+        }
+      ],
+      "blame": null,
+      "blame_reason": null
+    },
+    {
+      "id": "1659840cfb53",
+      "category": "import_error",
+      "exception_type": "ModuleNotFoundError",
+      "message": "No module named 'not_installed_package'",
+      "crash": {
+        "path": "tests/test_missing.py",
+        "line": 1,
+        "function": "<module>",
+        "code": "",
+        "location": "test"
+      },
+      "raised_at": {
+        "path": "tests/test_missing.py",
+        "line": 1,
+        "function": "<module>",
+        "code": "",
+        "location": "test"
+      },
+      "frames": [
+        {
+          "path": "tests/test_missing.py",
+          "line": 1,
+          "function": "<module>",
+          "code": "",
+          "location": "test"
+        }
+      ],
+      "locals": {},
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_missing.py",
+          "file": "tests/test_missing.py",
+          "name": null,
+          "line": null,
+          "phase": "collect",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "ModuleNotFoundError at tests/test_missing.py:1 in <module>",
+          "path": "tests/test_missing.py",
+          "line": 1
+        },
+        {
+          "kind": "dependency",
+          "detail": "'not_installed_package' is not part of the repository and no dependency with that name is declared (the distribution may have a different name)",
+          "path": null,
+          "line": null
+        }
+      ],
+      "blame": "environment",
+      "blame_reason": "No module named 'not_installed_package': it is not part of the repository, so a dependency is missing or failed to install"
+    },
+    {
+      "id": "c7f217acc615",
+      "category": "syntax_error",
+      "exception_type": "SyntaxError",
+      "message": "invalid syntax",
+      "crash": {
+        "path": "tests/test_syntax.py",
+        "line": 1,
+        "function": "<module>",
+        "code": "",
+        "location": "test"
+      },
+      "raised_at": {
+        "path": "tests/test_syntax.py",
+        "line": 1,
+        "function": "<module>",
+        "code": "",
+        "location": "test"
+      },
+      "frames": [
+        {
+          "path": "tests/test_syntax.py",
+          "line": 1,
+          "function": "<module>",
+          "code": "",
+          "location": "test"
+        }
+      ],
+      "locals": {},
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_syntax.py",
+          "file": "tests/test_syntax.py",
+          "name": null,
+          "line": null,
+          "phase": "collect",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [
+        {
+          "kind": "traceback",
+          "detail": "SyntaxError at tests/test_syntax.py:1 in <module>",
+          "path": "tests/test_syntax.py",
+          "line": 1
+        }
+      ],
+      "blame": "test",
+      "blame_reason": "tests/test_syntax.py is test code that does not parse"
+    },
+    {
+      "id": "cce038be7bce",
+      "category": "unexpected_pass",
+      "exception_type": null,
+      "message": "[XPASS(strict)] possible bug",
+      "crash": null,
+      "raised_at": null,
+      "frames": [],
+      "locals": {},
+      "chain": [],
+      "tests": [
+        {
+          "nodeid": "tests/test_stock.py::test_strict_xpass",
+          "file": "tests/test_stock.py",
+          "name": "test_strict_xpass",
+          "line": 40,
+          "phase": "call",
+          "generated": false
+        }
+      ],
+      "function": null,
+      "evidence": [],
+      "blame": "test",
+      "blame_reason": "The test is marked xfail(strict=True) but passed: the failure it documents no longer happens, so the marker is out of date"
+    }
+  ],
+  "total": 10,
+  "limit": 50,
+  "offset": 0
+}

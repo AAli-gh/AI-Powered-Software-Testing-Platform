@@ -66,7 +66,8 @@ Every non-2xx response has this shape:
 
 - `name`: 1–200 characters, starts with a letter or digit, then letters, digits, space, `.`,
   `_` or `-`. Surrounding whitespace is trimmed.
-- `source_type`: only `local` is supported (GitHub sources arrive in Phase 11).
+- `source_type`: only `local` here. GitHub projects are created by importing
+  (`POST /api/v1/github/imports`, see [github.md](github.md)).
 - `source_location`: a directory inside `TESTMIND_REPOS_ROOT`, given relative to it or as an
   absolute path. Stored normalised and relative to the root.
 
@@ -77,6 +78,16 @@ Responses: `201` with the project and a `Location` header, `409`, or `422`.
 | `GET` | `/api/v1/projects` | Paginated |
 | `GET` | `/api/v1/projects/{project_id}` | `404` if unknown |
 | `DELETE` | `/api/v1/projects/{project_id}` | `204`. `409` while any run is `queued`/`running`. Deletes its runs |
+
+### Dashboard aggregates
+
+Read-only summaries for the dashboard ([dashboard.md](dashboard.md)), computed in SQL from the
+stored jobs. Only the totals are read from the stored reports.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/overview` | `projects` (count); `jobs` (every job table with its counts by status); `active_jobs`; `project_health` (up to 50 projects, most recent activity first, each with its latest run, latest succeeded execution with test totals and coverage, latest mutation score and active runs); `recent_executions` and `recent_pull_analyses` (10 each, newest first) |
+| `GET` | `/api/v1/projects/{project_id}/overview` | `project`; `runs` (counts by status); `latest_run` and `latest_succeeded_run`; trends, oldest first: `executions` (last 50: tests, coverage, API coverage) and `mutation_runs` (last 50: score, mutants, survivors); newest first: `regressions` (last 20) and `pull_analyses` of the project's GitHub repository (last 20). `404` if the project is unknown |
 
 ### Analysis runs
 

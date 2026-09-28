@@ -1,0 +1,69 @@
+{
+  "tool": "coverage.py 7.16.1",
+  "branch_coverage": true,
+  "threshold": 80.0,
+  "totals": {
+    "statements": 34,
+    "covered_lines": 28,
+    "branches": 4,
+    "covered_branches": 2,
+    "line_percent": 82.35,
+    "branch_percent": 50.0,
+    "percent": 78.95,
+    "files": 1,
+    "functions": 7,
+    "functions_never_executed": 2
+  },
+  "unmeasured_files": [],
+  "gap_count": 4,
+  "top_gaps": [
+    {
+      "path": "library/__init__.py",
+      "qualname": "create_app.<locals>.stats",
+      "line": 42,
+      "percent": 0.0,
+      "missing": ["43-44"],
+      "missing_branches_detail": [],
+      "risk": 3.0,
+      "reasons": ["never executed by the test suite", "cyclomatic complexity 3"]
+    },
+    {
+      "path": "library/__init__.py",
+      "qualname": "create_app.<locals>.delete_book",
+      "line": 37,
+      "percent": 0.0,
+      "missing": ["38-39"],
+      "missing_branches_detail": [],
+      "risk": 1.0,
+      "reasons": ["never executed by the test suite"]
+    },
+    {
+      "path": "library/__init__.py",
+      "qualname": "create_app.<locals>.update_book",
+      "line": 29,
+      "percent": 66.67,
+      "missing": ["31"],
+      "missing_branches_detail": ["30->31"],
+      "risk": 1.0,
+      "reasons": [
+        "1 of 4 statements not executed",
+        "1 of 2 branches never taken",
+        "cyclomatic complexity 3"
+      ]
+    },
+    {
+      "path": "library/__init__.py",
+      "qualname": "create_app.<locals>.get_book",
+      "line": 23,
+      "percent": 60.0,
+      "missing": ["25"],
+      "missing_branches_detail": ["24->25"],
+      "risk": 0.8,
+      "reasons": [
+        "1 of 3 statements not executed",
+        "1 of 2 branches never taken",
+        "cyclomatic complexity 2"
+      ]
+    }
+  ]
+}

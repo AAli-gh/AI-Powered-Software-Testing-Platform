@@ -1,0 +1,133 @@
+{
+  "items": [
+    {
+      "framework": "flask",
+      "method": "GET",
+      "path": "/books",
+      "source": "both",
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.list_books",
+        "path": "library/__init__.py",
+        "line": 11
+      },
+      "calls": 1,
+      "tests": ["tests/test_books.py::test_list_books"],
+      "statuses": {
+        "200": 1
+      },
+      "generated_calls": 0,
+      "tested": true,
+      "success_tested": true,
+      "error_tested": false,
+      "server_errors": 0
+    },
+    {
+      "framework": "flask",
+      "method": "POST",
+      "path": "/books",
+      "source": "both",
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.add_book",
+        "path": "library/__init__.py",
+        "line": 15
+      },
+      "calls": 1,
+      "tests": ["tests/test_books.py::test_add_book"],
+      "statuses": {
+        "201": 1
+      },
+      "generated_calls": 2,
+      "tested": true,
+      "success_tested": true,
+      "error_tested": false,
+      "server_errors": 1
+    },
+    {
+      "framework": "flask",
+      "method": "DELETE",
+      "path": "/books/{book_id}",
+      "source": "both",
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.delete_book",
+        "path": "library/__init__.py",
+        "line": 37
+      },
+      "calls": 0,
+      "tests": [],
+      "statuses": {},
+      "generated_calls": 1,
+      "tested": false,
+      "success_tested": false,
+      "error_tested": false,
+      "server_errors": 0
+    },
+    {
+      "framework": "flask",
+      "method": "GET",
+      "path": "/books/{book_id}",
+      "source": "both",
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.get_book",
+        "path": "library/__init__.py",
+        "line": 23
+      },
+      "calls": 1,
+      "tests": ["tests/test_books.py::test_get_book"],
+      "statuses": {
+        "200": 1
+      },
+      "generated_calls": 1,
+      "tested": true,
+      "success_tested": true,
+      "error_tested": false,
+      "server_errors": 0
+    },
+    {
+      "framework": "flask",
+      "method": "PUT",
+      "path": "/books/{book_id}",
+      "source": "both",
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.update_book",
+        "path": "library/__init__.py",
+        "line": 29
+      },
+      "calls": 0,
+      "tests": [],
+      "statuses": {},
+      "generated_calls": 3,
+      "tested": false,
+      "success_tested": false,
+      "error_tested": false,
+      "server_errors": 0
+    },
+    {
+      "framework": "flask",
+      "method": "GET",
+      "path": "/stats",
+      "source": "both",
+      "handler": {
+        "module": "library",
+        "qualname": "create_app.<locals>.stats",
+        "path": "library/__init__.py",
+        "line": 42
+      },
+      "calls": 0,
+      "tests": [],
+      "statuses": {},
+      "generated_calls": 0,
+      "tested": false,
+      "success_tested": false,
+      "error_tested": false,
+      "server_errors": 0
+    }
+  ],
+  "total": 6,
+  "limit": 200,
+  "offset": 0
+}

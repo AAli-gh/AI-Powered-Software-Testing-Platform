@@ -1,0 +1,90 @@
+{
+  "file_count": 5,
+  "total_size_bytes": 4121,
+  "truncated": false,
+  "languages": [
+    {
+      "name": "Python",
+      "files": 2,
+      "lines": 67,
+      "bytes": 1909,
+      "percentage": 57.26
+    },
+    {
+      "name": "Markdown",
+      "files": 2,
+      "lines": 39,
+      "bytes": 2016,
+      "percentage": 33.33
+    },
+    {
+      "name": "TOML",
+      "files": 1,
+      "lines": 11,
+      "bytes": 196,
+      "percentage": 9.4
+    }
+  ],
+  "primary_language": "Python",
+  "dependencies": [
+    {
+      "name": "pytest",
+      "specifier": ">=8",
+      "group": "development",
+      "source": "pyproject.toml",
+      "extras": [],
+      "marker": null
+    },
+    {
+      "name": "flask",
+      "specifier": ">=3.0",
+      "group": "runtime",
+      "source": "pyproject.toml",
+      "extras": [],
+      "marker": null
+    }
+  ],
+  "frameworks": [
+    {
+      "name": "Flask",
+      "category": "web_framework",
+      "confidence": 1.0,
+      "evidence": [
+        "'flask' declared in pyproject.toml",
+        "'flask' imported in 1 file(s): library/__init__.py",
+        "flask app instance in library/__init__.py:7"
+      ]
+    }
+  ],
+  "test_frameworks": [
+    {
+      "name": "pytest",
+      "category": "test_framework",
+      "confidence": 1.0,
+      "evidence": [
+        "'pytest' declared in pyproject.toml",
+        "'pytest' imported in 1 file(s): tests/test_books.py",
+        "pytest configuration: pyproject.toml [tool.pytest]",
+        "3 module-level test function(s) (pytest style)"
+      ]
+    }
+  ],
+  "test_files": ["tests/test_books.py"],
+  "entry_points": [
+    {
+      "kind": "wsgi_app",
+      "path": "library/__init__.py",
+      "target": "library:create_app()"
+    }
+  ],
+  "config_files": ["pyproject.toml"],
+  "docker": {
+    "dockerfiles": [],
+    "base_images": [],
+    "compose_files": [],
+    "compose_services": []
+  },
+  "ci": [],
+  "issues": [],
+  "django_settings_module": null
+}

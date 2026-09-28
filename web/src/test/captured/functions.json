@@ -1,0 +1,161 @@
+{
+  "items": [
+    {
+      "qualname": "create_app.<locals>.update_book",
+      "name": "update_book",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 29,
+      "end_line": 34,
+      "lines": 6,
+      "is_async": false,
+      "is_method": false,
+      "is_public": false,
+      "decorators": ["app.put('/books/<int:book_id>')"],
+      "parameters": [
+        {
+          "name": "book_id",
+          "kind": "positional_or_keyword",
+          "annotation": null,
+          "default": null
+        }
+      ],
+      "returns": null,
+      "docstring": null,
+      "complexity": 3,
+      "complexity_rank": "A",
+      "raises": []
+    },
+    {
+      "qualname": "create_app.<locals>.stats",
+      "name": "stats",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 42,
+      "end_line": 44,
+      "lines": 3,
+      "is_async": false,
+      "is_method": false,
+      "is_public": false,
+      "decorators": ["app.get('/stats')"],
+      "parameters": [],
+      "returns": null,
+      "docstring": null,
+      "complexity": 3,
+      "complexity_rank": "A",
+      "raises": []
+    },
+    {
+      "qualname": "create_app.<locals>.get_book",
+      "name": "get_book",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 23,
+      "end_line": 26,
+      "lines": 4,
+      "is_async": false,
+      "is_method": false,
+      "is_public": false,
+      "decorators": ["app.get('/books/<int:book_id>')"],
+      "parameters": [
+        {
+          "name": "book_id",
+          "kind": "positional_or_keyword",
+          "annotation": null,
+          "default": null
+        }
+      ],
+      "returns": null,
+      "docstring": null,
+      "complexity": 2,
+      "complexity_rank": "A",
+      "raises": []
+    },
+    {
+      "qualname": "create_app",
+      "name": "create_app",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 6,
+      "end_line": 46,
+      "lines": 41,
+      "is_async": false,
+      "is_method": false,
+      "is_public": true,
+      "decorators": [],
+      "parameters": [],
+      "returns": null,
+      "docstring": null,
+      "complexity": 1,
+      "complexity_rank": "A",
+      "raises": []
+    },
+    {
+      "qualname": "create_app.<locals>.list_books",
+      "name": "list_books",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 11,
+      "end_line": 12,
+      "lines": 2,
+      "is_async": false,
+      "is_method": false,
+      "is_public": false,
+      "decorators": ["app.get('/books')"],
+      "parameters": [],
+      "returns": null,
+      "docstring": null,
+      "complexity": 1,
+      "complexity_rank": "A",
+      "raises": []
+    },
+    {
+      "qualname": "create_app.<locals>.add_book",
+      "name": "add_book",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 15,
+      "end_line": 20,
+      "lines": 6,
+      "is_async": false,
+      "is_method": false,
+      "is_public": false,
+      "decorators": ["app.post('/books')"],
+      "parameters": [],
+      "returns": null,
+      "docstring": null,
+      "complexity": 1,
+      "complexity_rank": "A",
+      "raises": []
+    },
+    {
+      "qualname": "create_app.<locals>.delete_book",
+      "name": "delete_book",
+      "path": "library/__init__.py",
+      "module": "library",
+      "line": 37,
+      "end_line": 39,
+      "lines": 3,
+      "is_async": false,
+      "is_method": false,
+      "is_public": false,
+      "decorators": ["app.delete('/books/<int:book_id>')"],
+      "parameters": [
+        {
+          "name": "book_id",
+          "kind": "positional_or_keyword",
+          "annotation": null,
+          "default": null
+        }
+      ],
+      "returns": null,
+      "docstring": null,
+      "complexity": 1,
+      "complexity_rank": "A",
+      "raises": []
+    }
+  ],
+  "total": 7,
+  "limit": 25,
+  "offset": 0
+}

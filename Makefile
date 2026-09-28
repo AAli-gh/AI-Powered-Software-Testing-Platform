@@ -6,7 +6,7 @@ COMPOSE_TEST := docker compose -f docker-compose.test.yml
 
 .PHONY: help
 help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 # ----------------------------------------------------------------- setup
 .PHONY: setup
@@ -14,6 +14,7 @@ setup: ## Install dependencies and create .env from the template
 	uv sync --locked
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
 	uv run pre-commit install
+	cd web && npm ci --no-audit --no-fund
 
 # ----------------------------------------------------------------- quality
 .PHONY: lint
@@ -85,6 +86,26 @@ worker: ## Run a worker on the host (it can use Docker for the sandbox; see docs
 .PHONY: smoke
 smoke: ## End-to-end smoke test against the running stack
 	./scripts/smoke_test.sh
+
+# ----------------------------------------------------------------- dashboard
+.PHONY: openapi
+openapi: ## Export the API schema and regenerate the dashboard's TypeScript types
+	uv run python scripts/export_openapi.py
+	cd web && npm run openapi
+
+.PHONY: web-dev
+web-dev: ## Dashboard dev server on :5173 (proxies the API on :8000)
+	cd web && npm run dev
+
+.PHONY: web-check
+web-check: ## Dashboard lint, format, types, component tests with coverage, build
+	uv run python scripts/export_openapi.py --check
+	cd web && npm run lint && npm run format:check && npm run typecheck \
+	  && npm run test:coverage && npm run build
+
+.PHONY: web-e2e
+web-e2e: ## Browser tests against a running stack (TESTMIND_WEB_URL, default :4173)
+	cd web && npx playwright test
 
 # ----------------------------------------------------------------- database
 .PHONY: migrate

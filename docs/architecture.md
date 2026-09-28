@@ -7,14 +7,17 @@ into it. Decisions and their trade-offs are recorded in [ADRs](adr/).
 
 ```mermaid
 flowchart LR
-    client([Client]) -->|HTTP :8000| api
+    browser([Browser]) -->|HTTP :8080| web
+    client([API client]) -->|HTTP :8000| api
     subgraph compose[docker compose — network "backend"]
+        web[web<br/>nginx: dashboard + API proxy]
         migrate[migrate<br/>alembic upgrade head<br/>one-shot]
         api[api<br/>FastAPI + uvicorn]
         worker[worker<br/>Celery]
         pg[(postgres)]
         redis[(redis)]
     end
+    web -->|/api, same origin| api
     migrate --> pg
     api --> pg
     api -->|publish task| redis
@@ -30,6 +33,7 @@ flowchart LR
 | `redis` | `redis:7-alpine` | Celery broker |
 | `migrate` | `api` | Applies Alembic migrations, then exits. `api` and `worker` start only after it succeeds |
 | `api` | `api` | HTTP API. Never does heavy work in the request path |
+| `web` | `docker/web.Dockerfile` | The dashboard's static files, and a same-origin proxy to the API ([dashboard.md](dashboard.md)) |
 | `worker` | `worker` | Executes queued jobs: analysis runs, AI test generations, test executions (later: mutation testing) |
 
 ## Code layout
@@ -53,6 +57,9 @@ src/testmind/
 ├── api/           FastAPI app factory, routes, dependencies, error handlers, middleware
 └── workers/       Celery app, tasks, Celery-backed TaskDispatcher
 ```
+
+The dashboard is a separate TypeScript application in `web/` (React, Vite). Its API types
+are generated from the backend's OpenAPI schema ([ADR-0013](adr/0013-dashboard-spa-typed-from-openapi.md)).
 
 Later phases add sibling packages when they are implemented. Empty placeholder packages are deliberately
 not created ahead of time.
