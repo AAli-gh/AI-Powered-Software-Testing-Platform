@@ -60,6 +60,11 @@ def test_blame_elsewhere_and_no_linked_function() -> None:
     assert (unlinked.blamed, unlinked.function_hit) == (None, False)
     no_group = score("p-1", [TARGET], TRUTH, run([TARGET]), run([]))
     assert no_group.detail == "no failure group holds the bug's tests"
+    assert no_group.analysed is True
+    crowded = [TARGET, *(f"t.py::test_{i}" for i in range(500))]
+    beyond = score("p-1", [TARGET], TRUTH, run(crowded), run([]))
+    assert (beyond.status, beyond.analysed) == ("reproduced", False)
+    assert beyond.detail.startswith("not analysed: 501 tests failed")
 
 
 @pytest.mark.parametrize(
@@ -81,14 +86,18 @@ def test_summarise() -> None:
                   blamed="x", function_hit=True, file_hit=True, rank=1),
         BugResult("b", "reproduced", python="3.8", category="assertion_failure", rank=4),
         BugResult("c", "buggy_not_run", python="3.7"),
+        BugResult("d", "reproduced", python="3.7", analysed=False),  # not in the shares
     ]  # fmt: skip
     summary = summarise(results)
-    assert summary["statuses"]["reproduced"] == 2
+    assert summary["statuses"]["reproduced"] == 3
+    assert (summary["reproduced"], summary["not_analysed"], summary["localisation_scored"]) == (
+        3, 1, 2,
+    )  # fmt: skip
     assert summary["statuses"]["buggy_not_run"] == 1
     assert (summary["function_at_1"], summary["file_at_1"]) == (50.0, 50.0)
     assert (summary["rank_at_3"], summary["rank_at_5"]) == (50.0, 100.0)
     assert summary["no_function_linked"] == 1
-    assert summary["python"] == {"3.8": 2, "3.7": 1}
+    assert summary["python"] == {"3.8": 2, "3.7": 2}
     assert summarise([])["function_at_1"] is None
 
 

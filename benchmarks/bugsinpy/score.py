@@ -10,6 +10,10 @@ on the failure group that holds the bug's tests (TestMind's deterministic analys
   production code, innermost first (frames carry a function's name, not its qualname, so this
   compares the last part of the qualname);
 - **category**: TestMind's failure category (`exception_in_code`, `assertion_failure`, ...).
+
+TestMind's failure plugin records the first 500 failures of a run. A reproduced bug whose
+tests are beyond them (a suite with many failing network tests) is counted as **not
+analysed**, and left out of the localisation shares rather than counted as a miss.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from benchmarks.bugsinpy.ground_truth import GroundTruth
 
 REPRODUCED = "reproduced"
 TOP_3, TOP_5 = 3, 5
+FAILURE_RECORDS = 500  # failures TestMind's failure plugin records per run (MAX_FAILURES)
 STATUSES = (
     REPRODUCED,
     "not_reproduced",  # the tests ran, but the bug's tests did not fail-then-pass
@@ -47,6 +52,7 @@ class BugResult:
     function_hit: bool = False
     file_hit: bool = False
     rank: int | None = None  # 1-based, among production frames; None: not among them
+    analysed: bool = True  # False: the bug's tests were beyond the failure-analysis cap
     seconds: float = 0.0
 
     def to_json(self) -> dict[str, Any]:
@@ -99,6 +105,12 @@ def score(
     group = next((g for g in buggy.groups if _holds(g, targets)), None)
     if group is None:
         result.detail = "no failure group holds the bug's tests"
+        if len(buggy.failed) > FAILURE_RECORDS:
+            result.analysed = False
+            result.detail = (
+                f"not analysed: {len(buggy.failed)} tests failed, and failure analysis records "
+                f"the first {FAILURE_RECORDS}"
+            )
         return result
     result.category = group["category"]
     function = group.get("function")
@@ -119,7 +131,8 @@ def score(
 
 def summarise(results: list[BugResult]) -> dict[str, Any]:
     statuses = Counter(r.status for r in results)
-    scored = [r for r in results if r.status == REPRODUCED]
+    reproduced = [r for r in results if r.status == REPRODUCED]
+    scored = [r for r in reproduced if r.analysed]  # localisation needs an analysed failure
     n = len(scored)
 
     def share(count: int) -> float | None:
@@ -128,7 +141,9 @@ def summarise(results: list[BugResult]) -> dict[str, Any]:
     return {
         "bugs": len(results),
         "statuses": {s: statuses.get(s, 0) for s in STATUSES},
-        "reproduced": n,
+        "reproduced": len(reproduced),
+        "not_analysed": len(reproduced) - n,
+        "localisation_scored": n,
         "function_at_1": share(sum(r.function_hit for r in scored)),
         "file_at_1": share(sum(r.file_hit for r in scored)),
         "rank_at_3": share(sum(r.rank is not None and r.rank <= TOP_3 for r in scored)),
