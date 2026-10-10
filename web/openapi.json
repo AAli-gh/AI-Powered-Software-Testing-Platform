@@ -5995,6 +5995,53 @@
         "title": "PullSummary",
         "type": "object"
       },
+      "PythonRequirement": {
+        "additionalProperties": false,
+        "description": "Which Python the project needs, as its own files say (python_version.py).",
+        "properties": {
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "major.minor pinned by .python-version or runtime.txt",
+            "title": "Pinned"
+          },
+          "requires": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PEP 440 specifier declared (requires-python, python_requires)",
+            "title": "Requires"
+          },
+          "tested": {
+            "description": "major.minor versions the project says it supports (tox, classifiers)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tested",
+            "type": "array"
+          }
+        },
+        "title": "PythonRequirement",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "checks": {
@@ -6444,6 +6491,10 @@
               }
             ],
             "title": "Primary Language"
+          },
+          "python": {
+            "$ref": "#/components/schemas/PythonRequirement",
+            "description": "The Python versions the project declares (empty for analyses made before)"
           },
           "test_files": {
             "items": {

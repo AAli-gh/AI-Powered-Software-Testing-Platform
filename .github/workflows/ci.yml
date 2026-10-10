@@ -68,6 +68,7 @@ jobs:
       TESTMIND_TEST_DATABASE_URL: postgresql+asyncpg://testmind:testmind@localhost:5432/testmind_test
       TESTMIND_TEST_REDIS_URL: redis://localhost:6379/15
       TESTMIND_REQUIRE_BROWSER_IMAGE: "1" # the browser test must run here, never be skipped
+      TESTMIND_REQUIRE_PYTHON_IMAGES: "1" # so must the sandbox of every Python version
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
@@ -76,8 +77,8 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: true
       - run: uv sync --locked
-      - name: Build the sandbox image (runs generated tests in isolation)
-        run: docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
+      - name: Build the sandbox images, one per Python version (run tests in isolation)
+        run: uv run python scripts/sandbox_images.py
       - name: Build the browser sandbox image (headless Chromium for Playwright tests)
         run: docker build -f docker/browser.Dockerfile -t testmind-sandbox-browser:local .
       - name: Unit tests
@@ -156,6 +157,11 @@ jobs:
       TESTMIND_HOST_REPOS_DIR: ${{ github.workspace }}/examples
     steps:
       - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6 # scripts/sandbox_images.py reads the Python version table
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --locked
       - name: Prepare environment file and sandbox directory
         run: |
           cp .env.example .env
@@ -166,8 +172,8 @@ jobs:
           echo "TESTMIND_API_TOKEN=$token" >> "$GITHUB_ENV"
       - name: Prometheus configuration and alert rule unit tests (promtool)
         run: make monitoring-check
-      - name: Build the sandbox image (on the host daemon, used through the proxy)
-        run: docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
+      - name: Build the sandbox images (on the host daemon, used through the proxy)
+        run: uv run python scripts/sandbox_images.py
       - name: Build images
         run: docker compose build
       - name: Start stack

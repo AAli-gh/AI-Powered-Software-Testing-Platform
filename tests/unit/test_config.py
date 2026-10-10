@@ -133,3 +133,12 @@ def test_api_token_rules() -> None:
         make(env="production")
     assert make(env="production", api_token="k" * 40).env == "production"
     assert "k" * 40 not in repr(make(api_token="k" * 40))
+
+
+def test_sandbox_python_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert make().sandbox_python_versions == ["3.12"]
+    assert make(sandbox_python_versions=" 3.8, 3.12 ,").sandbox_python_versions == ["3.8", "3.12"]
+    monkeypatch.setenv("TESTMIND_SANDBOX_PYTHON_VERSIONS", "3.7,3.9")
+    assert make().sandbox_python_versions == ["3.7", "3.9"]
+    with pytest.raises(ValidationError, match=r"major\.minor: 3\.8\.1, 2\.7"):
+        make(sandbox_python_versions="3.8.1,2.7")

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from testmind.analyzers.repository.models import Dependency, DependencyGroup
+from testmind.analyzers.repository.models import Dependency, DependencyGroup, PythonRequirement
 from testmind.sandbox.runner_image import (
     DOCKERFILE,
     DependencyInstallError,
@@ -126,3 +126,41 @@ def test_broken_docker_binary_when_probing(tmp_path: Path) -> None:
     broken.chmod(0o755)
     with pytest.raises(DependencyInstallError, match="Docker is not available"):
         RunnerImageBuilder("base", docker_binary=str(broken)).ensure([dep("six")])
+
+
+def test_the_projects_python_chooses_the_base_image(tmp_path: Path) -> None:
+    log = tmp_path / "calls"
+    docker = fake_docker(
+        tmp_path,
+        f'echo "$@" >> {log}\n' + INSPECT_BASE + 'if [ "$1" = "image" ]; then exit 0; fi\n',
+    )
+    builder = RunnerImageBuilder(
+        "testmind-sandbox:local", python_versions=("3.8", "3.12"), docker_binary=docker
+    )
+    image = builder.ensure([dep("six")], python=PythonRequirement(tested=["3.6", "3.8"]))
+    assert image.python == "3.8"
+    assert image.notes[0] == "Python 3.8: newest version the project is tested on (3.6, 3.8)"
+    assert "--format {{.Id}} testmind-sandbox:py3.8" in log.read_text()
+    bare = builder.ensure([], python=PythonRequirement(pinned="3.8"))
+    assert (bare.tag, bare.python, bare.notes) == (
+        "testmind-sandbox:py3.8", "3.8", ("Python 3.8: pinned to 3.8",),
+    )  # fmt: skip
+    default = RunnerImageBuilder("testmind-sandbox:local").ensure([])
+    assert (default.tag, default.python) == ("testmind-sandbox:local", "3.12")
+    assert default.notes == (
+        "Python 3.12: the project declares no Python version; newest available",
+    )
+
+
+def test_browser_projects_run_on_the_browser_image_and_its_python() -> None:
+    builder = RunnerImageBuilder("base:1", browser_image="browser:1", python_versions=("3.8",))
+    image = builder.ensure([], browser=True, python=PythonRequirement(pinned="3.8"))
+    assert (image.tag, image.python) == ("browser:1", "3.12")
+    assert image.notes[0] == "Python 3.12: browser tests run on the browser image"
+    plain = builder.ensure([], browser=True)
+    assert plain.notes[0] == "Python 3.12: browser tests run on the browser image"
+
+
+def test_versions_without_a_sandbox_definition_are_refused() -> None:
+    with pytest.raises(ValueError, match=r"No sandbox image is defined for Python 3\.6"):
+        RunnerImageBuilder("base:1", python_versions=("3.6", "3.8"))

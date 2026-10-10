@@ -46,6 +46,39 @@ USER 65534:65534
   base image's content id** are unchanged. Rebuilding the sandbox image (for example to
   upgrade pytest or coverage.py) therefore never reuses runner images built on the old one.
 
+## Python versions
+
+A project's tests run on the Python it declares, not on whatever TestMind happens to use.
+There is one sandbox image per version from 3.7 to 3.12 (`make sandbox-images`). Each has the
+newest pytest, coverage.py and pytest-cov that support that version; the pins are in
+`SANDBOX_PYTHONS` (`src/testmind/sandbox/python_versions.py`).
+
+**What the project declares.** The repository analysis reads the project's root files
+(`analyzers/repository/python_version.py`). Nothing is executed:
+
+| Source | Example | Meaning |
+|---|---|---|
+| `.python-version`, `runtime.txt` | `3.8.10`, `python-3.8.10` | pinned |
+| `requires-python` (pyproject), `python_requires` (setup.cfg, setup.py), Poetry's `python` | `>=3.7,<3.11`, `^3.8` | allowed range |
+| tox's `envlist`, trove classifiers | `py{37,38}-django22`, `Programming Language :: Python :: 3.8` | tested on |
+
+**Which version it runs on**, among those with an image (`TESTMIND_SANDBOX_PYTHON_VERSIONS`):
+
+1. the pinned version;
+2. otherwise the newest version it is tested on, within the allowed range;
+3. otherwise the newest version allowed;
+4. if nothing fits, the default (3.12), and the notes say its tests may fail for that reason.
+
+The choice and its reason are the first install note of every execution, for example
+`Python 3.8: newest version the project is tested on (3.5, 3.6, 3.7, 3.8)`.
+
+Python 3.6 and older are not supported: TestMind's API-capture plugin needs `contextvars`
+(3.7). Browser tests always run on the browser image, which has Python 3.12.
+
+`tests/sandbox/test_python_versions.py` runs a project pinned to each version on its image.
+The test checks the interpreter inside the container, coverage, failure capture and the
+mutation driver. CI builds every image and fails if one is missing.
+
 ## Test selection and configuration
 
 - The project's test files come from the repository analysis (the same classification used

@@ -191,7 +191,7 @@ class DependencyCollector:
         except (SyntaxError, ValueError) as exc:
             self.issues.append(Issue(path=path, message=f"Cannot parse setup.py: {exc}"))
             return
-        constants = _constants(tree)
+        constants = setup_py_constants(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and _call_name(node) == "setup":
                 for keyword in node.keywords:
@@ -307,7 +307,7 @@ def _join_inside_repo(base: str, target: str) -> str | None:
     return "/".join(parts)
 
 
-def _constants(tree: ast.Module) -> dict[str, ast.expr]:
+def setup_py_constants(tree: ast.Module) -> dict[str, ast.expr]:
     """Names bound exactly once, by a plain module-level assignment, and never changed.
 
     A name assigned twice, augmented (`+=`), mutated through a method (`.append(...)`) or

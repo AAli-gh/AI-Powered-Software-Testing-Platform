@@ -49,7 +49,10 @@ services:
     environment:
       TESTMIND_LOG_JSON: "true"
       TESTMIND_PROXY_MOUNT_ROOTS: ${TESTMIND_SANDBOX_DIR},${TESTMIND_HOST_REPOS_DIR}
-      TESTMIND_PROXY_BASE_IMAGES: ${TESTMIND_SANDBOX_IMAGE:-testmind-sandbox:local},${TESTMIND_BROWSER_SANDBOX_IMAGE:-testmind-sandbox-browser:local}
+      # The images runner images may be built FROM: the sandbox image of every Python version
+      # (make sandbox-images) and the browser image. Override the whole list when the sandbox
+      # image has another name.
+      TESTMIND_PROXY_BASE_IMAGES: ${TESTMIND_PROXY_BASE_IMAGES:-testmind-sandbox:local,testmind-sandbox:py3.7,testmind-sandbox:py3.8,testmind-sandbox:py3.9,testmind-sandbox:py3.10,testmind-sandbox:py3.11,testmind-sandbox-browser:local}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${TESTMIND_SANDBOX_DIR}:${TESTMIND_SANDBOX_DIR}:ro
@@ -73,6 +76,11 @@ services:
     environment:
       DOCKER_HOST: tcp://sandbox-proxy:2375
       TESTMIND_SANDBOX_IMAGE: ${TESTMIND_SANDBOX_IMAGE:-testmind-sandbox:local}
+      # Python versions with a sandbox image (make sandbox-images builds all of them).
+      TESTMIND_SANDBOX_PYTHON_VERSIONS: ${TESTMIND_SANDBOX_PYTHON_VERSIONS:-3.7,3.8,3.9,3.10,3.11,3.12}
+      # Projects with Playwright tests need the browser image (make browser-image); empty:
+      # they report install_failed with the reason.
+      TESTMIND_BROWSER_SANDBOX_IMAGE: ${TESTMIND_BROWSER_SANDBOX_IMAGE:-}
       TESTMIND_REPOS_ROOT: ${TESTMIND_HOST_REPOS_DIR}
       TESTMIND_GITHUB_IMPORTS_ROOT: ${TESTMIND_SANDBOX_DIR}/imports
       TMPDIR: ${TESTMIND_SANDBOX_DIR}/tmp

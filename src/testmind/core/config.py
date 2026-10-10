@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -76,6 +77,11 @@ class Settings(BaseSettings):
     sandbox_memory: str = Field(default="512m", pattern=r"^[0-9]+[kmg]$")
     sandbox_cpus: float = Field(default=1.0, gt=0, le=16)
     sandbox_build_timeout_seconds: int = Field(default=900, ge=30, le=7200)
+    # Python versions whose sandbox images exist (make sandbox-images): sandbox_image for 3.12,
+    # `<its repository>:py<version>` for the others (sandbox/python_versions.py).
+    sandbox_python_versions: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["3.12"]
+    )
     # Sandbox image with a headless Chromium for Playwright tests (docker/browser.Dockerfile).
     browser_sandbox_image: str | None = Field(default=None, min_length=1, max_length=200)
 
@@ -178,6 +184,23 @@ class Settings(BaseSettings):
         """`TESTMIND_GITHUB_ALLOWED_OWNERS=acme,other` (comma-separated)."""
         if isinstance(value, str):
             return [owner.strip() for owner in value.split(",") if owner.strip()]
+        return value
+
+    @field_validator("sandbox_python_versions", mode="before")
+    @classmethod
+    def _split_versions(cls, value: object) -> object:
+        """`TESTMIND_SANDBOX_PYTHON_VERSIONS=3.8,3.12` (comma-separated)."""
+        if isinstance(value, str):
+            return [version.strip() for version in value.split(",") if version.strip()]
+        return value
+
+    @field_validator("sandbox_python_versions")
+    @classmethod
+    def _version_format(cls, value: list[str]) -> list[str]:
+        """major.minor only; which versions have images is checked by the image builder."""
+        malformed = [v for v in value if not re.fullmatch(r"3\.\d{1,2}", v)]
+        if malformed:
+            raise ValueError(f"Python versions are written major.minor: {', '.join(malformed)}")
         return value
 
     @field_validator("repos_root")

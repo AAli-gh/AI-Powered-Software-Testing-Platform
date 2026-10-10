@@ -8,7 +8,7 @@ from typing import Protocol
 
 from testmind.analyzers.code.models import CodeProfile
 from testmind.analyzers.repository.frameworks import PLAYWRIGHT
-from testmind.analyzers.repository.models import Dependency, RepositoryProfile
+from testmind.analyzers.repository.models import Dependency, PythonRequirement, RepositoryProfile
 from testmind.api_engine.capture import ApiCaptureError, RawApiCapture, parse_api_json
 from testmind.api_engine.coverage import build_api_coverage
 from testmind.api_engine.models import ApiCoverageReport, ApiSurface
@@ -58,7 +58,13 @@ class Sandbox(Protocol):
 
 
 class ImageBuilder(Protocol):
-    def ensure(self, dependencies: list[Dependency], *, browser: bool = False) -> RunnerImage: ...
+    def ensure(
+        self,
+        dependencies: list[Dependency],
+        *,
+        browser: bool = False,
+        python: PythonRequirement | None = None,
+    ) -> RunnerImage: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,7 +128,9 @@ class TestSuiteRunner:
 
         browser = uses_browser(profile)
         try:
-            image = self._images.ensure(profile.dependencies, browser=browser)
+            image = self._images.ensure(
+                profile.dependencies, browser=browser, python=profile.python
+            )
         except DependencyInstallError as exc:
             install = InstallReport(
                 image="", requirements=[], from_cache=False, notes=list(exc.notes), log=exc.log

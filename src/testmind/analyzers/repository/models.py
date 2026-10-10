@@ -82,6 +82,22 @@ class CIConfig(_Model):
     jobs: list[str] = Field(default_factory=list)
 
 
+class PythonRequirement(_Model):
+    """Which Python the project needs, as its own files say (python_version.py)."""
+
+    requires: str | None = Field(
+        default=None, description="PEP 440 specifier declared (requires-python, python_requires)"
+    )
+    pinned: str | None = Field(
+        default=None, description="major.minor pinned by .python-version or runtime.txt"
+    )
+    tested: list[str] = Field(
+        default_factory=list,
+        description="major.minor versions the project says it supports (tox, classifiers)",
+    )
+    evidence: list[str] = Field(default_factory=list)
+
+
 class Issue(_Model):
     """Something the analyser could not process (the analysis still succeeds)."""
 
@@ -108,6 +124,10 @@ class RepositorySummary(_Model):
     issues: list[Issue]
     django_settings_module: str | None = Field(
         default=None, description="Value of DJANGO_SETTINGS_MODULE set by the project, if any"
+    )
+    python: PythonRequirement = Field(
+        default_factory=PythonRequirement,
+        description="The Python versions the project declares (empty for analyses made before)",
     )
 
 

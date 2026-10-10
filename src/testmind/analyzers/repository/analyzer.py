@@ -24,6 +24,7 @@ from testmind.analyzers.repository.languages import detect_language, summarise_l
 from testmind.analyzers.repository.limits import AnalysisLimits
 from testmind.analyzers.repository.models import FileEntry, Issue, RepositoryProfile
 from testmind.analyzers.repository.python_scanner import PythonFileFacts, scan_python
+from testmind.analyzers.repository.python_version import PythonVersionDetector
 from testmind.analyzers.repository.walker import WalkedFile, read_text, walk_repository
 
 # Bump when the output changes meaningfully; stored with every analysis.
@@ -66,6 +67,10 @@ class RepositoryAnalyzer:
         dependencies = collector.collect(p for p in paths if is_dependency_manifest(p))
         issues.extend(collector.issues)
 
+        python = PythonVersionDetector(read)
+        python_requirement = python.detect(paths)
+        issues.extend(python.issues)
+
         frameworks, test_frameworks = detect_frameworks(
             FrameworkInputs(
                 dependencies=dependencies,
@@ -94,6 +99,7 @@ class RepositoryAnalyzer:
             files=files,
             issues=sorted(issues, key=lambda i: (i.path, i.message)),
             django_settings_module=_django_settings(python_facts),
+            python=python_requirement,
         )
 
     def _scan_python(

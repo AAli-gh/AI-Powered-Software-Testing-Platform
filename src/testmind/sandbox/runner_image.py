@@ -6,8 +6,10 @@ needed there); tests later run from the finished image with no network. Images a
 hash of the base image's *content id* (so rebuilding the base image invalidates them) and the
 exact requirement list.
 
-Projects with browser tests (Playwright) are built on the browser sandbox image instead, which
-adds a headless Chromium. Playwright itself comes from that image, pinned to the browser
+The base image is the sandbox image of the Python version the project needs
+(sandbox/python_versions.py); the choice and its reason are in the notes. Projects with browser
+tests (Playwright) are built on the browser sandbox image instead, which adds a headless
+Chromium and has the default Python. Playwright itself comes from that image, pinned to the browser
 build it was installed with, so the project's own `playwright` / `pytest-playwright`
 requirements are not installed again.
 """
@@ -23,8 +25,14 @@ from pathlib import Path
 
 from packaging.requirements import InvalidRequirement, Requirement
 
-from testmind.analyzers.repository.models import Dependency, DependencyGroup
+from testmind.analyzers.repository.models import Dependency, DependencyGroup, PythonRequirement
 from testmind.core.logging import get_logger
+from testmind.sandbox.python_versions import (
+    DEFAULT_PYTHON,
+    SANDBOX_PYTHONS,
+    choose_python,
+    image_for,
+)
 
 logger = get_logger(__name__)
 
@@ -51,6 +59,7 @@ class RunnerImage:
     from_cache: bool
     log: str
     notes: tuple[str, ...]
+    python: str = DEFAULT_PYTHON
 
 
 class DependencyInstallError(RuntimeError):
@@ -91,11 +100,19 @@ class RunnerImageBuilder:
         base_image: str,
         *,
         browser_image: str | None = None,
+        python_versions: tuple[str, ...] = (DEFAULT_PYTHON,),
         docker_binary: str = "docker",
         timeout_seconds: int = 900,
     ) -> None:
         self._base = base_image
         self._browser = browser_image
+        unknown = [v for v in python_versions if v not in SANDBOX_PYTHONS]
+        if unknown:
+            raise ValueError(
+                f"No sandbox image is defined for Python {', '.join(unknown)} "
+                f"(TESTMIND_SANDBOX_PYTHON_VERSIONS; supported: {', '.join(SANDBOX_PYTHONS)})"
+            )
+        self._pythons = list(python_versions)
         self._docker = docker_binary
         self._timeout = timeout_seconds
 
@@ -103,10 +120,22 @@ class RunnerImageBuilder:
         digest = hashlib.sha256("\n".join([base_id, *requirements]).encode()).hexdigest()
         return f"{IMAGE_REPOSITORY}:{digest[:16]}"
 
-    def ensure(self, dependencies: Iterable[Dependency], *, browser: bool = False) -> RunnerImage:
-        """The runner image for these dependencies; `browser`: built on the browser image."""
-        base = self._base
+    def ensure(
+        self,
+        dependencies: Iterable[Dependency],
+        *,
+        browser: bool = False,
+        python: PythonRequirement | None = None,
+    ) -> RunnerImage:
+        """The runner image for these dependencies, on the sandbox image of the Python version
+        the project needs; `browser`: built on the browser image (default Python)."""
+        choice = choose_python(python or PythonRequirement(), self._pythons)
+        version = choice.version
+        base = image_for(self._base, version)
+        notes = [f"Python {version}: {choice.reason}"]
         if browser:
+            version = DEFAULT_PYTHON
+            notes = [f"Python {DEFAULT_PYTHON}: browser tests run on the browser image"]
             if self._browser is None:
                 raise DependencyInstallError(
                     "The project has browser tests, but no browser sandbox image is configured "
@@ -116,14 +145,15 @@ class RunnerImageBuilder:
                 )
             base = self._browser
             dependencies = [d for d in dependencies if d.name not in BROWSER_PROVIDED]
-        requirements, notes = requirement_lines(dependencies)
+        requirements, adjustments = requirement_lines(dependencies)
+        notes += adjustments
         if browser:
             notes.append(f"Playwright and a headless Chromium come from {base}")
         if not requirements:
-            return RunnerImage(base, (), True, "", tuple(notes))
+            return RunnerImage(base, (), True, "", tuple(notes), version)
         tag = self.tag_for(requirements, self._base_id(base, notes))
         if self._exists(tag):
-            return RunnerImage(tag, tuple(requirements), True, "", tuple(notes))
+            return RunnerImage(tag, tuple(requirements), True, "", tuple(notes), version)
 
         with tempfile.TemporaryDirectory(prefix="testmind-runner-") as context:
             (Path(context) / "Dockerfile").write_text(DOCKERFILE.format(base=base))
@@ -152,7 +182,7 @@ class RunnerImageBuilder:
                 tuple(notes),
             )
         logger.info("runner_image_built", tag=tag, requirements=len(requirements))
-        return RunnerImage(tag, tuple(requirements), False, log, tuple(notes))
+        return RunnerImage(tag, tuple(requirements), False, log, tuple(notes), version)
 
     def _base_id(self, base: str, notes: list[str]) -> str:
         """Content id of the base image: a rebuilt base (e.g. a new pytest or coverage version)

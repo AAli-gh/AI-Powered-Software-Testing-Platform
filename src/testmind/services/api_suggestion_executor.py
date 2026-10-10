@@ -114,7 +114,7 @@ class ApiSuggestionExecutor:
         code: CodeProfile,
     ) -> ApiSuggestionResult:
         provider = self._provider_factory()  # fails fast, before an image build, without a key
-        image = self._images.ensure(repository.dependencies).tag
+        image = self._images.ensure(repository.dependencies, python=repository.python).tag
         env = (
             {"DJANGO_SETTINGS_MODULE": repository.django_settings_module}
             if repository.django_settings_module

@@ -13,7 +13,7 @@ from testmind.ai_engine.llm import LLMError, LLMProvider
 from testmind.ai_engine.test_generator.generator import TestGenerator, TestSandbox
 from testmind.ai_engine.test_generator.models import GenerationOptions, GenerationResult
 from testmind.analyzers.code import CodeProfile
-from testmind.analyzers.repository.models import Dependency, RepositoryProfile
+from testmind.analyzers.repository.models import RepositoryProfile
 from testmind.core.errors import AppError
 from testmind.core.logging import get_logger
 from testmind.coverage_engine import CoverageReport
@@ -73,10 +73,8 @@ class GenerationExecutor:
             code = await analyses.get_code_for_run(run_id)
             repository = await analyses.get_for_run(run_id)
             profile = CodeProfile.model_validate(code.profile) if code else None
-            dependencies = (
-                RepositoryProfile.model_validate(repository.profile).dependencies
-                if repository
-                else []
+            environment = (
+                RepositoryProfile.model_validate(repository.profile) if repository else None
             )
             coverage = await _coverage(ExecutionRepository(session), options)
             apply_transition(generation, RunStatus.RUNNING)
@@ -90,7 +88,7 @@ class GenerationExecutor:
             root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             provider = self._provider_factory()
             result = await asyncio.to_thread(
-                self._generate, root, profile, options, provider, dependencies, coverage=coverage
+                self._generate, root, profile, options, provider, environment, coverage=coverage
             )
         except (AppError, LLMError) as exc:
             return await self._finish(generation_id, RunStatus.FAILED, str(exc))
@@ -106,7 +104,7 @@ class GenerationExecutor:
         profile: CodeProfile,
         options: GenerationOptions,
         provider: LLMProvider,
-        dependencies: list[Dependency],
+        environment: RepositoryProfile | None,
         *,
         coverage: CoverageReport | None,
     ) -> GenerationResult:
@@ -115,20 +113,22 @@ class GenerationExecutor:
             self._sandbox,
             max_iterations=self._max_iterations,
             max_tokens=self._max_tokens,
-            image=self._runner_image(dependencies),
+            image=self._runner_image(environment),
         )
         return generator.generate(
             root, profile, options, max_targets=self._max_targets, coverage=coverage
         )
 
-    def _runner_image(self, dependencies: list[Dependency]) -> str | None:
+    def _runner_image(self, environment: RepositoryProfile | None) -> str | None:
         """The project's dependencies are installed so generated tests can import its code.
         If that fails, the base image is used and missing imports surface as
         `environment_error` for the affected files."""
         if self._images is None or self._sandbox is None or not self._sandbox.available():
             return None
         try:
-            return self._images.ensure(dependencies).tag
+            if environment is None:
+                return self._images.ensure([]).tag
+            return self._images.ensure(environment.dependencies, python=environment.python).tag
         except DependencyInstallError:
             logger.warning("runner_image_unavailable_for_generation")
             return None

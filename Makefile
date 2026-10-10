@@ -57,6 +57,10 @@ test-services-down: ## Stop the test PostgreSQL + Redis
 sandbox-image: ## Build the Docker image used to run untrusted code (generated tests)
 	docker build -f docker/sandbox.Dockerfile -t testmind-sandbox:local .
 
+.PHONY: sandbox-images
+sandbox-images: ## Build the sandbox image of every supported Python version (3.7-3.12)
+	uv run python scripts/sandbox_images.py
+
 .PHONY: browser-image
 browser-image: sandbox-image ## Build the sandbox image with a headless Chromium (Playwright tests)
 	docker build -f docker/browser.Dockerfile -t testmind-sandbox-browser:local .
@@ -78,7 +82,7 @@ up: ## Build and start the full stack
 	$(COMPOSE) up -d --build --wait
 
 .PHONY: up-sandbox
-up-sandbox: sandbox-image ## The stack with sandboxed test execution (worker -> sandbox proxy -> Docker)
+up-sandbox: sandbox-images ## The stack with sandboxed test execution (worker -> sandbox proxy -> Docker)
 	mkdir -p $(SANDBOX_DIR)
 	$(COMPOSE_SANDBOX) up -d --build --wait
 

@@ -138,6 +138,7 @@ def build_image_builder(settings: Settings) -> RunnerImageBuilder:
     return RunnerImageBuilder(
         settings.sandbox_image,
         browser_image=settings.browser_sandbox_image,
+        python_versions=tuple(settings.sandbox_python_versions),
         timeout_seconds=settings.sandbox_build_timeout_seconds,
     )
 

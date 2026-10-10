@@ -3382,6 +3382,29 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * PythonRequirement
+         * @description Which Python the project needs, as its own files say (python_version.py).
+         */
+        PythonRequirement: {
+            /** Evidence */
+            evidence?: string[];
+            /**
+             * Pinned
+             * @description major.minor pinned by .python-version or runtime.txt
+             */
+            pinned?: string | null;
+            /**
+             * Requires
+             * @description PEP 440 specifier declared (requires-python, python_requires)
+             */
+            requires?: string | null;
+            /**
+             * Tested
+             * @description major.minor versions the project says it supports (tox, classifiers)
+             */
+            tested?: string[];
+        };
         /** ReadinessResponse */
         ReadinessResponse: {
             /** Checks */
@@ -3539,6 +3562,8 @@ export interface components {
             languages: components["schemas"]["LanguageStat"][];
             /** Primary Language */
             primary_language: string | null;
+            /** @description The Python versions the project declares (empty for analyses made before) */
+            python?: components["schemas"]["PythonRequirement"];
             /** Test Files */
             test_files: string[];
             /** Test Frameworks */

@@ -7,7 +7,7 @@ import pytest
 
 from testmind.analyzers.code import CodeAnalyzer, CodeProfile
 from testmind.analyzers.repository import RepositoryProfile
-from testmind.analyzers.repository.models import Dependency
+from testmind.analyzers.repository.models import Dependency, PythonRequirement
 from testmind.sandbox.docker_sandbox import PytestJob
 from testmind.sandbox.models import Outcome, SandboxResult, SandboxUnavailableError, TestCaseResult
 from testmind.sandbox.runner_image import DependencyInstallError, RunnerImage
@@ -39,9 +39,17 @@ class Images:
     def __init__(self, error: DependencyInstallError | None = None) -> None:
         self.error = error
         self.browser: list[bool] = []
+        self.pythons: list[PythonRequirement | None] = []
 
-    def ensure(self, dependencies: list[Dependency], *, browser: bool = False) -> RunnerImage:
+    def ensure(
+        self,
+        dependencies: list[Dependency],
+        *,
+        browser: bool = False,
+        python: PythonRequirement | None = None,
+    ) -> RunnerImage:
         self.browser.append(browser)
+        self.pythons.append(python)
         if self.error:
             raise self.error
         return RunnerImage("testmind-runner:abc", ("flask",), False, "installed", ("note",))

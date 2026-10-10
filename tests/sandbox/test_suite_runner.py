@@ -169,6 +169,7 @@ def test_browser_projects_are_built_on_the_browser_image(sandbox: DockerSandbox)
     only_playwright = builder.ensure(playwright, browser=True)
     assert (only_playwright.tag, only_playwright.requirements) == (sandbox.image, ())
     assert only_playwright.notes == (
+        "Python 3.12: browser tests run on the browser image",
         f"Playwright and a headless Chromium come from {sandbox.image}",
     )
     with_six = builder.ensure([*playwright, dependency("six", "==1.16.0")], browser=True)

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from testmind.ai_engine.llm import LLMNotConfiguredError
 from testmind.ai_engine.test_generator.models import FileStatus, GenerationOptions, TestKind
-from testmind.analyzers.repository.models import Dependency
+from testmind.analyzers.repository.models import Dependency, PythonRequirement
 from testmind.core.config import Settings
 from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableError, NotFoundError
 from testmind.db.models import AnalysisRun, TestGeneration
@@ -288,9 +288,17 @@ class RecordingImages:
     def __init__(self, error: bool = False) -> None:
         self.error = error
         self.calls: list[list[str]] = []
+        self.pythons: list[PythonRequirement | None] = []
 
-    def ensure(self, dependencies: list[Dependency], *, browser: bool = False) -> RunnerImage:
+    def ensure(
+        self,
+        dependencies: list[Dependency],
+        *,
+        browser: bool = False,
+        python: PythonRequirement | None = None,
+    ) -> RunnerImage:
         self.calls.append([d.name for d in dependencies])
+        self.pythons.append(python)
         if self.error:
             raise DependencyInstallError("no wheel", "log", ())
         return RunnerImage("testmind-runner:deps", (), False, "", ())
