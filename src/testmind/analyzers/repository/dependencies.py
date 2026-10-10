@@ -178,7 +178,11 @@ class DependencyCollector:
 
     # ------------------------------------------------------------------ setup.py
     def _setup_py(self, path: str) -> None:
-        """Read `install_requires` / `extras_require` only when they are literal values."""
+        """Read `install_requires` / `extras_require` only when they are literal values.
+
+        `setup(install_requires=requires)` is resolved when `requires` is bound once, at module
+        level, to a literal and never changed (see `_constants`). Nothing is executed.
+        """
         text = self._read(path)
         if text is None:
             return
@@ -187,26 +191,32 @@ class DependencyCollector:
         except (SyntaxError, ValueError) as exc:
             self.issues.append(Issue(path=path, message=f"Cannot parse setup.py: {exc}"))
             return
+        constants = _constants(tree)
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Call) and _call_name(node) == "setup"):
-                continue
-            for keyword in node.keywords:
-                try:
-                    value = ast.literal_eval(keyword.value)
-                except ValueError:
+            if isinstance(node, ast.Call) and _call_name(node) == "setup":
+                for keyword in node.keywords:
                     if keyword.arg in {"install_requires", "extras_require"}:
-                        self.issues.append(
-                            Issue(path=path, message=f"{keyword.arg} is not a static literal")
-                        )
-                    continue
-                if keyword.arg == "install_requires":
-                    for line in _strings(value):
-                        self._add_requirement(line, DependencyGroup.RUNTIME, path)
-                elif keyword.arg == "extras_require" and isinstance(value, dict):
-                    for extra, lines in value.items():
-                        group = _group_for_name(str(extra), default=DependencyGroup.OPTIONAL)
-                        for line in _strings(lines):
-                            self._add_requirement(line, group, path)
+                        self._setup_keyword(path, keyword, constants)
+
+    def _setup_keyword(
+        self, path: str, keyword: ast.keyword, constants: Mapping[str, ast.expr]
+    ) -> None:
+        expression = keyword.value
+        if isinstance(expression, ast.Name) and expression.id in constants:
+            expression = constants[expression.id]
+        try:
+            value = ast.literal_eval(expression)
+        except ValueError:
+            self.issues.append(Issue(path=path, message=f"{keyword.arg} is not a static literal"))
+            return
+        if keyword.arg == "install_requires":
+            for line in _strings(value):
+                self._add_requirement(line, DependencyGroup.RUNTIME, path)
+        elif isinstance(value, dict):
+            for extra, lines in value.items():
+                group = _group_for_name(str(extra), default=DependencyGroup.OPTIONAL)
+                for line in _strings(lines):
+                    self._add_requirement(line, group, path)
 
     # ------------------------------------------------------------------ Pipfile
     def _pipfile(self, path: str) -> None:
@@ -295,6 +305,41 @@ def _join_inside_repo(base: str, target: str) -> str | None:
         else:
             return None
     return "/".join(parts)
+
+
+def _constants(tree: ast.Module) -> dict[str, ast.expr]:
+    """Names bound exactly once, by a plain module-level assignment, and never changed.
+
+    A name assigned twice, augmented (`+=`), mutated through a method (`.append(...)`) or
+    bound anywhere else (a loop, a function, `global`) is left out: its value at the
+    `setup()` call cannot be known without running the file.
+    """
+    bindings: dict[str, int] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bindings[node.id] = bindings.get(node.id, 0) + 1
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            bindings[node.target.id] = bindings.get(node.target.id, 0) + 1
+        elif isinstance(node, ast.Global | ast.Nonlocal):
+            for name in node.names:
+                bindings[name] = bindings.get(name, 0) + 1
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+        ):
+            # requires.append(...), extras.update(...): possibly mutated
+            bindings[node.func.value.id] = bindings.get(node.func.value.id, 0) + 1
+    constants: dict[str, ast.expr] = {}
+    for statement in tree.body:
+        if (
+            isinstance(statement, ast.Assign)
+            and len(statement.targets) == 1
+            and isinstance(statement.targets[0], ast.Name)
+            and bindings.get(statement.targets[0].id) == 1
+        ):
+            constants[statement.targets[0].id] = statement.value
+    return constants
 
 
 def _call_name(call: ast.Call) -> str | None:

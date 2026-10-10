@@ -221,6 +221,50 @@ def test_dynamic_setup_py_is_reported_not_executed() -> None:
     assert collector.issues[0].message == "install_requires is not a static literal"
 
 
+def test_setup_py_names_bound_once_to_a_literal_are_resolved() -> None:
+    # The layout of thefuck's setup.py (found evaluating TestMind on BugsInPy).
+    collector = collect(
+        {
+            "setup.py": """
+            from setuptools import setup
+            install_requires = ['psutil', 'colorama']
+            extras_require = {':python_version<"3.4"': ['pathlib2']}
+            setup(name='pkg', install_requires=install_requires, extras_require=extras_require)
+            """
+        }
+    )
+    assert summary(collector) == {
+        ("psutil", "", RUNTIME),
+        ("colorama", "", RUNTIME),
+        ("pathlib2", "", OPTIONAL),
+    }
+    assert collector.issues == []
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        "requires = ['b']",  # bound twice
+        "requires += ['b']",
+        "requires.append('b')",
+        "for requires in [['b']]: pass",
+        "def f():\n    global requires\n    requires = ['b']",
+    ],
+)
+def test_setup_py_names_that_may_change_are_not_guessed(changed: str) -> None:
+    source = f"from setuptools import setup\nrequires = ['a']\n{changed}\n"
+    collector = collect({"setup.py": source + "setup(install_requires=requires)\n"})
+    assert collector.dependencies == []
+    assert collector.issues[0].message == "install_requires is not a static literal"
+
+
+def test_setup_py_unknown_and_non_literal_names_are_reported() -> None:
+    for body in ("setup(install_requires=undefined)", "x = read()\nsetup(install_requires=x)"):
+        collector = collect({"setup.py": "from setuptools import setup\n" + body + "\n"})
+        assert collector.dependencies == []
+        assert collector.issues[0].message == "install_requires is not a static literal"
+
+
 def test_unparseable_setup_py_is_reported() -> None:
     collector = collect({"setup.py": "setup(\n"})
     assert "Cannot parse setup.py" in collector.issues[0].message
