@@ -268,6 +268,8 @@ def _mapping(value: object) -> Mapping[str, Any]:
 def _strings(value: object) -> list[str]:
     if isinstance(value, list | tuple):
         return [item for item in value if isinstance(item, str)]
+    if isinstance(value, set | frozenset):  # extras_require={"tests": {"pytest", ...}}
+        return sorted(item for item in value if isinstance(item, str))
     if isinstance(value, str):
         return [value]
     return []

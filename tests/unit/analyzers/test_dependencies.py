@@ -200,7 +200,9 @@ def test_setup_py_static_literals_only() -> None:
             setup(
                 name="pkg",
                 install_requires=["requests>=2", "attrs"],
-                extras_require={"dev": ["pytest"], "yaml": ["pyyaml"]},
+                extras_require={
+                    "dev": ["pytest"], "yaml": ("pyyaml",), "tests": {"mock", "tox"}
+                },
             )
             """
         }
@@ -210,6 +212,8 @@ def test_setup_py_static_literals_only() -> None:
         ("attrs", "", RUNTIME),
         ("pytest", "", DEV),
         ("pyyaml", "", OPTIONAL),
+        ("mock", "", DEV),  # a set literal, as PySnooper's setup.py has
+        ("tox", "", DEV),
     }
 
 
