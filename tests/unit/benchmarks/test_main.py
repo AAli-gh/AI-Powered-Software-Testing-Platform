@@ -50,6 +50,14 @@ class FakeTestMind:
         )  # fmt: skip
 
 
+class AllWheels:
+    def __init__(self, cache: Path) -> None:
+        assert cache.name == "wheels.json"
+
+    def has_wheel(self, name: str, version: str, python: str) -> bool:
+        return True
+
+
 def test_run_then_report(
     tmp_path: Path,
     upstream: tuple[Path, str, str],
@@ -65,6 +73,7 @@ def test_run_then_report(
     write_bug(projects, 3, "0" * 40, patch, f"pytest {TARGET}\n")  # no such commit
     write_bug(projects, 4, fixed, patch, f"pytest {TARGET}\n")  # beyond --max-per-project
     monkeypatch.setattr(cli, "TestMind", FakeTestMind)
+    monkeypatch.setattr(cli, "WheelIndex", AllWheels)
     monkeypatch.setenv("TESTMIND_API_TOKEN", "secret-token")
     results = tmp_path / "results.jsonl"
     workspace = tmp_path / "work"

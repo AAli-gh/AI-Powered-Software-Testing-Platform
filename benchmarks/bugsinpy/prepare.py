@@ -7,7 +7,9 @@ commits needed. The trees are plain directories, as TestMind receives any local 
 With `recorded=True` both trees also get the environment BugsInPy reproduced the bug in, as a
 project with a lock file would declare it: `requirements-bugsinpy.txt` (its pinned packages,
 without editable installs and VCS URLs, which TestMind never installs) and `.python-version`
-(its Python, major.minor).
+(its Python, major.minor). A pin is kept only when PyPI has a wheel of it for the Python the
+bug will run on (wheels.py): TestMind installs wheels only, and one pin without a wheel would
+fail the whole installation.
 """
 
 from __future__ import annotations
@@ -19,7 +21,11 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+from packaging.version import Version
+
 from benchmarks.bugsinpy.dataset import Bug
+from benchmarks.bugsinpy.wheels import WheelIndex
+from testmind.sandbox.python_versions import SANDBOX_PYTHONS
 
 GIT_TIMEOUT = 300
 
@@ -65,19 +71,41 @@ RECORDED_REQUIREMENTS = "requirements-bugsinpy.txt"
 PINNED = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[\w,.-]+\])?==[\w.+!-]+$")
 
 
-def recorded_environment(bug: Bug) -> dict[str, str]:
+def sandbox_python(recorded: str) -> str:
+    """The sandbox Python a bug recorded on `recorded` runs on: that version, or the closest
+    newer one with an image (as TestMind chooses for a pinned version without an image)."""
+    later = [v for v in SANDBOX_PYTHONS if Version(v) >= Version(recorded)]
+    return later[0] if later else list(SANDBOX_PYTHONS)[-1]
+
+
+def recorded_environment(bug: Bug, wheels: WheelIndex | None = None) -> dict[str, str]:
     """The files that declare the bug's recorded environment (see the module docstring)."""
     files: dict[str, str] = {}
+    version = re.match(r"(\d+\.\d+)", bug.python_version)
+    python = sandbox_python(version.group(1)) if version else list(SANDBOX_PYTHONS)[-1]
     pins = [line.strip() for line in bug.requirements.splitlines() if PINNED.match(line.strip())]
+    if wheels is not None:
+        pins = [pin for pin in pins if wheels.has_wheel(*_name_version(pin), python)]
     if pins:
         files[RECORDED_REQUIREMENTS] = "\n".join(pins) + "\n"
-    version = re.match(r"(\d+\.\d+)", bug.python_version)
     if version:
         files[".python-version"] = version.group(1) + "\n"
     return files
 
 
-def prepare(bug: Bug, cache: Path, workspace: Path, *, recorded: bool = False) -> tuple[Path, Path]:
+def _name_version(pin: str) -> tuple[str, str]:
+    name, version = pin.split("==")
+    return name.split("[")[0], version
+
+
+def prepare(
+    bug: Bug,
+    cache: Path,
+    workspace: Path,
+    *,
+    recorded: bool = False,
+    wheels: WheelIndex | None = None,
+) -> tuple[Path, Path]:
     """`workspace/<bug>-fixed` and `workspace/<bug>-buggy`, rebuilt from scratch."""
     repository = fetch(bug, cache)
     fixed = workspace / f"{bug.name}-fixed"
@@ -88,7 +116,7 @@ def prepare(bug: Bug, cache: Path, workspace: Path, *, recorded: bool = False) -
     shutil.copytree(fixed, buggy, symlinks=True)
     _run(["patch", "-R", "-p1", "--batch", "--no-backup-if-mismatch", "-s"], buggy, bug.patch)
     if recorded:
-        for name, content in recorded_environment(bug).items():
+        for name, content in recorded_environment(bug, wheels).items():
             for tree in (fixed, buggy):
                 (tree / name).write_text(content)
     for tree in (fixed, buggy):  # TestMind reads the tree as another user

@@ -24,13 +24,20 @@ from benchmarks.bugsinpy.dataset import bug_numbers, load_bug, to_node_id
 from benchmarks.bugsinpy.ground_truth import ground_truth
 from benchmarks.bugsinpy.prepare import PreparationError, prepare
 from benchmarks.bugsinpy.score import BugResult, score, summarise
+from benchmarks.bugsinpy.wheels import WheelIndex
 
 
-def evaluate(args: argparse.Namespace, testmind: TestMind, project: str, number: int) -> BugResult:
+def evaluate(
+    args: argparse.Namespace,
+    testmind: TestMind,
+    wheels: WheelIndex | None,
+    project: str,
+    number: int,
+) -> BugResult:
     bug = load_bug(args.dataset / "projects", project, number)
     try:
         buggy, fixed = prepare(
-            bug, args.cache, args.workspace, recorded=args.environment == "recorded"
+            bug, args.cache, args.workspace, recorded=wheels is not None, wheels=wheels
         )
     except (PreparationError, OSError) as exc:
         return BugResult(bug.name, "preparation_error", detail=str(exc)[-500:])
@@ -58,12 +65,14 @@ def run(args: argparse.Namespace) -> int:
     if args.results.exists():
         done = {json.loads(line)["bug"] for line in args.results.read_text().splitlines() if line}
     testmind = TestMind(args.url, os.environ.get("TESTMIND_API_TOKEN") or None)
+    recorded = args.environment == "recorded"
+    wheels = WheelIndex(args.cache / "wheels.json") if recorded else None
     for project in args.projects.split(","):
         numbers = bug_numbers(args.dataset / "projects", project)[: args.max_per_project]
         for number in numbers:
             if f"{project}-{number}" in done:
                 continue
-            result = evaluate(args, testmind, project, number)
+            result = evaluate(args, testmind, wheels, project, number)
             with args.results.open("a") as out:
                 out.write(json.dumps(result.to_json()) + "\n")
             print(f"{result.bug}: {result.status} {result.blamed or ''} {result.detail}"[:200],  # noqa: T201

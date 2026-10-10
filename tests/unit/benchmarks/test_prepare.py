@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 from benchmarks.bugsinpy.dataset import Bug
-from benchmarks.bugsinpy.prepare import PreparationError, fetch, prepare, recorded_environment
+from benchmarks.bugsinpy.prepare import (
+    PreparationError,
+    fetch,
+    prepare,
+    recorded_environment,
+    sandbox_python,
+)
 
 
 def bug(repo: Path, fixed: str, patch: str) -> Bug:
@@ -62,3 +68,16 @@ def test_the_recorded_environment_is_declared_in_both_trees(
     assert recorded_environment(replace(recorded, python_version="", requirements="")) == {}
     plain, _ = prepare(recorded, tmp_path / "cache", tmp_path / "work")
     assert not (plain / ".python-version").exists()
+
+
+class NoWheels:
+    def has_wheel(self, name: str, version: str, python: str) -> bool:
+        assert python == "3.7"  # a bug recorded on 3.6 runs on the closest newer image
+        return name != "Flask"
+
+
+def test_recorded_pins_without_a_wheel_are_left_out() -> None:
+    recorded = Bug("p", 1, "u", "b", "f", "3.6.9", (), "", "Flask==1.1.2\nidna==2.9\n")
+    files = recorded_environment(recorded, NoWheels())  # type: ignore[arg-type]
+    assert files["requirements-bugsinpy.txt"] == "idna==2.9\n"
+    assert sandbox_python("3.13") == "3.12"
