@@ -59,7 +59,12 @@ def builder(sandbox: DockerSandbox) -> Iterator[RunnerImageBuilder]:
     docker("rmi", "--force", *built, alias, check=False)
 
 
-BUILT_REQUIREMENTS = [["six==1.16.0"], ["pyyaml>=6.0", "requests>=2.31"]]
+# The sandbox image's pytest and coverage are pinned with every project's requirements.
+TOOLS = ["coverage==7.16.1", "pytest-cov==7.1.0", "pytest==8.4.2"]
+BUILT_REQUIREMENTS = [
+    sorted(["six==1.16.0", *TOOLS]),
+    sorted(["pyyaml>=6.0", "requests>=2.31", *TOOLS]),
+]
 
 
 @pytest.fixture(scope="module")
@@ -137,7 +142,7 @@ def test_generated_tests_run_next_to_the_project_suite(
 
     assert report.outcome is ExecutionOutcome.FAILED
     assert report.install is not None
-    assert report.install.requirements == ["pyyaml>=6.0", "requests>=2.31"]
+    assert report.install.requirements == BUILT_REQUIREMENTS[1]
     [failure] = report.failures()
     assert failure.generated is True
     assert failure.nodeid == "tests/testmind/test_inventory_stock.py::test_average_of_zero_items"
@@ -173,7 +178,7 @@ def test_browser_projects_are_built_on_the_browser_image(sandbox: DockerSandbox)
         f"Playwright and a headless Chromium come from {sandbox.image}",
     )
     with_six = builder.ensure([*playwright, dependency("six", "==1.16.0")], browser=True)
-    assert with_six.requirements == ("six==1.16.0",)  # Playwright comes from the image
+    assert with_six.requirements == tuple(BUILT_REQUIREMENTS[0])  # Playwright: from the image
     assert sandbox.available(with_six.tag)
     with pytest.raises(DependencyInstallError, match="no browser sandbox image is configured"):
         RunnerImageBuilder(sandbox.image).ensure(playwright, browser=True)

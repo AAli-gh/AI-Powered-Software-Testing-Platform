@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from benchmarks.bugsinpy.dataset import Bug
-from benchmarks.bugsinpy.prepare import PreparationError, fetch, prepare
+from benchmarks.bugsinpy.prepare import PreparationError, fetch, prepare, recorded_environment
 
 
 def bug(repo: Path, fixed: str, patch: str) -> Bug:
@@ -46,3 +47,18 @@ def test_an_unknown_commit_is_a_preparation_error(
     repo, _, patch = upstream
     with pytest.raises(PreparationError, match="git fetch"):
         fetch(bug(repo, "0" * 40, patch), tmp_path / "cache")
+
+
+def test_the_recorded_environment_is_declared_in_both_trees(
+    tmp_path: Path, upstream: tuple[Path, str, str]
+) -> None:
+    repo, fixed_commit, patch = upstream
+    frozen = "# pip freeze\nFlask==1.1.2\n-e git+https://example.com/x@1#egg=x\nidna==2.9\n\n"
+    recorded = replace(bug(repo, fixed_commit, patch), python_version="3.6.9", requirements=frozen)
+    trees = prepare(recorded, tmp_path / "cache", tmp_path / "work", recorded=True)
+    for tree in trees:
+        assert (tree / "requirements-bugsinpy.txt").read_text() == "Flask==1.1.2\nidna==2.9\n"
+        assert (tree / ".python-version").read_text() == "3.6\n"
+    assert recorded_environment(replace(recorded, python_version="", requirements="")) == {}
+    plain, _ = prepare(recorded, tmp_path / "cache", tmp_path / "work")
+    assert not (plain / ".python-version").exists()

@@ -12,7 +12,10 @@ images are configured (TESTMIND_SANDBOX_PYTHON_VERSIONS):
 1. a pinned version (`.python-version`, `runtime.txt`), if available;
 2. otherwise the versions allowed by the declared range (`requires-python`);
 3. among those, the newest the project says it is tested on (tox, classifiers);
-4. otherwise the newest allowed.
+4. otherwise, when it names versions none of which has an image (a pin, tested versions),
+   the closest allowed version: the oldest newer than all of them, else the newest. A
+   project tested up to 3.5 is more likely to work on 3.7 than on 3.12;
+5. otherwise the newest allowed.
 
 When nothing available satisfies the project, it runs on the default version, and the notes
 say so: its tests may then fail for reasons that are not theirs.
@@ -84,6 +87,18 @@ def choose_python(requirement: PythonRequirement, available: list[str]) -> Pytho
     if tested:
         reason = f"newest version the project is tested on ({', '.join(requirement.tested)})"
         return PythonChoice(tested[-1], _join(unavailable, reason))
+    named = [*requirement.tested, *([requirement.pinned] if requirement.pinned else [])]
+    if allowed and named:
+        newest_named = max(named, key=Version)
+        later = [v for v in allowed if Version(v) > Version(newest_named)]
+        if later:
+            reason = "closest newer version"
+            if requirement.tested:
+                reason = (
+                    f"the project is tested on {', '.join(requirement.tested)}, none of which "
+                    f"has a sandbox image; {reason}"
+                )
+            return PythonChoice(later[0], _join(unavailable, reason))
     if allowed:
         if requirement.requires:
             reason = f"newest version allowed by requires-python {requirement.requires}"

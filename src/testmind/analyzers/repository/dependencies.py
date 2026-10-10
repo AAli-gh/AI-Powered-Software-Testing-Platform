@@ -239,11 +239,16 @@ def is_dependency_manifest(path: str) -> bool:
 
 
 def _is_requirements_file(path: str) -> bool:
-    """`requirements*.txt` anywhere, or any `.txt` inside a `requirements/` directory."""
+    """`requirements*.txt` and `*-requirements.txt` / `*_requirements.txt` (`test_requirements.txt`)
+    anywhere, or any `.txt` inside a `requirements/` directory."""
     pure = PurePosixPath(path)
     if pure.suffix != ".txt":
         return False
-    return pure.name.startswith("requirements") or pure.parent.name == "requirements"
+    return (
+        pure.name.startswith("requirements")
+        or pure.stem.endswith(("-requirements", "_requirements"))
+        or pure.parent.name == "requirements"
+    )
 
 
 DEV_REQUIREMENT_TOKENS = DEV_GROUP_NAMES | {"ci", "docs", "dev-requirements"}

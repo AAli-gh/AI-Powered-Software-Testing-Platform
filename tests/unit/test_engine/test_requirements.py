@@ -84,9 +84,27 @@ def test_base_image_id_is_part_of_the_tag(tmp_path: Path) -> None:
     )
     image = RunnerImageBuilder("base", docker_binary=docker).ensure([dep("six")])
     builder = RunnerImageBuilder("base")
-    assert image.tag == builder.tag_for(["six"], "sha256:base")
+    assert image.requirements == ("coverage==7.16.1", "pytest-cov==7.1.0", "pytest==8.4.2", "six")
+    assert image.tag == builder.tag_for(list(image.requirements), "sha256:base")
     assert image.from_cache is True
     assert log.read_text().splitlines()[0] == "image inspect --format {{.Id}} base"
+
+
+def test_the_sandbox_images_pytest_and_coverage_are_kept(tmp_path: Path) -> None:
+    docker = fake_docker(tmp_path, INSPECT_BASE + 'if [ "$1" = "image" ]; then exit 0; fi\n')
+    builder = RunnerImageBuilder("base", python_versions=("3.7",), docker_binary=docker)
+    image = builder.ensure(
+        [dep("pytest", "==3.2.1"), dep("pytest_cov"), dep("mock")],
+        python=PythonRequirement(pinned="3.7"),
+    )
+    assert image.requirements == ("coverage==7.2.7", "mock", "pytest-cov==4.1.0", "pytest==7.4.4")
+    assert image.notes[1] == (
+        "pytest, pytest_cov: the sandbox image's versions are used "
+        "(coverage 7.2.7, pytest 7.4.4, pytest-cov 4.1.0), not the project's"
+    )
+    # Nothing else to install: the sandbox image itself, no pins needed.
+    bare = builder.ensure([dep("pytest")], python=PythonRequirement(pinned="3.7"))
+    assert (bare.tag, bare.requirements) == ("base:py3.7", ())
 
 
 def test_docker_disappearing_after_the_base_image_probe(tmp_path: Path) -> None:

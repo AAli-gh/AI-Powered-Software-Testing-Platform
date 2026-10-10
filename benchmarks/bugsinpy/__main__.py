@@ -7,6 +7,7 @@
     uv run python -m benchmarks.bugsinpy report --results results.jsonl
 
 `run` appends one JSON line per bug and skips bugs already in the file, so it can be resumed.
+`--environment recorded` adds the environment BugsInPy recorded for each bug (prepare.py).
 """
 
 from __future__ import annotations
@@ -28,7 +29,9 @@ from benchmarks.bugsinpy.score import BugResult, score, summarise
 def evaluate(args: argparse.Namespace, testmind: TestMind, project: str, number: int) -> BugResult:
     bug = load_bug(args.dataset / "projects", project, number)
     try:
-        buggy, fixed = prepare(bug, args.cache, args.workspace)
+        buggy, fixed = prepare(
+            bug, args.cache, args.workspace, recorded=args.environment == "recorded"
+        )
     except (PreparationError, OSError) as exc:
         return BugResult(bug.name, "preparation_error", detail=str(exc)[-500:])
     try:
@@ -96,6 +99,11 @@ def main(argv: list[str] | None = None) -> int:
     running.add_argument("--results", type=Path, required=True)
     running.add_argument("--url", default="http://127.0.0.1:8000")
     running.add_argument("--clean", action="store_true", help="delete each bug's trees after")
+    running.add_argument(
+        "--environment", choices=("declared", "recorded"), default="declared",
+        help="declared: the project's own files only; recorded: plus BugsInPy's pinned "
+        "packages and Python version for the bug",
+    )  # fmt: skip
     reporting = commands.add_parser("report")
     reporting.add_argument("--results", type=Path, required=True)
     args = parser.parse_args(argv)

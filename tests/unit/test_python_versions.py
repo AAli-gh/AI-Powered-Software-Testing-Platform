@@ -49,9 +49,11 @@ def test_nothing_declared_runs_on_the_newest() -> None:
 
 def test_pinned_wins_when_available() -> None:
     assert choose(pinned="3.8", tested=["3.10"]) == ("3.8", "pinned to 3.8")
-    version, reason = choose(available=["3.12"], pinned="3.8")
-    assert version == "3.12"
-    assert reason.startswith("pinned to 3.8, which has no sandbox image; ")
+    assert choose(available=["3.12"], pinned="3.8") == (
+        "3.12",
+        "pinned to 3.8, which has no sandbox image; closest newer version",
+    )
+    assert choose(pinned="3.6")[0] == "3.7"
 
 
 def test_newest_tested_version_within_the_declared_range() -> None:
@@ -70,11 +72,18 @@ def test_newest_allowed_by_the_range() -> None:
     )
 
 
-def test_tested_versions_without_images() -> None:
-    version, reason = choose(available=["3.12"], tested=["3.6"])
-    assert version == "3.12"
-    assert reason == (
-        "the project is tested on 3.6, none of which has a sandbox image; newest available"
+def test_tested_versions_without_images_run_on_the_closest_newer_one() -> None:
+    # httpie in 2016: tox py26, py27, py35; classifiers up to 3.4.
+    assert choose(tested=["3.1", "3.2", "3.3", "3.4", "3.5"]) == (
+        "3.7",
+        "the project is tested on 3.1, 3.2, 3.3, 3.4, 3.5, none of which has a sandbox image; "
+        "closest newer version",
+    )
+    assert choose(available=["3.12"], tested=["3.6"])[0] == "3.12"
+    # Tested only on versions newer than every image: the newest.
+    assert choose(tested=["3.13"]) == (
+        "3.12",
+        "the project is tested on 3.13, none of which has a sandbox image; newest available",
     )
 
 

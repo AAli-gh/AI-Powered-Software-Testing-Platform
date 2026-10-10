@@ -21,6 +21,7 @@ class Bug:
     python_version: str  # as BugsInPy recorded it, e.g. 3.8.3
     targets: tuple[str, ...]  # the failing tests, as written in run_test.sh
     patch: str  # the source fix, buggy -> fixed
+    requirements: str = ""  # the environment BugsInPy reproduced the bug in (pip freeze)
 
     @property
     def name(self) -> str:
@@ -70,7 +71,12 @@ def load_bug(projects: Path, project: str, number: int) -> Bug:
         python_version=info.get("python_version", ""),
         targets=parse_targets((directory / "run_test.sh").read_text("utf-8")),
         patch=(directory / "bug_patch.txt").read_text("utf-8", errors="replace"),
+        requirements=_read_optional(directory / "requirements.txt"),
     )
+
+
+def _read_optional(path: Path) -> str:
+    return path.read_text("utf-8", errors="replace") if path.is_file() else ""
 
 
 def bug_numbers(projects: Path, project: str) -> list[int]:

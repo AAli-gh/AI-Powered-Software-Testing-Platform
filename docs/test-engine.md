@@ -40,6 +40,11 @@ USER 65534:65534
 - **Wheels only (`--only-binary=:all:`):** no third-party `setup.py` is ever executed while
   installing. A package without a wheel makes the installation fail with the pip log in the
   report (`install_failed`). TestMind does not fall back to building from source.
+- **pytest, coverage.py and pytest-cov** are TestMind's own tools: its plugins and coverage
+  measurement need the image's versions. The project's requirements for them are dropped
+  (with a note) and the image's versions are pinned in the list, so an old
+  `pytest==3.2.1` can neither downgrade them nor can another package upgrade them; a package
+  that needs other versions fails the installation with pip's reason.
 - The project itself is **not** installed. It is importable through `PYTHONPATH`
   (`/workspace/src` and `/workspace/src/src` for `src/` layouts).
 - Images are tagged `testmind-runner:<hash>` and reused while the requirement list **and the
@@ -66,8 +71,11 @@ newest pytest, coverage.py and pytest-cov that support that version; the pins ar
 
 1. the pinned version;
 2. otherwise the newest version it is tested on, within the allowed range;
-3. otherwise the newest version allowed;
-4. if nothing fits, the default (3.12), and the notes say its tests may fail for that reason.
+3. when the versions it names (pinned, tested) have no image, the **closest newer** version
+   allowed: a project tested up to 3.5 runs on 3.7, not 3.12, because it is far more likely
+   to work there;
+4. otherwise the newest version allowed;
+5. if nothing fits, the default (3.12), and the notes say its tests may fail for that reason.
 
 The choice and its reason are the first install note of every execution, for example
 `Python 3.8: newest version the project is tested on (3.5, 3.6, 3.7, 3.8)`.

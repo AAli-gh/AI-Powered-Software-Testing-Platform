@@ -12,6 +12,12 @@ tests (Playwright) are built on the browser sandbox image instead, which adds a 
 Chromium and has the default Python. Playwright itself comes from that image, pinned to the browser
 build it was installed with, so the project's own `playwright` / `pytest-playwright`
 requirements are not installed again.
+
+pytest, coverage.py and pytest-cov are TestMind's own tools: its plugins and coverage
+measurement need the versions the sandbox image has. The project's requirements for them are
+dropped, and the image's versions are pinned in the requirement list, so pip can neither
+downgrade them (`pytest==3.2.1` in an old requirements-dev.txt) nor upgrade them for another
+package; a package that needs other versions makes the installation fail with pip's reason.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 
 from testmind.analyzers.repository.models import Dependency, DependencyGroup, PythonRequirement
 from testmind.core.logging import get_logger
@@ -145,8 +152,20 @@ class RunnerImageBuilder:
                 )
             base = self._browser
             dependencies = [d for d in dependencies if d.name not in BROWSER_PROVIDED]
+        dependencies = list(dependencies)
+        tools = _sandbox_tools(version)
+        provided = sorted({d.name for d in dependencies if canonicalize_name(d.name) in tools})
+        dependencies = [d for d in dependencies if canonicalize_name(d.name) not in tools]
         requirements, adjustments = requirement_lines(dependencies)
         notes += adjustments
+        if provided:
+            pins = ", ".join(f"{name} {pin}" for name, pin in tools.items())
+            notes.append(
+                f"{', '.join(provided)}: the sandbox image's versions are used ({pins}), "
+                "not the project's"
+            )
+        if requirements:
+            requirements = sorted([*requirements, *(f"{n}=={v}" for n, v in tools.items())])
         if browser:
             notes.append(f"Playwright and a headless Chromium come from {base}")
         if not requirements:
@@ -217,3 +236,9 @@ class RunnerImageBuilder:
         except (OSError, subprocess.TimeoutExpired):
             return False
         return probe.returncode == 0
+
+
+def _sandbox_tools(version: str) -> dict[str, str]:
+    """TestMind's tools in the sandbox image of `version`, by canonical name."""
+    image = SANDBOX_PYTHONS[version]
+    return {"coverage": image.coverage, "pytest": image.pytest, "pytest-cov": image.pytest_cov}

@@ -54,9 +54,9 @@ walker ──► files (safe inventory)
 | `[project.optional-dependencies]` | optional (`dev`/`test`/`lint`… → development) |
 | `[dependency-groups]` (PEP 735) | same naming rule. `{include-group}` tables are skipped |
 | `[tool.poetry.*]` dependencies, dev-dependencies, groups | runtime / development / by group name |
-| `requirements*.txt`, `requirements/*.txt` | by file name (`-dev`, `test`, `ci`, … → development) |
+| `requirements*.txt`, `*-requirements.txt`, `*_requirements.txt`, `requirements/*.txt` | by file name (`-dev`, `test`, `ci`, … → development) |
 | `setup.cfg` `install_requires`, `extras_require` | runtime / by extra name |
-| `setup.py` | only **literal** `install_requires` / `extras_require`. A dynamic value is reported as an issue and never executed |
+| `setup.py` | only **literal** `install_requires` / `extras_require` (lists, tuples or sets of strings). A dynamic value is reported as an issue and never executed |
 | `Pipfile` | `packages` → runtime, `dev-packages` → development |
 
 - Names are normalised (PEP 503) and extras and markers are kept.

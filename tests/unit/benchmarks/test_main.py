@@ -23,6 +23,7 @@ def write_bug(projects: Path, number: int, fixed: str, patch: str, run_test: str
     )
     (directory / "run_test.sh").write_text(run_test)
     (directory / "bug_patch.txt").write_text(patch)
+    (directory / "requirements.txt").write_text("six==1.15.0\n")
 
 
 class FakeTestMind:
@@ -71,6 +72,7 @@ def test_run_then_report(
         "run", "--dataset", str(tmp_path / "BugsInPy"), "--workspace", str(workspace),
         "--cache", str(tmp_path / "cache"), "--projects", "calc", "--max-per-project", "3",
         "--results", str(results), "--url", "http://testmind", "--clean",
+        "--environment", "recorded",
     ]  # fmt: skip
 
     assert cli.main(args) == 0

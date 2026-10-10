@@ -131,6 +131,9 @@ def test_nested_include_relative_to_including_file() -> None:
         ("requirements.txt", RUNTIME),
         ("requirements-dev.txt", DEV),
         ("requirements_test.txt", DEV),
+        ("test_requirements.txt", DEV),  # cookiecutter
+        ("dev-requirements.txt", DEV),
+        ("prod_requirements.txt", RUNTIME),
         ("requirements/ci.txt", DEV),
         ("requirements/base.txt", RUNTIME),
         ("requirements/special.txt", RUNTIME),  # regression: "ci" inside a word is not CI
