@@ -64,7 +64,7 @@ packages = ["src/testmind"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests"]
+src = ["src", "tests", "."]  # "." for benchmarks/ and scripts/
 # examples/ holds fixture repositories that TestMind analyses; they are not TestMind's own code.
 extend-exclude = ["examples"]
 force-exclude = true
@@ -92,7 +92,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src", "tests", "migrations", "scripts"]
+files = ["src", "tests", "migrations", "scripts", "benchmarks"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
