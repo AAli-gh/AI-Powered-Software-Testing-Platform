@@ -53,9 +53,15 @@ class TestMind:
 
     def _register(self, name: str) -> str:
         """A fresh project for the directory `name` of the repositories root."""
-        for project in self._get("/projects", limit=100)["items"]:
-            if project["name"] == name:
-                self._http.delete(f"/projects/{project['id']}").raise_for_status()
+        offset, stale = 0, []
+        while True:  # every page: the name may be anywhere
+            page = self._get("/projects", limit=PAGE, offset=offset)
+            stale += [p["id"] for p in page["items"] if p["name"] == name]
+            offset += PAGE
+            if offset >= page["total"]:
+                break
+        for project_id in stale:
+            self._http.delete(f"/projects/{project_id}").raise_for_status()
         created = self._http.post("/projects", json={"name": name, "source_location": name})
         return str(created.raise_for_status().json()["id"])
 

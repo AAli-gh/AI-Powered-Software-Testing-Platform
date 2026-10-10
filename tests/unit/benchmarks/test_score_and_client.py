@@ -105,7 +105,11 @@ class FakeTestMind:
         path, method = request.url.path.removeprefix("/api/v1"), request.method
         params = request.url.params
         if path == "/projects" and method == "GET":
-            return httpx.Response(200, json={"items": [{"id": "old", "name": "p-1-buggy"}]})
+            if params["offset"] == "0":  # two pages; the stale project is on the second
+                items = [{"id": str(i), "name": f"other-{i}"} for i in range(100)]
+                return httpx.Response(200, json={"items": items, "total": 101})
+            items = [{"id": "old", "name": "p-1-buggy"}]
+            return httpx.Response(200, json={"items": items, "total": 101})
         if path == "/projects/old" and method == "DELETE":
             self.deleted.append("old")
             return httpx.Response(204)
