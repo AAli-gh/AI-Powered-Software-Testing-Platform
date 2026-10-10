@@ -94,12 +94,12 @@ def test_the_sandbox_images_pytest_and_coverage_are_kept(tmp_path: Path) -> None
     docker = fake_docker(tmp_path, INSPECT_BASE + 'if [ "$1" = "image" ]; then exit 0; fi\n')
     builder = RunnerImageBuilder("base", python_versions=("3.7",), docker_binary=docker)
     image = builder.ensure(
-        [dep("pytest", "==3.2.1"), dep("pytest_cov"), dep("mock")],
+        [dep("pytest", "==3.2.1"), dep("pytest_cov"), dep("mock"), dep("pluggy", "==0.13.1")],
         python=PythonRequirement(pinned="3.7"),
     )
     assert image.requirements == ("coverage==7.2.7", "mock", "pytest-cov==4.1.0", "pytest==7.4.4")
     assert image.notes[1] == (
-        "pytest, pytest_cov: the sandbox image's versions are used "
+        "pluggy, pytest, pytest_cov: the sandbox image's versions are used "
         "(coverage 7.2.7, pytest 7.4.4, pytest-cov 4.1.0), not the project's"
     )
     # Nothing else to install: the sandbox image itself, no pins needed.

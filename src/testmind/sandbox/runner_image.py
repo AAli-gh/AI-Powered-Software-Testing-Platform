@@ -14,10 +14,11 @@ build it was installed with, so the project's own `playwright` / `pytest-playwri
 requirements are not installed again.
 
 pytest, coverage.py and pytest-cov are TestMind's own tools: its plugins and coverage
-measurement need the versions the sandbox image has. The project's requirements for them are
-dropped, and the image's versions are pinned in the requirement list, so pip can neither
-downgrade them (`pytest==3.2.1` in an old requirements-dev.txt) nor upgrade them for another
-package; a package that needs other versions makes the installation fail with pip's reason.
+measurement need the versions the sandbox image has. The project's requirements for them, and
+for pytest's own dependencies (pluggy, py, iniconfig), are dropped, and the image's versions
+of the tools are pinned in the requirement list, so pip can neither downgrade them
+(`pytest==3.2.1` in an old requirements-dev.txt) nor upgrade them for another package; a
+package that needs other versions makes the installation fail with pip's reason.
 """
 
 from __future__ import annotations
@@ -48,6 +49,9 @@ DOCKER_PROBE_TIMEOUT = 15
 IMAGE_REPOSITORY = "testmind-runner"
 INSTALLED_GROUPS = frozenset({DependencyGroup.RUNTIME, DependencyGroup.DEVELOPMENT})
 BROWSER_PROVIDED = frozenset({"playwright", "pytest-playwright"})
+# Installed with the image's pytest, in versions it needs: pluggy==0.13.1 from an old frozen
+# requirements file cannot be installed next to pytest 8.
+PYTEST_DEPENDENCIES = frozenset({"pluggy", "py", "iniconfig"})
 DOCKERFILE = """\
 FROM {base}
 USER root
@@ -154,8 +158,11 @@ class RunnerImageBuilder:
             dependencies = [d for d in dependencies if d.name not in BROWSER_PROVIDED]
         dependencies = list(dependencies)
         tools = _sandbox_tools(version)
-        provided = sorted({d.name for d in dependencies if canonicalize_name(d.name) in tools})
-        dependencies = [d for d in dependencies if canonicalize_name(d.name) not in tools]
+        image_owned = tools.keys() | PYTEST_DEPENDENCIES
+        provided = sorted(
+            {d.name for d in dependencies if canonicalize_name(d.name) in image_owned}
+        )
+        dependencies = [d for d in dependencies if canonicalize_name(d.name) not in image_owned]
         requirements, adjustments = requirement_lines(dependencies)
         notes += adjustments
         if provided:
