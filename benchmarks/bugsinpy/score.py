@@ -54,7 +54,18 @@ class BugResult:
 
 
 def matches(node_id: str, target: str) -> bool:
-    return node_id == target or node_id.startswith((f"{target}[", f"{target}::"))
+    """Whether a test TestMind reports is one the bug's target names.
+
+    TestMind reports tests as `file::name` (classes left out, as its docs say), so a target in
+    a class, `file::Class::test`, is compared as `file::test`. A target naming a whole class,
+    `file::TestClass`, matches every test of that file: the class is not in the report.
+    """
+    file, _, rest = target.partition("::")
+    parts = rest.split("::") if rest else []
+    if len(parts) == 1 and parts[0][:1].isupper():  # a class: TestClass
+        parts = []
+    short = "::".join([file, parts[-1]]) if parts else file
+    return node_id == short or node_id.startswith((f"{short}[", f"{short}::"))
 
 
 def _holds(group: dict[str, Any], targets: list[str]) -> bool:

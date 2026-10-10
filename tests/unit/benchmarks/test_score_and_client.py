@@ -10,7 +10,7 @@ import pytest
 
 from benchmarks.bugsinpy.client import SuiteRun, TestMind
 from benchmarks.bugsinpy.ground_truth import GroundTruth, Location
-from benchmarks.bugsinpy.score import BugResult, score, summarise
+from benchmarks.bugsinpy.score import BugResult, matches, score, summarise
 
 PATH = "pkg/rules.py"
 TRUTH = GroundTruth(lines={PATH: {15}}, functions={Location(PATH, "Rule.get_new_command")})
@@ -182,3 +182,25 @@ def test_run_suite_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
     testmind = client(FakeTestMind(), monkeypatch)
     testmind._timeout = 0
     assert testmind.run_suite("p-1-buggy").status == "timeout"
+
+
+@pytest.mark.parametrize(
+    ("node_id", "target", "expected"),
+    [
+        ("t.py::test_a", "t.py::test_a", True),
+        ("t.py::test_a[1-2]", "t.py::test_a", True),
+        ("t.py::test_ab", "t.py::test_a", False),
+        # TestMind leaves classes out of node ids
+        (
+            "test/test_utils.py::test_match_str",
+            "test/test_utils.py::TestUtil::test_match_str",
+            True,
+        ),
+        ("t.py::test_b", "t.py::TestA::test_a", False),
+        ("t.py::test_b", "t.py::TestA", True),  # a whole class: the file's tests
+        ("u.py::test_b", "t.py::TestA", False),
+        ("t.py::test_b", "t.py", True),
+    ],
+)
+def test_matches(node_id: str, target: str, expected: bool) -> None:
+    assert matches(node_id, target) is expected
