@@ -126,7 +126,8 @@ def test_a_timed_out_sandbox_is_killed_through_the_proxy(repo: Path) -> None:
 def test_a_runner_image_is_built_through_the_proxy() -> None:
     builder = RunnerImageBuilder(SANDBOX_IMAGE, timeout_seconds=300)
     dependency = Dependency(
-        name="iniconfig", specifier="==2.0.0", group=DependencyGroup.RUNTIME,
+        # not one of pytest's own dependencies, which the sandbox image provides
+        name="six", specifier="==1.16.0", group=DependencyGroup.RUNTIME,
         source="pyproject.toml",
     )  # fmt: skip
     image = builder.ensure([dependency])
