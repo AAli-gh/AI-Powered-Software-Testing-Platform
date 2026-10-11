@@ -77,6 +77,9 @@ def settings(repos_root: Path) -> Settings:
         repos_root=repos_root,
         log_json=False,
         rate_limit_per_minute=0,  # tests/api/test_security_api.py enables it where tested
+        # External AI is off by default; tests exercise it with a scripted model and a
+        # placeholder key wherever they need it (llm_configured fixtures).
+        llm_provider="anthropic",
     )
 
 

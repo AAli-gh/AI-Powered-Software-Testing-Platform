@@ -7,8 +7,8 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from testmind.ai_engine.llm.factory import llm_available
-from testmind.core.config import Settings
+from testmind.ai_engine.llm.factory import ai_unavailable_reason
+from testmind.core.config import AIFeature, Settings
 from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableError, NotFoundError
 from testmind.core.logging import get_logger
 from testmind.db.models import FailureAnalysis, TestExecution
@@ -72,10 +72,10 @@ class FailureAnalysisService:
         report = await self.report(execution_id)
         if not report.groups:
             raise ConflictError("The execution has no failure groups to analyse")
-        if not llm_available(self._settings):
+        reason = ai_unavailable_reason(self._settings, AIFeature.FAILURE_EXPLANATION)
+        if reason is not None:
             raise LLMUnavailableError(
-                "No LLM provider is configured (set ANTHROPIC_API_KEY; see .env.example). "
-                "The deterministic analysis is available at /failures"
+                f"{reason}. The deterministic analysis is available at /failures"
             )
         analysis = await self._analyses.add(
             FailureAnalysis(

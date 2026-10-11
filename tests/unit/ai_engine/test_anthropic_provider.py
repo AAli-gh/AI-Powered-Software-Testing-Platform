@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import anthropic
@@ -7,10 +8,10 @@ import pytest
 
 from testmind.ai_engine.llm import LLMError, LLMRefusalError, LLMRequest
 from testmind.ai_engine.llm.anthropic_provider import FALLBACK_BETA, AnthropicProvider
-from testmind.ai_engine.llm.factory import create_provider, llm_available
+from testmind.ai_engine.llm.factory import ai_unavailable_reason, create_provider, llm_available
 from testmind.ai_engine.llm.metering import MeteredProvider
 from testmind.ai_engine.llm.redaction import RedactingProvider
-from testmind.core.config import Settings
+from testmind.core.config import AIFeature, Settings
 
 
 @dataclass
@@ -128,6 +129,7 @@ def settings(**overrides: object) -> Settings:
         "database_url": "postgresql+asyncpg://u:p@db/x",
         "redis_url": "redis://r:6379/0",
         "repos_root": "/srv",
+        "llm_provider": "anthropic",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]
@@ -162,3 +164,32 @@ def test_available_with_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(provider._inner, RedactingProvider)
     assert isinstance(provider._inner._inner, AnthropicProvider)
     assert provider.name == "anthropic"
+
+
+@pytest.mark.usefixtures("no_credentials")
+def test_external_ai_is_off_by_default_and_per_feature(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "placeholder-value")
+    default = Settings(
+        _env_file=None,
+        database_url="postgresql+asyncpg://u:p@db/x",  # type: ignore[arg-type]
+        redis_url="redis://r:6379/0",  # type: ignore[arg-type]
+        repos_root=Path("/srv"),
+    )
+    assert default.llm_provider == "disabled"
+    assert default.ai_features == list(AIFeature)
+    off = ai_unavailable_reason(default, AIFeature.TEST_GENERATION)
+    assert off is not None
+    assert off.startswith("External AI is turned off (TESTMIND_LLM_PROVIDER=disabled)")
+
+    chosen = settings(ai_features="test_generation, failure_explanation")
+    assert chosen.ai_features == [AIFeature.TEST_GENERATION, AIFeature.FAILURE_EXPLANATION]
+    assert ai_unavailable_reason(chosen, AIFeature.TEST_GENERATION) is None
+    assert ai_unavailable_reason(chosen, AIFeature.MUTATION_SUGGESTIONS) == (
+        "External AI is turned off for mutation_suggestions (TESTMIND_AI_FEATURES)"
+    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    assert ai_unavailable_reason(chosen, AIFeature.TEST_GENERATION) == (
+        "No credentials for the LLM provider: set ANTHROPIC_API_KEY (see .env.example)"
+    )
+    with pytest.raises(ValueError, match="ai_features"):
+        settings(ai_features="test_generation,telepathy")

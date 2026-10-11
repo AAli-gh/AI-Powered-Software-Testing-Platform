@@ -7,9 +7,9 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from testmind.ai_engine.llm.factory import llm_available
+from testmind.ai_engine.llm.factory import ai_unavailable_reason
 from testmind.ai_engine.test_generator.models import GenerationOptions
-from testmind.core.config import Settings
+from testmind.core.config import AIFeature, Settings
 from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableError, NotFoundError
 from testmind.core.logging import get_logger
 from testmind.db.models import TestGeneration
@@ -44,10 +44,9 @@ class GenerationService:
             )
         if options.coverage_execution_id is not None:
             await self._check_coverage_source(run_id, options.coverage_execution_id)
-        if not llm_available(self._settings):
-            raise LLMUnavailableError(
-                "No LLM provider is configured (set ANTHROPIC_API_KEY; see .env.example)"
-            )
+        reason = ai_unavailable_reason(self._settings, AIFeature.TEST_GENERATION)
+        if reason is not None:
+            raise LLMUnavailableError(reason)
 
         generation = await self._generations.add(
             TestGeneration(

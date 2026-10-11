@@ -17,6 +17,15 @@ MIN_TOKEN_LENGTH = 32
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
+class AIFeature(StrEnum):
+    """The features that may call an external LLM. Detection never does (docs/ai-engine.md)."""
+
+    TEST_GENERATION = "test_generation"
+    FAILURE_EXPLANATION = "failure_explanation"
+    MUTATION_SUGGESTIONS = "mutation_suggestions"
+    API_SUGGESTIONS = "api_suggestions"
+
+
 class Environment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
@@ -61,10 +70,15 @@ class Settings(BaseSettings):
     # PROMETHEUS_MULTIPROC_DIR (docs/monitoring.md).
     worker_metrics_port: int = Field(default=0, ge=0, le=65535)
 
-    # --- AI test generation. The API key itself is NOT a TestMind setting: the Anthropic SDK
-    # reads ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile) directly,
-    # so the secret never passes through TestMind's configuration or logs.
-    llm_provider: Literal["anthropic", "disabled"] = "anthropic"
+    # --- External AI (an LLM), off by default: running tests, failure analysis and fault
+    # localisation never use it. `anthropic` turns it on for the features in `ai_features`.
+    # The API key itself is NOT a TestMind setting: the Anthropic SDK reads ANTHROPIC_API_KEY
+    # (or ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile) directly, so the secret never
+    # passes through TestMind's configuration or logs.
+    llm_provider: Literal["anthropic", "disabled"] = "disabled"
+    ai_features: Annotated[list[AIFeature], NoDecode] = Field(
+        default_factory=lambda: list(AIFeature)
+    )
     llm_model: str = Field(default="claude-opus-5", min_length=1, max_length=100)
     llm_max_tokens: int = Field(default=16000, ge=1024, le=128000)
     llm_timeout_seconds: float = Field(default=600.0, gt=0)
@@ -184,6 +198,14 @@ class Settings(BaseSettings):
         """`TESTMIND_GITHUB_ALLOWED_OWNERS=acme,other` (comma-separated)."""
         if isinstance(value, str):
             return [owner.strip() for owner in value.split(",") if owner.strip()]
+        return value
+
+    @field_validator("ai_features", mode="before")
+    @classmethod
+    def _split_features(cls, value: object) -> object:
+        """`TESTMIND_AI_FEATURES=test_generation,failure_explanation` (comma-separated)."""
+        if isinstance(value, str):
+            return [feature.strip() for feature in value.split(",") if feature.strip()]
         return value
 
     @field_validator("sandbox_python_versions", mode="before")

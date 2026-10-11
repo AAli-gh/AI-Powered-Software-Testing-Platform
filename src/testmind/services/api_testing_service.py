@@ -7,9 +7,9 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from testmind.ai_engine.llm.factory import llm_available
+from testmind.ai_engine.llm.factory import ai_unavailable_reason
 from testmind.api_engine.suggester import TARGET_KINDS
-from testmind.core.config import Settings
+from testmind.core.config import AIFeature, Settings
 from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableError, NotFoundError
 from testmind.core.logging import get_logger
 from testmind.db.models import ApiTestSuggestion
@@ -38,10 +38,9 @@ class ApiTestingService:
             raise ConflictError(
                 "The execution's API coverage has no endpoint gaps a test could close"
             )
-        if not llm_available(self._settings):
-            raise LLMUnavailableError(
-                "No LLM provider is configured (set ANTHROPIC_API_KEY; see .env.example)"
-            )
+        reason = ai_unavailable_reason(self._settings, AIFeature.API_SUGGESTIONS)
+        if reason is not None:
+            raise LLMUnavailableError(reason)
         job = await self._jobs.add(
             ApiTestSuggestion(
                 execution_id=execution_id,

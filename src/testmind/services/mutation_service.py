@@ -9,8 +9,8 @@ from typing import TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from testmind.ai_engine.llm.factory import llm_available
-from testmind.core.config import Settings
+from testmind.ai_engine.llm.factory import ai_unavailable_reason
+from testmind.core.config import AIFeature, Settings
 from testmind.core.errors import ConflictError, DispatchError, LLMUnavailableError, NotFoundError
 from testmind.core.logging import get_logger
 from testmind.db.models import MutantTestSuggestion, MutationRun
@@ -91,10 +91,9 @@ class MutationService:
         report = await self.report(mutation_run_id)
         if not any(m.status is MutantStatus.SURVIVED for m in report.mutants):
             raise ConflictError("The mutation run has no surviving mutants")
-        if not llm_available(self._settings):
-            raise LLMUnavailableError(
-                "No LLM provider is configured (set ANTHROPIC_API_KEY; see .env.example)"
-            )
+        reason = ai_unavailable_reason(self._settings, AIFeature.MUTATION_SUGGESTIONS)
+        if reason is not None:
+            raise LLMUnavailableError(reason)
         job = await self._jobs.add(
             MutantTestSuggestion(
                 mutation_run_id=mutation_run_id,

@@ -106,11 +106,27 @@ version file. The version used is stored with every generation (`prompt_version`
 results stay traceable to the exact prompt text. Coverage-guided generations append the
 separately versioned `coverage.v1.md` section and record `v1+coverage.v1`.
 
-## Configuration
+## Configuration: external AI is optional
+
+External AI is **off by default**. Everything that detects problems works without it: running
+tests, coverage, failure analysis, fault localisation, mutation testing, regression analysis
+and API coverage. These are deterministic, and their accuracy is measured with AI off
+([evaluation.md](evaluation.md)). An LLM only adds the features below, and each can be turned
+off on its own:
+
+| Feature (`TESTMIND_AI_FEATURES`) | What the LLM does | Without it |
+|---|---|---|
+| `test_generation` | writes tests for untested functions, checked in the sandbox | the coverage gaps are still listed |
+| `failure_explanation` | a root-cause hypothesis, kept only if its evidence checks out | the deterministic groups, evidence and suspects |
+| `mutation_suggestions` | tests that would kill surviving mutants | the surviving mutants are still listed |
+| `api_suggestions` | tests for untested endpoints | the endpoint gaps are still listed |
+
+A disabled feature's endpoint answers `503 llm_not_configured` with the reason.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TESTMIND_LLM_PROVIDER` | `anthropic` | `anthropic` or `disabled` |
+| `TESTMIND_LLM_PROVIDER` | `disabled` | `disabled` or `anthropic` |
+| `TESTMIND_AI_FEATURES` | all four | comma-separated features that may use the LLM |
 | `TESTMIND_LLM_MODEL` | `claude-opus-5` | Model id |
 | `TESTMIND_LLM_MAX_TOKENS` | `16000` | Max output tokens per call |
 | `TESTMIND_LLM_TIMEOUT_SECONDS` | `600` | Per-request timeout (SDK retries included) |

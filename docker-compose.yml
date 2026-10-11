@@ -9,7 +9,8 @@ x-app-environment: &app-environment
   TESTMIND_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?set in .env}:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/${POSTGRES_DB:?set in .env}
   TESTMIND_REDIS_URL: redis://redis:6379/0
   TESTMIND_REPOS_ROOT: /repos
-  TESTMIND_LLM_PROVIDER: ${TESTMIND_LLM_PROVIDER:-anthropic}
+  TESTMIND_LLM_PROVIDER: ${TESTMIND_LLM_PROVIDER:-disabled}
+  TESTMIND_AI_FEATURES: ${TESTMIND_AI_FEATURES:-}
   TESTMIND_LLM_MODEL: ${TESTMIND_LLM_MODEL:-claude-opus-5}
   # Read by the Anthropic SDK. Empty = AI features disabled (503 llm_not_configured).
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
