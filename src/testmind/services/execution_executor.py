@@ -66,7 +66,14 @@ class ExecutionExecutor:
                 return await self._finish(execution_id, RunStatus.FAILED, NO_REPOSITORY_ANALYSIS)
             root = resolve_local_source(self._repos_root, location, imports_root=self._imports_root)
             result = await asyncio.to_thread(
-                lambda: self._runner.run(root, profile, generated, code=code, api_probes=api_probes)
+                lambda: self._runner.run(
+                    root,
+                    profile,
+                    generated,
+                    code=code,
+                    api_probes=api_probes,
+                    test_contexts=True,  # per-test coverage: fault localisation
+                )
             )
         except AppError as exc:
             return await self._finish(execution_id, RunStatus.FAILED, exc.message)
@@ -96,6 +103,8 @@ class ExecutionExecutor:
                 if result.coverage is not None:
                     execution.coverage = result.coverage.model_dump(mode="json")
                     execution.coverage_percent = result.coverage.totals.percent
+                if result.spectrum is not None:
+                    execution.spectrum = result.spectrum.to_json()
                 if result.api is not None:
                     execution.api_coverage = result.api.model_dump(mode="json")
                     execution.api_coverage_percent = result.api.totals.percent

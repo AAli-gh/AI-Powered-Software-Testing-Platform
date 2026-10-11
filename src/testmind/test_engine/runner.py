@@ -28,6 +28,8 @@ from testmind.failure_engine import (
     FailureReport,
     parse_failures_json,
 )
+from testmind.fault_localization.failures import localize_failures
+from testmind.fault_localization.spectrum import Spectrum
 from testmind.sandbox.docker_sandbox import DEFAULT_TMPFS, PytestJob
 from testmind.sandbox.models import (
     Outcome,
@@ -74,6 +76,7 @@ class SuiteResult:
     failures: FailureReport | None = None  # None when no tests ran
     impact: TestImpact | None = None  # only when per-test contexts were requested
     api: ApiCoverageReport | None = None  # None: no endpoints and no requests, or no run
+    spectrum: Spectrum | None = None  # with per-test contexts: for fault localisation
 
 
 class TestSuiteRunner:
@@ -173,8 +176,11 @@ class TestSuiteRunner:
             impact = build_test_impact(raw, code) if test_contexts else None
         report = base.from_result(result, install, coverage_error)
         failures = _failures(result, report, profile, code, coverage)
+        spectrum = Spectrum.build(impact, code) if impact is not None and code else None
+        if spectrum is not None and code is not None:
+            failures = localize_failures(failures, spectrum, report.tests, code)
         api = _api(result, code, probes, report.tests)
-        return SuiteResult(report, coverage, failures, impact, api)
+        return SuiteResult(report, coverage, failures, impact, api, spectrum)
 
 
 def uses_browser(profile: RepositoryProfile) -> bool:

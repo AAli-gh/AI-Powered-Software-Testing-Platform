@@ -994,6 +994,16 @@
         "title": "Conclusion",
         "type": "string"
       },
+      "Confidence": {
+        "enum": [
+          "high",
+          "medium",
+          "low",
+          "none"
+        ],
+        "title": "Confidence",
+        "type": "string"
+      },
       "CoverageDiff": {
         "additionalProperties": false,
         "properties": {
@@ -2334,6 +2344,17 @@
             "description": "Stable id: a hash of the grouping signature",
             "title": "Id",
             "type": "string"
+          },
+          "localization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Localization"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ranked suspect functions (fault localisation), when per-test coverage was recorded"
           },
           "locals": {
             "additionalProperties": {
@@ -3899,6 +3920,45 @@
           "coverage_percent"
         ],
         "title": "LinkedFunction",
+        "type": "object"
+      },
+      "Localization": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
+          "failing_tests": {
+            "description": "Failing tests with coverage, the ranking's basis",
+            "title": "Failing Tests",
+            "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "passing_tests": {
+            "title": "Passing Tests",
+            "type": "integer"
+          },
+          "suspects": {
+            "items": {
+              "$ref": "#/components/schemas/Suspect"
+            },
+            "title": "Suspects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suspects",
+          "confidence",
+          "failing_tests",
+          "passing_tests"
+        ],
+        "title": "Localization",
         "type": "object"
       },
       "ModuleInfo": {
@@ -7039,6 +7099,60 @@
         ],
         "title": "SuggestionStatus",
         "type": "string"
+      },
+      "Suspect": {
+        "additionalProperties": false,
+        "properties": {
+          "failed": {
+            "description": "Failing tests that executed the function",
+            "title": "Failed",
+            "type": "integer"
+          },
+          "in_traceback": {
+            "description": "The function is a frame of the failure's traceback",
+            "title": "In Traceback",
+            "type": "boolean"
+          },
+          "line": {
+            "title": "Line",
+            "type": "integer"
+          },
+          "passed": {
+            "description": "Passing tests that executed the function",
+            "title": "Passed",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "qualname": {
+            "title": "Qualname",
+            "type": "string"
+          },
+          "rank": {
+            "description": "1-based; tied suspects all get the last position of their tie (worst case)",
+            "title": "Rank",
+            "type": "integer"
+          },
+          "score": {
+            "description": "Ochiai suspiciousness, 0..1",
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "path",
+          "qualname",
+          "line",
+          "rank",
+          "score",
+          "failed",
+          "passed",
+          "in_traceback"
+        ],
+        "title": "Suspect",
+        "type": "object"
       },
       "SuspectedBug": {
         "additionalProperties": false,
@@ -12367,6 +12481,88 @@
           }
         },
         "summary": "Get Failure Group",
+        "tags": [
+          "failure analysis"
+        ]
+      }
+    },
+    "/api/v1/test-executions/{execution_id}/failures/suspects": {
+      "get": {
+        "description": "Fault localisation: the production functions most likely to hold the fault behind\nthese failing tests, ranked by spectrum (Ochiai). Each failure group also carries its own\nranking, which puts the group's traceback frames first.",
+        "operationId": "get_suspects_api_v1_test_executions__execution_id__failures_suspects_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Execution Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Failing tests (node ids as reported) to localise; default: all",
+            "in": "query",
+            "name": "test",
+            "required": false,
+            "schema": {
+              "default": [],
+              "description": "Failing tests (node ids as reported) to localise; default: all",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 500,
+              "title": "Test",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Localization"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Suspects",
         "tags": [
           "failure analysis"
         ]

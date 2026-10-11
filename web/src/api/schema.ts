@@ -1041,6 +1041,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-executions/{execution_id}/failures/suspects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Suspects
+         * @description Fault localisation: the production functions most likely to hold the fault behind
+         *     these failing tests, ranked by spectrum (Ochiai). Each failure group also carries its own
+         *     ranking, which puts the group's traceback frames first.
+         */
+        get: operations["get_suspects_api_v1_test_executions__execution_id__failures_suspects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-executions/{execution_id}/logs": {
         parameters: {
             query?: never;
@@ -1526,6 +1548,11 @@ export interface components {
          * @enum {string}
          */
         Conclusion: "success" | "failure" | "neutral";
+        /**
+         * Confidence
+         * @enum {string}
+         */
+        Confidence: "high" | "medium" | "low" | "none";
         /** CoverageDiff */
         CoverageDiff: {
             /** Base Percent */
@@ -2045,6 +2072,8 @@ export interface components {
              * @description Stable id: a hash of the grouping signature
              */
             id: string;
+            /** @description Ranked suspect functions (fault localisation), when per-test coverage was recorded */
+            localization?: components["schemas"]["Localization"] | null;
             /**
              * Locals
              * @description Local variables at the crash frame (repr)
@@ -2627,6 +2656,21 @@ export interface components {
             path: string;
             /** Qualname */
             qualname: string;
+        };
+        /** Localization */
+        Localization: {
+            confidence: components["schemas"]["Confidence"];
+            /**
+             * Failing Tests
+             * @description Failing tests with coverage, the ranking's basis
+             */
+            failing_tests: number;
+            /** Notes */
+            notes?: string[];
+            /** Passing Tests */
+            passing_tests: number;
+            /** Suspects */
+            suspects: components["schemas"]["Suspect"][];
         };
         /** ModuleInfo */
         ModuleInfo: {
@@ -3773,6 +3817,40 @@ export interface components {
          * @enum {string}
          */
         SuggestionStatus: "accepted" | "rejected" | "llm_error" | "sandbox_error";
+        /** Suspect */
+        Suspect: {
+            /**
+             * Failed
+             * @description Failing tests that executed the function
+             */
+            failed: number;
+            /**
+             * In Traceback
+             * @description The function is a frame of the failure's traceback
+             */
+            in_traceback: boolean;
+            /** Line */
+            line: number;
+            /**
+             * Passed
+             * @description Passing tests that executed the function
+             */
+            passed: number;
+            /** Path */
+            path: string;
+            /** Qualname */
+            qualname: string;
+            /**
+             * Rank
+             * @description 1-based; tied suspects all get the last position of their tie (worst case)
+             */
+            rank: number;
+            /**
+             * Score
+             * @description Ochiai suspiciousness, 0..1
+             */
+            score: number;
+        };
         /** SuspectedBug */
         SuspectedBug: {
             /** Reason */
@@ -6875,6 +6953,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FailureGroup"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_suspects_api_v1_test_executions__execution_id__failures_suspects_get: {
+        parameters: {
+            query?: {
+                /** @description Failing tests (node ids as reported) to localise; default: all */
+                test?: string[];
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Localization"];
                 };
             };
             /** @description Not found */

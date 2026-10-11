@@ -6,6 +6,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from testmind.fault_localization.models import Localization
+
 
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -92,6 +94,11 @@ class FailureGroup(_Model):
         description="Set only when the facts decide it (e.g. a missing third-party module)"
     )
     blame_reason: str | None
+    localization: Localization | None = Field(
+        default=None,
+        description="Ranked suspect functions (fault localisation), when per-test coverage "
+        "was recorded",
+    )
 
 
 class FailureReport(_Model):

@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import type { Schemas } from "../api/client";
 import { captured } from "../test/captured";
 import {
   EXECUTION_ID,
@@ -213,6 +214,78 @@ describe("Execution", () => {
     const group = captured.failureGroups.items[0];
     if (!group) throw new Error("no groups");
     expect(await screen.findAllByText(group.tests[0]?.nodeid ?? "")).not.toHaveLength(0);
+  });
+
+  it("ranks the suspect functions of a failure", async () => {
+    const [first, ...rest] = captured.failureGroups.items;
+    if (!first) throw new Error("no groups");
+    const localization: Schemas["Localization"] = {
+      suspects: [
+        {
+          path: "shop/pricing.py",
+          qualname: "apply_discount",
+          line: 1,
+          rank: 1,
+          score: 0.8165,
+          failed: 2,
+          passed: 1,
+          in_traceback: false,
+        },
+        {
+          path: "shop/pricing.py",
+          qualname: "total",
+          line: 9,
+          rank: 2,
+          score: 0.5,
+          failed: 1,
+          passed: 1,
+          in_traceback: true,
+        },
+      ],
+      confidence: "high",
+      failing_tests: 2,
+      passing_tests: 3,
+      notes: [],
+    };
+    mockApi(
+      executionRoutes({
+        [`GET ${EXECUTION}/failures`]: { body: captured.failures },
+        [`GET ${EXECUTION}/failures/groups`]: {
+          body: { ...captured.failureGroups, items: [{ ...first, localization }, ...rest] },
+        },
+      }),
+    );
+    renderAt(`/executions/${EXECUTION_ID}?tab=failures`);
+    const section = await screen.findByRole("region", { name: "Suspect functions" });
+    expect(within(section).getByText("high confidence")).toBeInTheDocument();
+    expect(within(section).getByText("shop/pricing.py:1 apply_discount")).toBeInTheDocument();
+    expect(within(section).getByText("0.82")).toBeInTheDocument();
+    expect(within(section).getByText("in traceback")).toBeInTheDocument();
+    expect(within(section).getByText("2 / 1")).toBeInTheDocument();
+  });
+
+  it("says when the failing tests executed no production function", async () => {
+    const [first] = captured.failureGroups.items;
+    if (!first) throw new Error("no groups");
+    const localization: Schemas["Localization"] = {
+      suspects: [],
+      confidence: "none",
+      failing_tests: 0,
+      passing_tests: 0,
+      notes: [],
+    };
+    mockApi(
+      executionRoutes({
+        [`GET ${EXECUTION}/failures`]: { body: captured.failures },
+        [`GET ${EXECUTION}/failures/groups`]: {
+          body: { ...captured.failureGroups, items: [{ ...first, localization }] },
+        },
+      }),
+    );
+    renderAt(`/executions/${EXECUTION_ID}?tab=failures`);
+    expect(
+      await screen.findByText("The failing tests executed no production function."),
+    ).toBeInTheDocument();
   });
 
   it("shows API coverage with probes", async () => {

@@ -294,6 +294,7 @@ function Failures({ id }: { id: string }) {
                         </div>
                         <pre className="block">{g.message}</pre>
                         {g.blame_reason && <p className="muted">{g.blame_reason}</p>}
+                        {g.localization && <Suspects localization={g.localization} />}
                         <ul className="plain mono">
                           {g.tests.slice(0, 10).map((t) => (
                             <li key={t.nodeid}>{t.nodeid}</li>
@@ -309,6 +310,61 @@ function Failures({ id }: { id: string }) {
         </div>
       )}
     </Query>
+  );
+}
+
+const CONFIDENCE_TONE: Record<string, string> = {
+  high: "good",
+  medium: "warning",
+  low: "serious",
+  none: "",
+};
+
+/** Fault localisation: the functions most likely to hold the bug, best first. */
+function Suspects({ localization }: { localization: Schemas["Localization"] }) {
+  const { suspects, confidence } = localization;
+  return (
+    <section aria-label="Suspect functions">
+      <h3>
+        Suspect functions{" "}
+        <span className={`badge ${CONFIDENCE_TONE[confidence] ?? ""}`}>
+          {words(confidence)} confidence
+        </span>
+      </h3>
+      {suspects.length === 0 ? (
+        <p className="muted">The failing tests executed no production function.</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="num">Rank</th>
+                <th>Function</th>
+                <th className="num">Score</th>
+                <th className="num">Failing / passing tests</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suspects.map((s) => (
+                <tr key={`${s.path}::${s.qualname}`}>
+                  <td className="num">{s.rank}</td>
+                  <td>
+                    <span className="mono">
+                      {s.path}:{s.line} {s.qualname}
+                    </span>
+                    {s.in_traceback && <span className="badge active">in traceback</span>}
+                  </td>
+                  <td className="num">{s.score.toFixed(2)}</td>
+                  <td className="num">
+                    {s.failed} / {s.passed}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

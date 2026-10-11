@@ -5,6 +5,7 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from testmind.db.models import TestExecution
 from testmind.services.failure_analysis_executor import FailureAnalysisExecutor
 from tests.doubles import RecordingDispatcher, ScriptedLLM
 from tests.integration.test_failure_analysis import REPLY, failed_execution
@@ -101,3 +102,32 @@ async def test_ai_analysis_lifecycle(
     listed = (await client.get(f"{EXECUTIONS}/{execution}/failure-analyses")).json()
     assert [a["id"] for a in listed["items"]] == [body["id"]]
     assert (await client.get(f"/api/v1/failure-analyses/{uuid.uuid4()}")).status_code == 404
+
+
+async def test_suspects(
+    client: httpx.AsyncClient,
+    execution: uuid.UUID,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    url = f"{EXECUTIONS}/{execution}/failures/suspects"
+    every = (await client.get(url)).json()  # all failing tests by default
+    assert every["suspects"] == [
+        {
+            "path": "main.py", "qualname": "ratio", "line": 1, "rank": 1, "score": 1.0,
+            "failed": 1, "passed": 0, "in_traceback": False,
+        }
+    ]  # fmt: skip
+    assert (every["confidence"], every["failing_tests"], every["notes"]) == ("high", 1, [])
+
+    chosen = await client.get(url, params=[("test", "test_main.py::test_ratio"), ("test", "x")])
+    assert chosen.json()["suspects"] == every["suspects"]
+    assert chosen.json()["notes"] == ["Not failing tests of this execution, ignored: x"]
+
+    async with session_factory() as session:  # an execution from before fault localisation
+        row = await session.get(TestExecution, execution)
+        assert row is not None
+        row.spectrum = None
+        await session.commit()
+    missing = await client.get(url)
+    assert missing.status_code == 404
+    assert "no per-test coverage" in missing.json()["error"]["message"]

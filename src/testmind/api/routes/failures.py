@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, status
 from testmind.api.deps import FailureAnalysisServiceDep
 from testmind.core.errors import NotFoundError
 from testmind.failure_engine import FailureCategory, FailureGroup
+from testmind.fault_localization import Localization
 from testmind.schemas.common import ErrorResponse, Page
 from testmind.schemas.failure_analysis import FailureAnalysisRead, FailureOverview
 
@@ -54,6 +55,25 @@ async def get_failure_group(
         if group.id == group_id:
             return group
     raise NotFoundError(f"Failure group '{group_id}' not found in this execution")
+
+
+@router.get("/test-executions/{execution_id}/failures/suspects", responses=NOT_FOUND)
+async def get_suspects(
+    execution_id: uuid.UUID,
+    service: FailureAnalysisServiceDep,
+    test: Annotated[
+        list[str],
+        Query(
+            max_length=500,
+            description="Failing tests (node ids as reported) to localise; default: all",
+        ),
+    ] = [],  # noqa: B006 - FastAPI copies query defaults
+    limit: Limit = 10,
+) -> Localization:
+    """Fault localisation: the production functions most likely to hold the fault behind
+    these failing tests, ranked by spectrum (Ochiai). Each failure group also carries its own
+    ranking, which puts the group's traceback frames first."""
+    return await service.suspects(execution_id, test, limit=limit)
 
 
 @router.post(

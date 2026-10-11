@@ -46,6 +46,9 @@ class TestExecution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Serialised ApiCoverageReport, and its share of endpoints the project's tests call.
     api_coverage: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     api_coverage_percent: Mapped[float | None] = mapped_column(Float)
+    # Which tests executed which production function (fault_localization.Spectrum, compact
+    # JSON): ranks the suspects of any set of failing tests after the run.
+    spectrum: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -55,6 +55,19 @@ CAPTURE = json.dumps(
         ],
     }
 )
+# test_ratio executed ratio's body (per-test coverage contexts, for fault localisation)
+COVERAGE = json.dumps(
+    {
+        "meta": {"version": "7.16.1", "branch_coverage": True},
+        "files": {
+            "main.py": {
+                "executed_lines": [1, 2],
+                "missing_lines": [],
+                "contexts": {"2": ["test_main.py::test_ratio|run"]},
+            }
+        },
+    }
+)
 REPLY = (
     "```json\n"
     + json.dumps(
@@ -94,7 +107,7 @@ async def failed_execution(
         if passing
         else result(
             case("test_ratio", Outcome.FAILED, file="test_main.py"), exit_code=1,
-            failures_json=CAPTURE,
+            failures_json=CAPTURE, coverage_json=COVERAGE,
         )
     )  # fmt: skip
     runner = TestSuiteRunner(Sandbox(canned), Images())
@@ -127,6 +140,16 @@ async def test_deterministic_report_is_stored_with_the_execution(
     assert (group.exception_type, group.locals) == ("ZeroDivisionError", {"a": "1", "b": "0"})
     assert group.function is not None
     assert group.function.qualname == "ratio"
+    # fault localisation: the traceback's production frame, first and with high confidence
+    assert group.localization is not None
+    assert [(s.qualname, s.rank, s.in_traceback) for s in group.localization.suspects] == [
+        ("ratio", 1, True)
+    ]
+    assert group.localization.confidence == "high"
+    assert row.spectrum == {
+        "tests": ["test_main.py::test_ratio"],
+        "functions": {"main.py::ratio": [1, [0]]},
+    }
     summary = TestExecutionRead.from_row(row).summary
     assert summary is not None
     assert summary.failure_groups == 1

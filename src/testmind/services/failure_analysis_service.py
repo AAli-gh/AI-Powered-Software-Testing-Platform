@@ -14,10 +14,13 @@ from testmind.core.logging import get_logger
 from testmind.db.models import FailureAnalysis, TestExecution
 from testmind.domain.enums import RunStatus
 from testmind.failure_engine import FailureReport
+from testmind.fault_localization import Localization, Spectrum, localize
 from testmind.repositories.execution_repository import ExecutionRepository
 from testmind.repositories.failure_analysis_repository import FailureAnalysisRepository
+from testmind.sandbox.models import Outcome
 from testmind.services.dispatcher import TaskDispatcher
 from testmind.services.run_service import DISPATCH_FAILED_MESSAGE, apply_transition
+from testmind.test_engine.models import TestRunReport
 
 logger = get_logger(__name__)
 
@@ -42,6 +45,28 @@ class FailureAnalysisService:
                 f"{execution.outcome.value if execution.outcome else 'none'})"
             )
         return FailureReport.model_validate(execution.failures)
+
+    async def suspects(
+        self, execution_id: uuid.UUID, tests: Sequence[str], *, limit: int
+    ) -> Localization:
+        """Fault localisation for any failing tests of the execution (all of them by default),
+        from its stored spectrum. No traceback is used: the tests need not share a failure."""
+        execution = await self._execution(execution_id)
+        if execution.spectrum is None or execution.report is None:
+            raise NotFoundError(
+                f"Test execution '{execution_id}' has no per-test coverage to localise faults "
+                "with (it did not run, or it ran before fault localisation existed)"
+            )
+        report = TestRunReport.model_validate(execution.report)
+        failed = {t.nodeid for t in report.tests if t.outcome in {Outcome.FAILED, Outcome.ERROR}}
+        passing = {t.nodeid for t in report.tests if t.outcome is Outcome.PASSED}
+        chosen = [t for t in tests if t in failed] if tests else sorted(failed)
+        result = localize(Spectrum.from_json(execution.spectrum), chosen, passing, limit=limit)
+        ignored = sorted(set(tests) - failed)
+        if ignored:
+            note = f"Not failing tests of this execution, ignored: {', '.join(ignored[:10])}"
+            result = result.model_copy(update={"notes": [note, *result.notes]})
+        return result
 
     async def create(self, execution_id: uuid.UUID) -> FailureAnalysis:
         report = await self.report(execution_id)
