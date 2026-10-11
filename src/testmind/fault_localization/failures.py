@@ -46,14 +46,16 @@ def _functions_by_path(code: CodeProfile) -> dict[str, list[FunctionInfo]]:
     return by_path
 
 
-def _traceback(group: FailureGroup, functions: dict[str, list[FunctionInfo]]) -> list[str]:
-    """'path::qualname' of the group's production frames, innermost first."""
+def _traceback(
+    group: FailureGroup, functions: dict[str, list[FunctionInfo]]
+) -> list[tuple[str, int]]:
+    """('path::qualname', first line) of the group's production frames, innermost first."""
     keys = []
     for frame in reversed(group.frames):
         if frame.location is FrameLocation.PRODUCTION:
             function = _innermost(frame, functions.get(frame.path, []))
             if function is not None:
-                keys.append(TestImpact.key(function.path, function.qualname))
+                keys.append((TestImpact.key(function.path, function.qualname), function.line))
     return keys
 
 

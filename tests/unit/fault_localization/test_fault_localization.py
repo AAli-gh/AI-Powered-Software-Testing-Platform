@@ -83,14 +83,38 @@ def test_an_assertion_failure_is_localised_by_the_spectrum() -> None:
 
 
 def test_traceback_frames_come_first_innermost_first() -> None:
-    result = localize(
-        APP, FAILING, PASSING, traceback=["app.py::helper", "app.py::helper", "lib.py::gone"]
-    )
+    frames = [("app.py::helper", 10), ("app.py::helper", 10)]
+    result = localize(APP, FAILING, PASSING, traceback=frames)
     assert [(s.qualname, s.rank, s.in_traceback) for s in result.suspects] == [
         ("helper", 1, True),
         ("buggy", 2, False),
     ]
     assert result.confidence is Confidence.HIGH
+    assert result.notes == []
+
+
+def test_a_traceback_frame_is_a_suspect_even_without_coverage() -> None:
+    """Regression (PySnooper-3 on BugsInPy): the project installs its own tracer, so coverage
+    records nothing of the functions it runs, yet the traceback proves they ran."""
+    frames = [("app.py::hidden", 42), ("app.py::helper", 10)]
+    result = localize(APP, FAILING, PASSING, traceback=frames)
+    hidden = result.suspects[0]
+    assert (hidden.qualname, hidden.line, hidden.rank, hidden.in_traceback) == (
+        "hidden",
+        42,
+        1,
+        True,
+    )
+    assert (hidden.failed, hidden.passed, hidden.score) == (2, 0, 1.0)
+    assert [s.qualname for s in result.suspects[1:]] == ["helper", "buggy"]
+    assert result.notes == [
+        "1 function(s) of the traceback had no coverage for the failing tests (another tracer "
+        "may have hidden them); counted as executed by them"
+    ]
+    # No failing test has coverage at all: the traceback still ranks.
+    alone = localize(APP, {"t.py::unknown"}, PASSING, traceback=[("app.py::other", 5)])
+    assert [(s.qualname, s.failed, s.passed) for s in alone.suspects] == [("other", 1, 1)]
+    assert alone.confidence is Confidence.HIGH
 
 
 def test_ties_get_the_worst_rank_and_lower_the_confidence() -> None:

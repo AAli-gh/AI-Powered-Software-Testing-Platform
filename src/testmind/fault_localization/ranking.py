@@ -3,7 +3,8 @@
 The rule, fixed before it was measured (docs/fault-localization.md):
 
 1. Production functions of the failure's traceback come first, innermost first: the exception
-   was raised there, which is direct evidence.
+   was raised there, which is direct evidence. They are suspects even when coverage missed
+   them: a frame proves the function ran.
 2. Then every other function the failing tests executed, by Ochiai score, highest first.
    Functions no failing test executed are not suspects.
 3. Tied scores get the worst rank of their tie, so a tie never looks better than it is.
@@ -29,34 +30,50 @@ def localize(
     failing: Iterable[str],
     passing: Iterable[str],
     *,
-    traceback: Sequence[str] = (),
+    traceback: Sequence[tuple[str, int]] = (),
     limit: int = DEFAULT_LIMIT,
 ) -> Localization:
     """`failing` and `passing` are test ids as TestMind reports them; `traceback` lists the
-    'path::qualname' keys of the failure's production frames, innermost first."""
+    ('path::qualname', first line) of the failure's production frames, innermost first.
+
+    A traceback frame proves its function ran, so it is a suspect even when coverage did not
+    record it (a project that installs its own tracer, such as a debugger, hides its code from
+    coverage.py): it is then counted as executed by the failing tests."""
     index = {test: i for i, test in enumerate(spectrum.tests)}
     failed_ids = {index[t] for t in failing if t in index}
     passed_ids = {index[t] for t in passing if t in index} - failed_ids
+    frames = dict(traceback)  # innermost first, without repeats
     notes: list[str] = []
-    if not failed_ids:
+    if not failed_ids and not frames:
         notes.append("No failing test has per-test coverage, so there is nothing to rank")
         return Localization(
             suspects=[], confidence=Confidence.NONE, failing_tests=0,
             passing_tests=len(passed_ids), notes=notes,
         )  # fmt: skip
 
+    total_failed = max(len(failed_ids), 1)
     scored: dict[str, tuple[float, int, int, int]] = {}  # key -> (score, failed, passed, line)
     for key, (line, tests) in spectrum.functions.items():
         failed = len(tests & failed_ids)
         if failed == 0:
             continue
         passed = len(tests & passed_ids)
-        score = ochiai(failed, passed, len(failed_ids), len(passed_ids))
-        scored[key] = (score, failed, passed, line)
+        scored[key] = (ochiai(failed, passed, total_failed, len(passed_ids)), failed, passed, line)
+    unrecorded = [key for key in frames if key not in scored]
+    for key in unrecorded:
+        entry = spectrum.functions.get(key)
+        passed = len(entry[1] & passed_ids) if entry else 0
+        score = ochiai(total_failed, passed, total_failed, len(passed_ids))
+        scored[key] = (score, total_failed, passed, frames[key])
+    if unrecorded:
+        notes.append(
+            f"{len(unrecorded)} function(s) of the traceback had no coverage for the failing "
+            "tests (another tracer may have hidden them); counted as executed by them"
+        )
 
-    in_traceback = [key for key in dict.fromkeys(traceback) if key in scored]
+    in_traceback = list(frames)
     rest = sorted(
-        (key for key in scored if key not in in_traceback),
+        (key for key in scored if key not in frames),
         key=lambda key: (-scored[key][0], key),
     )
     suspects = [
