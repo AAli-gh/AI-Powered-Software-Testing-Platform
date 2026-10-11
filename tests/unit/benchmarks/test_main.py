@@ -45,7 +45,8 @@ class FakeTestMind:
         }
         return SuiteRun(
             name, "succeeded", "failed" if buggy else "passed", None, 1.5,
-            totals={"total": 1}, notes=["Python 3.8: pinned to 3.8"], python="3.8",
+            totals={"total": 1, "passed": int(not buggy), "failed": int(buggy)},
+            notes=["Python 3.8: pinned to 3.8"], python="3.8",
             failed=[TARGET] if buggy else [], groups=[group] if buggy else [],
         )  # fmt: skip
 

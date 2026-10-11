@@ -42,7 +42,7 @@ USER 65534:65534
   report (`install_failed`). TestMind does not fall back to building from source.
 - **pytest, coverage.py and pytest-cov** are TestMind's own tools: its plugins and coverage
   measurement need the image's versions. The project's requirements for them, and for
-  pytest's own dependencies (pluggy, py, iniconfig), are dropped
+  pytest's own dependencies (pluggy, iniconfig), are dropped
   (with a note) and the image's versions are pinned in the list, so an old
   `pytest==3.2.1` can neither downgrade them nor can another package upgrade them; a package
   that needs other versions fails the installation with pip's reason.

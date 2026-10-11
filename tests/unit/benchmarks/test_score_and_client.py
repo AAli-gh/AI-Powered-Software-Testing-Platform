@@ -32,7 +32,8 @@ def group(function: tuple[str, str] | None, frames: list[dict[str, str]]) -> dic
 
 def run(failed: list[str], groups: list[dict[str, Any]] | None = None, **kw: Any) -> SuiteRun:
     defaults: dict[str, Any] = {"outcome": "failed" if failed else "passed",
-                                "totals": {"total": 10}, "python": "3.8"}  # fmt: skip
+                                "totals": {"total": 10, "passed": 9, "failed": 1},
+                                "python": "3.8"}  # fmt: skip
     return SuiteRun("p", "succeeded", error=None, seconds=1.0, failed=failed,
                     groups=groups or [], **(defaults | kw))  # fmt: skip
 
@@ -72,6 +73,12 @@ def test_blame_elsewhere_and_no_linked_function() -> None:
     [
         (run([], outcome="install_failed", totals={}), run([]), "buggy_not_run"),
         (run([TARGET]), run([], outcome="error", totals={}), "fixed_not_run"),
+        # errors only, nothing passed or failed: the tests did not run
+        (
+            run([TARGET], outcome="error", totals={"total": 3, "errors": 3}),
+            run([]),
+            "buggy_not_run",
+        ),
         (run([]), run([]), "not_reproduced"),  # the bug's test passes on the buggy tree
         (run([TARGET]), run([TARGET]), "not_reproduced"),  # and still fails after the fix
     ],
@@ -138,7 +145,7 @@ class FakeTestMind:
             return httpx.Response(202, json={"id": "e"})
         if path == "/test-executions/e":
             summary: dict[str, Any] = {
-                "totals": {"total": 600},
+                "totals": {"total": 600, "passed": 99, "failed": 501},
                 "install_notes": ["Python 3.8: pinned to 3.8"],
             }
             execution = {"status": "succeeded", "outcome": self.outcome, "error_message": None}
@@ -182,7 +189,7 @@ def test_run_suite_without_failures_or_analysis(monkeypatch: pytest.MonkeyPatch)
     assert (passed.failed, passed.groups) == ([], [])
     errored = client(FakeTestMind(outcome="error"), monkeypatch).run_suite("p-1-buggy")
     assert errored.groups == []  # no failure analysis: 404
-    assert not errored.ran_tests
+    assert errored.ran_tests  # outcome error, but tests passed and failed
     failed = client(FakeTestMind(analysis="failed"), monkeypatch).run_suite("p-1-buggy")
     assert (failed.status, failed.outcome, failed.error) == ("failed", None, "boom")
 
@@ -213,3 +220,10 @@ def test_run_suite_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
 )
 def test_matches(node_id: str, target: str, expected: bool) -> None:
     assert matches(node_id, target) is expected
+
+
+def test_a_run_with_import_errors_still_ran_its_other_tests() -> None:
+    """fastapi-1: some modules fail to import (outcome `error`), the rest run."""
+    partial = run([TARGET], outcome="error", totals={"total": 791, "passed": 743, "failed": 19})
+    assert partial.ran_tests is True
+    assert score("p-1", [TARGET], TRUTH, partial, run([])).status == "reproduced"

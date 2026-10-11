@@ -29,7 +29,10 @@ class SuiteRun:
 
     @property
     def ran_tests(self) -> bool:
-        return self.outcome in {"passed", "failed"} and self.totals.get("total", 0) > 0
+        """Tests really ran: some passed or failed. `error` alone does not decide it (a run
+        with a module that fails to import still runs the others)."""
+        ran = self.totals.get("passed", 0) + self.totals.get("failed", 0)
+        return self.outcome in {"passed", "failed", "error"} and ran > 0
 
 
 class TestMind:
