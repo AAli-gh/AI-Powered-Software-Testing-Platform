@@ -5,6 +5,29 @@ All notable changes to TestMind are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). The HTTP API under `/api/v1` is the public
 interface that semantic versioning applies to.
 
+## [Unreleased]
+
+### Added
+
+- One sandbox image per Python version from 3.7 to 3.12 (`make sandbox-images`). Each
+  project runs on the version it declares (`.python-version`, `requires-python`, tox,
+  classifiers), or the closest newer one.
+- An evaluation on 135 real bugs from BugsInPy ([docs/evaluation.md](docs/evaluation.md)), with
+  its harness (`benchmarks/bugsinpy/`) and per-bug results.
+
+### Fixed
+
+Found by the evaluation:
+
+- `setup.py`: set literals and names bound once to a literal are read.
+- `test_requirements.txt` and `*-requirements.txt` are read.
+- flit's legacy `[tool.flit.metadata]` is read.
+- A project's own `pytest`, `coverage`, `pytest-cov`, `pluggy` or `iniconfig` requirement no
+  longer replaces the sandbox's.
+- unittest assertion failures are `assertion_failure`, not `exception_in_library`.
+- 16 settings documented in `.env.example` were not passed to the containers by Docker
+  Compose; nor was the browser image setting, with the sandbox overlay.
+
 ## [1.0.0] - 2026-09-28
 
 The first release: the fourteen phases of the [roadmap](README.md#roadmap).

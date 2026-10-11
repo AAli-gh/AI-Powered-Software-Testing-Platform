@@ -254,11 +254,27 @@ Everything listed here is implemented and tested.
 - **Infrastructure**: PostgreSQL schema managed by Alembic (with a test that fails on
   model/migration drift), Docker images (non-root, read-only filesystem, all capabilities
   dropped), docker-compose for the full stack, and a GitHub Actions pipeline.
-- **Test suite**: 1304 Python tests with 100 % line and branch coverage in CI, plus 65
+- **Test suite**: 1401 Python tests with 100 % line and branch coverage in CI, plus 65
   dashboard component tests and 3 browser tests through the real stack. They run against real
   PostgreSQL and Redis (no database mocks) and against golden example repositories for
   Django, FastAPI and Flask, plus an intentionally flawed repository whose documented
   defects must be found exactly. An end-to-end smoke test runs against the containers.
+
+### Measured on real bugs
+
+TestMind was run on 135 real bugs from 8 open-source projects in
+[BugsInPy](https://github.com/soarsmu/BugsInPy), through its own API, and scored against the
+bugs' fixes ([evaluation](docs/evaluation.md)):
+
+- It reproduces **65 of 135** bugs: their tests fail before the fix and pass after it.
+- When a bug raises an exception in the project's code, the failure analysis blames **the file
+  the fix changed in 15 of 15** bugs, and **the exact function in 10 of 15**.
+- When a bug only makes a test's assertion fail (23 bugs), it blames nothing: the traceback
+  has no production frame. This is the main gap the evaluation shows.
+
+Most bugs that were not reproduced need pytest 3 or packages that have no wheel. TestMind
+installs wheels only, by design. The evaluation also found 8 general problems in TestMind
+(Python versions, dependency formats, failure categories), all fixed with regression tests.
 
 ## Tech stack
 
@@ -586,6 +602,7 @@ Still open:
 - [Security](docs/security.md): threat model and controls
 - [Monitoring](docs/monitoring.md): metrics, alerts, how they are tested
 - [Performance](docs/performance.md): method, measurements, what was fixed and why
+- [Evaluation on real bugs](docs/evaluation.md): BugsInPy, method, results, why bugs were not reproduced
 - [Deployment](docs/deployment.md): configuration, TLS, backups, upgrades, sizing
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 - [Architecture Decision Records](docs/adr/)
