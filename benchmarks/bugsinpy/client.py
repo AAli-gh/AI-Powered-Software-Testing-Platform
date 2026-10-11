@@ -26,6 +26,8 @@ class SuiteRun:
     failed: list[str] = field(default_factory=list)  # node ids, failed or error
     groups: list[dict[str, Any]] = field(default_factory=list)
     python: str | None = None
+    execution_id: str | None = None
+    suspects: dict[str, Any] | None = None  # fault localisation for the bug's failing tests
 
     @property
     def ran_tests(self) -> bool:
@@ -90,6 +92,7 @@ class TestMind:
             error=body.get("error_message"), seconds=seconds,
             totals=summary.get("totals") or {}, notes=summary.get("install_notes") or [],
         )  # fmt: skip
+        result.execution_id = str(execution_id)
         if result.notes and result.notes[0].startswith("Python "):
             result.python = result.notes[0].split(":", 1)[0].removeprefix("Python ")
         if result.outcome in {"failed", "error"}:
@@ -123,3 +126,13 @@ class TestMind:
             offset += PAGE
             if offset >= page["total"]:
                 return groups
+
+    def suspects(self, execution_id: str, tests: list[str], *, limit: int = 20) -> dict[str, Any]:
+        """TestMind's fault localisation for these failing tests (spectrum only, no traceback)."""
+        params = httpx.QueryParams([("test", t) for t in tests[:500]] + [("limit", limit)])
+        response = self._http.get(
+            f"/test-executions/{execution_id}/failures/suspects", params=params
+        )
+        if response.status_code == httpx.codes.NOT_FOUND:  # no per-test coverage
+            return {"suspects": [], "confidence": "none", "notes": ["no spectrum"]}
+        return dict(response.raise_for_status().json())

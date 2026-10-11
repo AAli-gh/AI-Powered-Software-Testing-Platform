@@ -87,6 +87,27 @@ def test_runs_that_do_not_reproduce(buggy: SuiteRun, fixed: SuiteRun, status: st
     assert score("p-1", [TARGET], TRUTH, buggy, fixed).status == status
 
 
+def suspects(*ranked: tuple[str, str, int], confidence: str = "high") -> dict[str, Any]:
+    return {
+        "suspects": [{"path": p, "qualname": q, "rank": r} for p, q, r in ranked],
+        "confidence": confidence,
+    }
+
+
+def test_fault_localisation_ranks() -> None:
+    in_group = group(None, [])
+    in_group["localization"] = suspects(("pkg/x.py", "f", 1), (PATH, "Rule.get_new_command", 2))
+    buggy = run([TARGET], [in_group])
+    buggy.suspects = suspects((PATH, "Rule.get_new_command", 4), confidence="low")
+    result = score("p-1", [TARGET], TRUTH, buggy, run([]))
+    assert (result.sbfl_rank, result.combined_rank, result.confidence) == (4, 2, "high")
+    # No group (beyond the failure-analysis cap): the spectrum ranking is the combined one.
+    crowded = run([TARGET, *(f"t.py::test_{i}" for i in range(500))])
+    crowded.suspects = suspects((PATH, "get_new_command", 1))  # not the qualname: no hit
+    alone = score("p-1", [TARGET], TRUTH, crowded, run([]))
+    assert (alone.sbfl_rank, alone.combined_rank, alone.confidence) == (None, None, "high")
+
+
 def test_summarise() -> None:
     results = [
         BugResult("a", "reproduced", python="3.8", category="exception_in_code",
@@ -106,6 +127,19 @@ def test_summarise() -> None:
     assert summary["no_function_linked"] == 1
     assert summary["python"] == {"3.8": 2, "3.7": 2}
     assert summarise([])["function_at_1"] is None
+    ranked = [
+        BugResult("a", "reproduced", rank=1, sbfl_rank=3, combined_rank=1, confidence="high"),
+        BugResult("b", "reproduced", sbfl_rank=1, combined_rank=1, confidence="high"),
+        BugResult("c", "reproduced", sbfl_rank=7, combined_rank=7, confidence="low"),
+        BugResult("d", "buggy_not_run"),  # not in the localisation counts
+    ]
+    assert summarise(ranked)["localisation"] == {
+        "bugs": 3,
+        "traceback": {"top_1": 1, "top_3": 1, "top_5": 1},
+        "sbfl": {"top_1": 1, "top_3": 2, "top_5": 2},
+        "combined": {"top_1": 2, "top_3": 2, "top_5": 2},
+        "confidence": {"high": 2, "low": 1},
+    }
 
 
 class FakeTestMind:
@@ -117,7 +151,7 @@ class FakeTestMind:
         self.deleted: list[str] = []
         self.failed = [f"t.py::test_{i}" for i in range(501)]
 
-    def __call__(self, request: httpx.Request) -> httpx.Response:  # noqa: PLR0911 (a router)
+    def __call__(self, request: httpx.Request) -> httpx.Response:  # noqa: PLR0911, PLR0912
         path, method = request.url.path.removeprefix("/api/v1"), request.method
         params = request.url.params
         if path == "/projects" and method == "GET":
@@ -155,6 +189,11 @@ class FakeTestMind:
             offset, limit = int(params["offset"]), int(params["limit"])
             items = [{"nodeid": n} for n in failed[offset : offset + limit]]
             return httpx.Response(200, json={"items": items, "total": len(failed)})
+        if path == "/test-executions/e/failures/suspects":
+            if self.outcome == "error":
+                return httpx.Response(404, json={})
+            assert params.get_list("test") == ["t.py::test_0"]
+            return httpx.Response(200, json={"suspects": [], "confidence": "none"})
         if path == "/test-executions/e/failures/groups":
             offset = int(params["offset"])
             total = 150 if self.outcome == "failed" else 0
@@ -181,6 +220,11 @@ def test_run_suite_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     assert (result.status, result.outcome, result.python) == ("succeeded", "failed", "3.8")
     assert len(result.failed) == 501  # two pages of tests
     assert len(result.groups) == 150  # two pages of groups
+    assert result.execution_id == "e"
+    testmind = client(fake, monkeypatch)
+    assert testmind.suspects("e", ["t.py::test_0"])["confidence"] == "none"
+    fake.outcome = "error"
+    assert testmind.suspects("e", ["t.py::test_0"])["notes"] == ["no spectrum"]
     assert result.ran_tests
 
 

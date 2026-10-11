@@ -13,7 +13,16 @@ on the failure group that holds the bug's tests (TestMind's deterministic analys
 
 TestMind's failure plugin records the first 500 failures of a run. A reproduced bug whose
 tests are beyond them (a suite with many failing network tests) is counted as **not
-analysed**, and left out of the localisation shares rather than counted as a miss.
+analysed**, and left out of the traceback shares rather than counted as a miss.
+
+Fault localisation (docs/fault-localization.md) is scored on every reproduced bug, by the rank
+of the first function the fix changed (exact qualname) among the suspects:
+
+- **sbfl_rank**: spectrum only, for the bug's failing tests (`/failures/suspects`);
+- **combined_rank**: the failure group's own ranking, traceback frames first; for a bug beyond
+  the failure-analysis cap, which has no group, the spectrum ranking.
+
+Ranks of tied suspects are the worst of their tie, as TestMind reports them.
 """
 
 from __future__ import annotations
@@ -53,6 +62,9 @@ class BugResult:
     file_hit: bool = False
     rank: int | None = None  # 1-based, among production frames; None: not among them
     analysed: bool = True  # False: the bug's tests were beyond the failure-analysis cap
+    sbfl_rank: int | None = None
+    combined_rank: int | None = None
+    confidence: str | None = None  # of the combined ranking
     seconds: float = 0.0
 
     def to_json(self) -> dict[str, Any]:
@@ -102,7 +114,13 @@ def score(
         )
         return result
     result.status = REPRODUCED
+    truth_names = {(f.path, f.qualname) for f in truth.functions}
+    spectrum = buggy.suspects or {}
+    result.sbfl_rank = _first_rank(spectrum, truth_names)
     group = next((g for g in buggy.groups if _holds(g, targets)), None)
+    combined = (group or {}).get("localization") or spectrum
+    result.combined_rank = _first_rank(combined, truth_names)
+    result.confidence = combined.get("confidence")
     if group is None:
         result.detail = "no failure group holds the bug's tests"
         if len(buggy.failed) > FAILURE_RECORDS:
@@ -114,7 +132,6 @@ def score(
         return result
     result.category = group["category"]
     function = group.get("function")
-    truth_names = {(f.path, f.qualname) for f in truth.functions}
     if function:
         result.blamed = f"{function['path']}::{function['qualname']}"
         result.function_hit = (function["path"], function["qualname"]) in truth_names
@@ -127,6 +144,19 @@ def score(
             seen.append(key)
     result.rank = next((i + 1 for i, key in enumerate(seen) if key in short), None)
     return result
+
+
+def _first_rank(localization: dict[str, Any], truth: set[tuple[str, str]]) -> int | None:
+    ranks = [
+        int(s["rank"])
+        for s in localization.get("suspects") or []
+        if (s["path"], s["qualname"]) in truth
+    ]
+    return min(ranks, default=None)
+
+
+def _top(ranks: list[int | None]) -> dict[str, int]:
+    return {f"top_{k}": sum(r is not None and r <= k for r in ranks) for k in (1, TOP_3, TOP_5)}
 
 
 def summarise(results: list[BugResult]) -> dict[str, Any]:
@@ -150,5 +180,13 @@ def summarise(results: list[BugResult]) -> dict[str, Any]:
         "rank_at_5": share(sum(r.rank is not None and r.rank <= TOP_5 for r in scored)),
         "no_function_linked": sum(r.blamed is None for r in scored),
         "categories": dict(Counter(r.category or "none" for r in scored).most_common()),
+        # fault localisation, on every reproduced bug (counts, not shares)
+        "localisation": {
+            "bugs": len(reproduced),
+            "traceback": _top([r.rank for r in reproduced]),
+            "sbfl": _top([r.sbfl_rank for r in reproduced]),
+            "combined": _top([r.combined_rank for r in reproduced]),
+            "confidence": dict(Counter(r.confidence or "none" for r in reproduced)),
+        },
         "python": dict(Counter(r.python or "?" for r in results).most_common()),
     }

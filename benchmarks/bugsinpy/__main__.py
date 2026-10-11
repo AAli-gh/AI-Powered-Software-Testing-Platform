@@ -23,7 +23,7 @@ from benchmarks.bugsinpy.client import TestMind
 from benchmarks.bugsinpy.dataset import bug_numbers, load_bug, to_node_id
 from benchmarks.bugsinpy.ground_truth import ground_truth
 from benchmarks.bugsinpy.prepare import PreparationError, prepare
-from benchmarks.bugsinpy.score import BugResult, score, summarise
+from benchmarks.bugsinpy.score import BugResult, matches, score, summarise
 from benchmarks.bugsinpy.wheels import WheelIndex
 
 
@@ -53,6 +53,9 @@ def evaluate(
         truth = ground_truth(bug.patch, sources)
         before = testmind.run_suite(buggy.name)
         after = testmind.run_suite(fixed.name)
+        failing = [n for n in before.failed if any(matches(n, t) for t in targets if t)]
+        if failing and before.execution_id is not None:
+            before.suspects = testmind.suspects(before.execution_id, failing)
         return score(bug.name, [t for t in targets if t], truth, before, after)
     finally:
         if args.clean:

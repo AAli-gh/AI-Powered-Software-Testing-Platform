@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
@@ -34,6 +34,11 @@ class FakeTestMind:
     def __init__(self, url: str, token: str | None) -> None:
         assert (url, token) == ("http://testmind", "secret-token")
 
+    def suspects(self, execution_id: str, tests: list[str]) -> dict[str, Any]:
+        assert (execution_id, tests) == ("calc-1-buggy", [TARGET])
+        ranked = {"path": "calc.py", "qualname": "div", "rank": 1}
+        return {"suspects": [ranked], "confidence": "high"}
+
     def run_suite(self, name: str) -> SuiteRun:
         self.runs.append(name)
         buggy = name.endswith("-buggy")
@@ -48,6 +53,7 @@ class FakeTestMind:
             totals={"total": 1, "passed": int(not buggy), "failed": int(buggy)},
             notes=["Python 3.8: pinned to 3.8"], python="3.8",
             failed=[TARGET] if buggy else [], groups=[group] if buggy else [],
+            execution_id=name,
         )  # fmt: skip
 
 
@@ -95,6 +101,7 @@ def test_run_then_report(
         "calc-3": "preparation_error",
     }
     assert (rows["calc-1"]["blamed"], rows["calc-1"]["function_hit"]) == ("calc.py::div", True)
+    assert (rows["calc-1"]["sbfl_rank"], rows["calc-1"]["combined_rank"]) == (1, 1)
     assert rows["calc-1"]["truth_functions"] == ["calc.py::div"]
     assert FakeTestMind.runs == ["calc-1-buggy", "calc-1-fixed"]
     assert not list(workspace.iterdir())  # --clean removed every tree
