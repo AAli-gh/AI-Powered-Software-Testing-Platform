@@ -99,6 +99,15 @@ class DependencyCollector:
             for line in _strings(lines):  # {include-group = ...} tables are skipped
                 self._add_requirement(line, group, path)
 
+        # flit's legacy metadata (flit < 3.2): [tool.flit.metadata] requires / requires-extra
+        flit = _mapping(_mapping(_mapping(data.get("tool")).get("flit")).get("metadata"))
+        for line in _strings(flit.get("requires")):
+            self._add_requirement(line, DependencyGroup.RUNTIME, path)
+        for extra, lines in _mapping(flit.get("requires-extra")).items():
+            group = _group_for_name(str(extra), default=DependencyGroup.OPTIONAL)
+            for line in _strings(lines):
+                self._add_requirement(line, group, path)
+
         poetry = _mapping(_mapping(data.get("tool")).get("poetry"))
         self._poetry_table(_mapping(poetry.get("dependencies")), DependencyGroup.RUNTIME, path)
         self._poetry_table(

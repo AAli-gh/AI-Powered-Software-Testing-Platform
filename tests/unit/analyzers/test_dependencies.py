@@ -51,6 +51,30 @@ def test_pyproject_pep621_optional_and_dependency_groups() -> None:
     assert requests.marker == 'python_version >= "3.11"'
 
 
+def test_flit_legacy_metadata() -> None:
+    # fastapi's pyproject.toml in 2020 (flit < 3.2), as in BugsInPy.
+    collector = collect(
+        {
+            "pyproject.toml": """
+            [tool.flit.metadata]
+            module = "fastapi"
+            requires = ["starlette ==0.13.2", "pydantic >=0.32.2,<2.0.0"]
+            requires-python = ">=3.6"
+            [tool.flit.metadata.requires-extra]
+            test = ["pytest >=4.0.0", "requests"]
+            doc = ["mkdocs"]
+            """
+        }
+    )
+    assert summary(collector) == {
+        ("starlette", "==0.13.2", RUNTIME),
+        ("pydantic", "<2.0.0,>=0.32.2", RUNTIME),
+        ("pytest", ">=4.0.0", DEV),
+        ("requests", "", DEV),
+        ("mkdocs", "", OPTIONAL),
+    }
+
+
 def test_poetry_tables() -> None:
     collector = collect(
         {

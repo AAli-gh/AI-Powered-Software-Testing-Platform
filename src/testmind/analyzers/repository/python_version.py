@@ -128,6 +128,11 @@ class PythonVersionDetector:
             self._require(project.get("requires-python"), path)
             self._classifiers(project.get("classifiers"), path)
         tool = data.get("tool")
+        flit = tool.get("flit") if isinstance(tool, dict) else None
+        flit = flit.get("metadata") if isinstance(flit, dict) else None
+        if isinstance(flit, dict):  # flit's legacy metadata (flit < 3.2)
+            self._require(flit.get("requires-python"), path)
+            self._classifiers(flit.get("classifiers"), path)
         poetry = tool.get("poetry") if isinstance(tool, dict) else None
         if isinstance(poetry, dict):
             dependencies = poetry.get("dependencies")

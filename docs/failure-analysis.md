@@ -45,9 +45,9 @@ fails to import stops pytest before any test runs, which hides every other resul
 | `syntax_error` | `SyntaxError` / `IndentationError` / `TabError` while collecting |
 | `collection_error` | any other error while collecting |
 | `fixture_error` | failure in the `setup` or `teardown` phase |
-| `exception_in_library` | the innermost frame is outside the repository (standard library or an installed package) |
+| `exception_in_library` | the innermost frame is outside the repository (standard library or an installed package), unless it is a test's assertion |
 | `exception_in_code` | raised in the repository's production code (including an `assert` there) |
-| `assertion_failure` | an `AssertionError` raised by a test |
+| `assertion_failure` | an `AssertionError` raised by a test, also through an assertion helper such as unittest's `self.assertEqual` (raised inside `unittest/case.py`, called from the test) |
 | `exception_in_test` | any other exception raised by test code |
 | `unexpected_pass` | `xfail(strict=True)` passed |
 

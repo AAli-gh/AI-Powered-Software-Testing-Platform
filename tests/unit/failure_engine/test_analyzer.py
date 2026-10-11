@@ -16,7 +16,7 @@ from testmind.failure_engine import (
     FailureReport,
     parse_failures_json,
 )
-from testmind.failure_engine.models import FrameLocation
+from testmind.failure_engine.models import Frame, FrameLocation
 from testmind.sandbox.models import Outcome
 from testmind.test_engine.models import TestCaseReport
 
@@ -178,3 +178,30 @@ def test_group_ids_are_stable(profiles: tuple[RepositoryProfile, CodeProfile]) -
     second = FailureAnalyzer(repository, code).analyze(capture, failed_tests())
     assert [g.id for g in first.groups] == [g.id for g in second.groups]
     assert len({g.id for g in first.groups}) == 10
+
+
+def test_an_assertion_helper_failing_in_a_test_is_an_assertion_failure() -> None:
+    """Regression (youtube-dl on BugsInPy): unittest's self.assertEqual raises AssertionError
+    inside unittest/case.py; that is the test's assertion, not an exception in a library."""
+
+    def frame(path: str, location: FrameLocation) -> Frame:
+        return Frame(path=path, line=1, function="f", code="", location=location)
+
+    in_test = frame("test/helper.py", FrameLocation.TEST)
+    unittest = frame("/usr/lib/python3.7/unittest/case.py", FrameLocation.EXTERNAL)
+    category = FailureAnalyzer._category
+    assert category("call", "AssertionError", in_test, unittest) is (
+        FailureCategory.ASSERTION_FAILURE
+    )
+    generated = frame("tests/testmind/test_g.py", FrameLocation.GENERATED)
+    assert category("call", "AssertionError", generated, unittest) is (
+        FailureCategory.ASSERTION_FAILURE
+    )
+    # An AssertionError raised by a library called from production code stays a library one.
+    in_code = frame("shop/stock.py", FrameLocation.PRODUCTION)
+    assert category("call", "AssertionError", in_code, unittest) is (
+        FailureCategory.EXCEPTION_IN_LIBRARY
+    )
+    assert category("call", "ValueError", in_test, unittest) is (
+        FailureCategory.EXCEPTION_IN_LIBRARY
+    )

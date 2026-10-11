@@ -192,7 +192,15 @@ class FailureAnalyzer:
             return FailureCategory.IMPORT_ERROR
         if phase in FIXTURE_PHASES:
             return FailureCategory.FIXTURE_ERROR
-        if raised_at is not None and raised_at.location is FrameLocation.EXTERNAL:
+        # The test's own assertion, also when an assertion helper raises it (unittest's
+        # self.assertEqual raises inside unittest/case.py): not an exception in a library.
+        test_assertion = (
+            exception_type == "AssertionError"
+            and crash is not None
+            and crash.location in {FrameLocation.TEST, FrameLocation.GENERATED}
+        )
+        external = raised_at is not None and raised_at.location is FrameLocation.EXTERNAL
+        if external and not test_assertion:
             return FailureCategory.EXCEPTION_IN_LIBRARY
         if crash is not None and crash.location is FrameLocation.PRODUCTION:
             return FailureCategory.EXCEPTION_IN_CODE

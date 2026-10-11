@@ -83,6 +83,24 @@ def test_pyproject_requires_python_and_classifiers() -> None:
     ]
 
 
+def test_flit_legacy_metadata() -> None:
+    requirement, _ = detect(
+        {
+            "pyproject.toml": """
+            [tool.flit.metadata]
+            module = "fastapi"
+            requires-python = ">=3.6"
+            classifiers = [
+                "Programming Language :: Python :: 3.7",
+                "Programming Language :: Python :: 3.8",
+            ]
+            """
+        }
+    )
+    assert requirement.requires == ">=3.6"
+    assert requirement.tested == ["3.7", "3.8"]
+
+
 @pytest.mark.parametrize(
     ("declared", "expected"),
     [("^3.8", ">=3.8,<4.0"), ("~3.9", ">=3.9,<3.10"), (">=3.7", ">=3.7")],
