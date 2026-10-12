@@ -30,11 +30,16 @@ What the numbers say:
   file every time (15/15) and at the exact function the fix changed two times in three
   (10/15).** In the other five, it blamed a different function in the same file. For example,
   for tqdm-5 the fix changed `tqdm.__init__`, but the exception surfaced in `tqdm.__len__`.
-- **When the bug makes a test's assertion fail, TestMind does not localise it at all.** The
-  traceback ends in the test, so it contains no frame of production code to blame. That is
-  the case for 23 of the 39 scored bugs. Closing this gap needs another signal than the
-  traceback, such as coverage-based fault localisation (which code the failing tests execute
-  and the passing ones do not). TestMind does not do that today.
+- **The traceback alone leaves most failures unlocalised.** When the bug makes a test's
+  assertion fail, the traceback ends in the test, with no frame of production code to blame:
+  23 of the 39 scored bugs. The traceback-only method found the changed function at rank 1 in
+  only 9 of the 65 reproduced bugs.
+
+Fault localisation ([fault-localization.md](fault-localization.md), added after this finding)
+closes most of that gap by also using the program spectrum — which functions the failing
+tests execute and the passing ones do not. Measured below, it finds the changed function at
+rank 1 in 33 of the 65 reproduced bugs, and in the top 5 in 49. The table above is the
+original traceback-only result, kept so the gain is visible.
 
 ## Method
 
@@ -73,6 +78,41 @@ own.
 **Scope.** All bugs of PySnooper, httpie, cookiecutter, tqdm, thefuck, black, youtube-dl and
 fastapi: 135 bugs. Python 3.7 for 91 of them and 3.8 for 44, as BugsInPy
 recorded. The BugsInPy commit is `11c5f1e`.
+
+## Fault localisation
+
+[Fault localisation](fault-localization.md) ranks the functions most likely to hold the bug,
+deterministically and with no LLM. It is scored on **every** reproduced bug (65), not only the
+39 the failure plugin fully analysed, because the spectrum ranking needs only the names of the
+failing tests. The score is the rank of the first function the fix changed (exact qualname),
+counted at 1, 3 and 5. Three methods, measured on the same 65 bugs:
+
+| Method | rank 1 | top 3 | top 5 |
+|---|---|---|---|
+| Traceback only (TestMind 1.0) | 9 (14 %) | 10 | 10 (15 %) |
+| Spectrum only (Ochiai) | 26 (40 %) | 45 | 45 (69 %) |
+| **Combined** (traceback first, then spectrum) | **33 (51 %)** | **47** | **49 (75 %)** |
+
+What the numbers say:
+
+- **The spectrum is what finds assertion-only bugs.** The traceback alone localises 10 of 65;
+  adding the spectrum reaches 49 of 65 in the top 5. The spectrum ranks a function by how far
+  the failing tests concentrate on it against the passing tests, so it needs no exception
+  frame in the project's code.
+- **The two signals combine, they do not just overlap.** The combined ranking (33 at rank 1)
+  beats either alone (9 and 26), because a traceback frame — direct evidence the function ran
+  — is ranked first, and the spectrum orders the rest.
+- **The confidence is honest.** Of the 65, the ranking reports high confidence for 44, medium
+  for 15, low for 2 and none for 4 (no failing test had per-test coverage). A low or none is
+  the tool saying the tests do not tell the suspects apart, not a wrong guess.
+
+**Cost.** Recording per-test coverage added about 3 % to a run on `examples/fastapi_todo`
+(3 tests): 3.49 s → 3.58 s, best of three. The overhead grows with tests × executed lines, so
+it is larger on big suites; it is paid only on suite executions, which already record
+coverage.
+
+The spectrum ranking also covers the 26 reproduced bugs whose tests fall beyond the failure
+plugin's 500-failure cap, which the failure-group analysis cannot reach.
 
 ## Why 70 bugs were not reproduced
 
@@ -126,6 +166,10 @@ The evaluation also found bugs in the harness itself, all fixed before these num
   cost money per bug.
 - **Classes are not part of test ids.** TestMind reports tests as `file::name`, so the
   harness compares BugsInPy's `file::Class::test` as `file::test`.
+- **Fault localisation is scored by exact qualname.** A suspect in the right file but a
+  neighbouring function counts as a miss, so the ranks above are a lower bound on "points a
+  developer at the right place". The ranking and the Ochiai formula were fixed before any of
+  these bugs were run, and nothing was tuned on them.
 
 ## Reproducing
 

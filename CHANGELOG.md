@@ -14,6 +14,13 @@ interface that semantic versioning applies to.
   classifiers), or the closest newer one.
 - An evaluation on 135 real bugs from BugsInPy ([docs/evaluation.md](docs/evaluation.md)), with
   its harness (`benchmarks/bugsinpy/`) and per-bug results.
+- Spectrum-based fault localisation ([docs/fault-localization.md](docs/fault-localization.md)):
+  every failure group, and a `/failures/suspects` endpoint, rank the functions most likely to
+  hold the bug, from the traceback and the program spectrum. Deterministic, no LLM. On BugsInPy
+  it ranks the changed function 1st in 33 of 65 reproduced bugs (top 5 in 49), against 9 for
+  the traceback alone.
+- External AI is now off by default and switchable per feature (`TESTMIND_LLM_PROVIDER`,
+  `TESTMIND_AI_FEATURES`); detection never depends on it.
 
 ### Fixed
 

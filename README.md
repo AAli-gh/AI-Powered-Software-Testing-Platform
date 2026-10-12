@@ -267,10 +267,10 @@ TestMind was run on 135 real bugs from 8 open-source projects in
 bugs' fixes ([evaluation](docs/evaluation.md)):
 
 - It reproduces **65 of 135** bugs: their tests fail before the fix and pass after it.
-- When a bug raises an exception in the project's code, the failure analysis blames **the file
-  the fix changed in 15 of 15** bugs, and **the exact function in 10 of 15**.
-- When a bug only makes a test's assertion fail (23 bugs), it blames nothing: the traceback
-  has no production frame. This is the main gap the evaluation shows.
+- [Fault localisation](docs/fault-localization.md) ranks the function the fix changed **1st in
+  33 of the 65** reproduced bugs and **in the top 5 in 49**, deterministically and with no
+  LLM. The traceback alone (TestMind 1.0) managed 9. Most of the gain is on bugs that only
+  fail a test's assertion, where the traceback has no production frame to blame.
 
 Most bugs that were not reproduced need pytest 3 or packages that have no wheel. TestMind
 installs wheels only, by design. The evaluation also found 8 general problems in TestMind
@@ -591,6 +591,7 @@ Still open:
 - [Test engine](docs/test-engine.md): runner images, sandboxed execution, reports, orphaned jobs
 - [Coverage](docs/coverage.md): measurement, function mapping, gap ranking, coverage-guided generation
 - [Failure analysis](docs/failure-analysis.md): structured capture, categories, grouping, evidence, AI hypotheses and their checks
+- [Fault localisation](docs/fault-localization.md): ranked suspect functions from the traceback and the program spectrum
 - [Regression analysis](docs/regression.md): safe git access, AST diff, test selection, comparison
 - [Mutation testing](docs/mutation.md): operators, targeting, the in-sandbox driver, scores, AI tests for survivors
 - [API and browser testing](docs/api-testing.md): endpoint discovery, runtime capture, API coverage, probes, AI API tests, Playwright
