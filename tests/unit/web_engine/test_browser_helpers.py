@@ -99,6 +99,40 @@ def test_gate_aborts_out_of_scope_requests() -> None:
     assert any("tracker.example" in d for d in session._policy.denied)
 
 
+class FakeLocator:
+    """A stand-in for a Playwright Locator: the label/name helpers only read text and attrs."""
+
+    def __init__(self, text: str = "", attrs: dict[str, str] | None = None) -> None:
+        self._text = text
+        self._attrs = attrs or {}
+
+    def inner_text(self, timeout: int = 0) -> str:
+        if not self._text:
+            raise RuntimeError("no text node")  # Playwright raises rather than returning ""
+        return self._text
+
+    def get_attribute(self, name: str) -> str | None:
+        return self._attrs.get(name)
+
+
+def loc(text: str = "", **attrs: str) -> Any:
+    return FakeLocator(text, attrs)
+
+
+def test_label_prefers_text_then_value_then_falls_back() -> None:
+    assert b._label(loc("Sign in")) == "Sign in"
+    assert b._label(loc(value="Send")) == "Send"  # no inner text: the value attribute
+    assert b._label(loc()) == "(unlabelled button)"
+    assert len(b._label(loc("z" * 500))) == 120  # bounded
+
+
+def test_form_name_prefers_name_then_id_then_action() -> None:
+    assert b._form_name(loc(name="signup", id="f1")) == "signup"
+    assert b._form_name(loc(id="f1", action="/go")) == "f1"
+    assert b._form_name(loc(action="/go")) == "/go"
+    assert b._form_name(loc()) == "(unnamed form)"
+
+
 def test_visit_before_enter_is_an_error_and_exit_is_safe() -> None:
     session = b.PlaywrightSession(NetworkPolicy.for_target("https://a.test/"))
     with pytest.raises(RuntimeError, match="context manager"):

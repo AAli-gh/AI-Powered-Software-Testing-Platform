@@ -15,6 +15,7 @@ browser binary is found automatically inside the sandbox image, or by `executabl
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from collections.abc import Callable
@@ -23,6 +24,12 @@ from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar
 
 from testmind.web_engine.crawler import PageVisit
+from testmind.web_engine.interactions import (
+    ButtonProbe,
+    FormProbe,
+    Interactions,
+    is_dangerous,
+)
 from testmind.web_engine.login import Credentials, perform_login
 from testmind.web_engine.network_policy import NetworkPolicy
 
@@ -31,6 +38,7 @@ if TYPE_CHECKING:
     from playwright.sync_api import (
         BrowserContext,
         ConsoleMessage,
+        Locator,
         Page,
         Playwright,
         Request,
@@ -40,6 +48,10 @@ if TYPE_CHECKING:
 DEFAULT_TIMEOUT_MS = 15_000
 MAX_LINKS = 500
 MAX_EVENTS = 50  # console errors / failed requests kept per page
+MAX_PROBE = 25  # buttons / forms exercised per page
+BUTTON_SELECTOR = "button, [role=button], input[type=submit], input[type=button]"
+PROBE_TIMEOUT_MS = 4_000  # a click or submit should take effect quickly
+SETTLE_MS = 400  # time allowed for a click's effect (navigation, request, DOM change) to show
 
 
 class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
@@ -50,11 +62,13 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         timeout_ms: int = DEFAULT_TIMEOUT_MS,
         executable_path: str | None = None,
         login: Credentials | None = None,
+        interact: bool = False,
     ) -> None:
         self._policy = policy
         self._timeout = timeout_ms
         self._executable = executable_path or os.environ.get("TESTMIND_CHROMIUM_PATH") or None
         self._login = login
+        self._interact = interact
         self._playwright: Playwright | None = None
         self._browser: PwBrowser | None = None
         self._context: BrowserContext | None = None
@@ -119,11 +133,12 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
             buttons = _safe(lambda: page.eval_on_selector_all(
                 "button, [role=button], input[type=submit], input[type=button]",
                 "els => els.length")) or 0  # fmt: skip
+            interactions = self._probe(url) if self._interact else None
             visit = PageVisit(
                 url=final_url, status=response.status if response else None, title=title,
                 load_ms=round(load_ms, 1), links=list(links)[:MAX_LINKS], buttons=int(buttons),
                 console_errors=console[:MAX_EVENTS], failed_requests=failed[:MAX_EVENTS],
-                redirects=_redirect_count(response),
+                redirects=_redirect_count(response), interactions=interactions,
             )  # fmt: skip
         except Exception as exc:
             visit = PageVisit(url=url, status=None, error=_reason(exc),
@@ -139,6 +154,74 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         else:
             self._policy.record(request.url, self._policy.refusal(request.url) or "out of scope")
             route.abort()  # type: ignore[attr-defined]
+
+    def _probe(self, url: str) -> Interactions:
+        # Each control is exercised on its own fresh page, so a click that navigates away or
+        # changes state never affects the next probe.
+        assert self._context is not None  # noqa: S101 - set in __enter__ before visit() runs
+        page = self._context.new_page()
+        try:
+            page.goto(url, wait_until="load")
+            button_count = min(page.locator(BUTTON_SELECTOR).count(), MAX_PROBE)
+            form_count = min(page.locator("form").count(), MAX_PROBE)
+        finally:
+            page.close()
+        buttons = [self._probe_button(url, i) for i in range(button_count)]
+        forms = [self._probe_form(url, i) for i in range(form_count)]
+        return Interactions(buttons=buttons, forms=forms)
+
+    def _probe_button(self, url: str, index: int) -> ButtonProbe:
+        assert self._context is not None  # noqa: S101
+        page = self._context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        try:
+            page.goto(url, wait_until="load")
+            button = page.locator(BUTTON_SELECTOR).nth(index)
+            label = _label(button)
+            if is_dangerous(label):
+                return ButtonProbe(label=label, skipped_dangerous=True)
+            page.wait_for_timeout(SETTLE_MS)  # let load-time requests flush before we measure
+            before_url, before_dom = page.url, _dom_sig(page)
+            fired: list[int] = []
+            page.on("request", lambda _: fired.append(1))
+            _safe(lambda: button.click(timeout=PROBE_TIMEOUT_MS))
+            page.wait_for_timeout(SETTLE_MS)
+            return ButtonProbe(
+                label=label,
+                navigated=page.url != before_url,
+                requested=bool(fired),
+                changed_dom=_dom_sig(page) != before_dom,
+                errored=errors[0] if errors else None,
+            )
+        finally:
+            page.close()
+
+    def _probe_form(self, url: str, index: int) -> FormProbe:
+        assert self._context is not None  # noqa: S101
+        page = self._context.new_page()
+        status: list[int] = []
+        page.on(
+            "response",
+            lambda r: status.append(r.status) if r.request.is_navigation_request() else None,
+        )
+        try:
+            page.goto(url, wait_until="load")
+            form = page.locator("form").nth(index)
+            name = _form_name(form)
+            page.wait_for_timeout(SETTLE_MS)
+            status.clear()  # ignore the page's own navigation; keep only what the submit triggers
+            submitted = _safe(
+                lambda: form.evaluate(
+                    "f => { (f.requestSubmit ? f.requestSubmit() : f.submit()); return true; }"
+                )
+            )
+            page.wait_for_timeout(SETTLE_MS)
+            if submitted is None:  # pragma: no cover - the submit script itself failed to run
+                return FormProbe(name=name, submitted=False, error="the form did not submit")
+            return FormProbe(name=name, submitted=True, status=status[-1] if status else None)
+        finally:
+            page.close()
 
 
 def _append(items: list[str], value: str) -> None:
@@ -179,6 +262,26 @@ def _safe(call: Callable[[], _T]) -> _T | None:
 def _reason(exc: Exception) -> str:
     text = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
     return text[:200]
+
+
+def _label(button: Locator) -> str:
+    text = (_safe(lambda: button.inner_text(timeout=PROBE_TIMEOUT_MS)) or "").strip()
+    if not text:
+        text = (_safe(lambda: button.get_attribute("value")) or "").strip()
+    return text[:120] if text else "(unlabelled button)"
+
+
+def _form_name(form: Locator) -> str:
+    for attr in ("name", "id", "action"):
+        value = (_safe(lambda a=attr: form.get_attribute(a)) or "").strip()  # type: ignore[misc]
+        if value:
+            return value[:120]
+    return "(unnamed form)"
+
+
+def _dom_sig(page: Page) -> str:
+    html = _safe(lambda: page.evaluate("() => document.body ? document.body.innerHTML : ''")) or ""
+    return hashlib.sha1(str(html).encode(), usedforsecurity=False).hexdigest()
 
 
 class _PlaywrightDriver:

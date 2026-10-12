@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Interactive</title>
+  </head>
+  <body>
+    <h1>Controls</h1>
+
+    <!-- Fine: issues a network request (no navigation). -->
+    <button id="fetcher" onclick="fetch('/api/price').catch(function () {})">Load price</button>
+
+    <!-- Fine: changes the page without navigating or requesting. -->
+    <button id="mutate" onclick="document.body.appendChild(document.createElement('p'))">
+      Add a note
+    </button>
+
+    <!-- Broken: the click raises an uncaught error (undefined function). -->
+    <button id="boom" onclick="doesNotExist()">Break</button>
+
+    <!-- Dangerous: a destructive label; the scanner must never click it. -->
+    <button id="danger">Delete account</button>
+
+    <!-- Broken form: submitting POSTs to /submit, which the server answers 500. -->
+    <form id="signup" method="post" action="/submit">
+      <input name="email" />
+      <input type="submit" value="Sign up" />
+    </form>
+  </body>
+</html>

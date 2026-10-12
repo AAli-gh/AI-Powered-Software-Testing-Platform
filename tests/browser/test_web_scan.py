@@ -31,6 +31,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_POST(self) -> None:  # the signup form posts here; the server is broken
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)
+        self.send_error(500, "boom")
+
     def log_message(self, *args: object) -> None:  # silence the server
         pass
 
@@ -71,6 +76,29 @@ def test_scan_finds_the_sites_defects(site: str, chromium_path: str) -> None:
     # buttons on the home page are counted
     home = next(p for p in scan.pages if urlsplit(p.url).path == "/")
     assert home.buttons == 2
+
+
+def test_exercising_controls_finds_dead_buttons_and_broken_forms(
+    site: str, chromium_path: str
+) -> None:
+    policy = NetworkPolicy.for_target(site, allow_internal=True)
+    with PlaywrightSession(policy, executable_path=chromium_path, interact=True) as browser:
+        scan = crawl(site, browser, policy=policy)
+
+    dead = [i for i in scan.issues if i.kind is IssueKind.DEAD_BUTTON]
+    assert any("Does nothing" in i.detail for i in dead)  # the #dead button on /
+
+    forms = [i for i in scan.issues if i.kind is IssueKind.FORM_ERROR]
+    assert any(i.severity is Severity.HIGH and "500" in i.detail for i in forms)  # signup -> 500
+
+    # Buttons that do something are not reported, and the destructive one is never clicked.
+    assert not any("Load price" in i.detail for i in dead)  # #fetcher issued a request
+    assert not any("Add a note" in i.detail for i in dead)  # #mutate changed the page
+    assert not any("Delete account" in i.detail for i in scan.issues)  # #danger was skipped
+
+    # The button whose click throws is reported as a JS error, not a dead button.
+    js = [i for i in scan.issues if i.kind is IssueKind.JS_ERROR and "Break" in i.detail]
+    assert js
 
 
 def test_a_navigation_failure_is_reported(chromium_path: str) -> None:

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from testmind.web_engine.frontier import Frontier
+from testmind.web_engine.interactions import Interactions, interaction_issues
 from testmind.web_engine.models import Issue, IssueKind, Page, Severity, SiteScan
 from testmind.web_engine.network_policy import NetworkPolicy
 
@@ -35,6 +36,7 @@ class PageVisit:
     failed_requests: list[str] = field(default_factory=list)  # "GET url — reason"
     redirects: int = 0
     error: str | None = None  # the navigation itself failed (DNS, connection, timeout)
+    interactions: Interactions | None = None  # button/form probes, when the scan exercised them
 
 
 class Browser(Protocol):
@@ -124,5 +126,9 @@ def _issues(url: str, visit: PageVisit, from_url: str | None) -> list[Issue]:
         found.append(Issue(
             kind=IssueKind.SLOW_PAGE, severity=Severity.LOW, url=url,
             detail=f"The page took {visit.load_ms / 1000:.1f}s to load",
+        ))  # fmt: skip
+    if visit.interactions is not None:
+        found.extend(interaction_issues(
+            url, visit.interactions.buttons, visit.interactions.forms
         ))  # fmt: skip
     return found

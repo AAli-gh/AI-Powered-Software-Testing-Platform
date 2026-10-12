@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from testmind.web_engine.crawler import PageVisit, crawl
+from testmind.web_engine.interactions import ButtonProbe, FormProbe, Interactions
 from testmind.web_engine.models import IssueKind, Severity
 from testmind.web_engine.network_policy import NetworkPolicy
 
@@ -107,6 +108,24 @@ def test_page_budget_is_reported() -> None:
     assert len(scan.pages) == 3
     assert scan.notes
     assert "page budget 3" in scan.notes[0]
+
+
+def test_interaction_probes_become_issues() -> None:
+    browser = FakeBrowser(
+        {
+            "https://a.test/": visit(
+                "https://a.test/",
+                interactions=Interactions(
+                    buttons=[ButtonProbe("Dead"), ButtonProbe("Fine", navigated=True)],
+                    forms=[FormProbe("signup", submitted=True, status=500)],
+                ),
+            ),
+        }
+    )
+    scan = crawl("https://a.test/", browser)
+    kinds = {i.kind for i in scan.issues}
+    assert kinds == {IssueKind.DEAD_BUTTON, IssueKind.FORM_ERROR}
+    assert all(i.url == "https://a.test/" for i in scan.issues)
 
 
 def test_an_out_of_scope_or_internal_start_url_is_refused() -> None:
