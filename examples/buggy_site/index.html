@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Home</title></head>
+  <body>
+    <h1>Shop</h1>
+    <nav>
+      <a href="/catalog.html">Catalog</a>
+      <a href="/about.html">About</a>
+      <a href="/missing.html">Broken link</a>
+      <a href="/crash.html">Crash</a>
+      <a href="https://example.com/">External (not crawled)</a>
+    </nav>
+    <button id="dead">Does nothing</button>
+    <button id="works" onclick="location.href='/about.html'">Go to About</button>
+    <script>
+      // A failed sub-request the page makes on load.
+      fetch('/api/price').catch(function () {});
+    </script>
+  </body>
+</html>

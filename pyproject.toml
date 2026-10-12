@@ -48,6 +48,7 @@ dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
+    "playwright>=1.56",
     "ruff>=0.6",
     "types-defusedxml>=0.7",
     "types-pyyaml>=6",
@@ -110,6 +111,7 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: needs real PostgreSQL and Redis (see docker-compose.test.yml)",
     "sandbox: needs Docker and the sandbox image (make sandbox-image)",
+    "browser: needs Playwright and a Chromium (web scanning)",
 ]
 filterwarnings = ["error"]
 
