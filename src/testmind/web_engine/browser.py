@@ -23,11 +23,19 @@ from types import TracebackType
 from typing import TYPE_CHECKING, TypeVar
 
 from testmind.web_engine.crawler import PageVisit
+from testmind.web_engine.login import Credentials, perform_login
 from testmind.web_engine.network_policy import NetworkPolicy
 
 if TYPE_CHECKING:
     from playwright.sync_api import Browser as PwBrowser
-    from playwright.sync_api import ConsoleMessage, Playwright, Request, Response
+    from playwright.sync_api import (
+        BrowserContext,
+        ConsoleMessage,
+        Page,
+        Playwright,
+        Request,
+        Response,
+    )
 
 DEFAULT_TIMEOUT_MS = 15_000
 MAX_LINKS = 500
@@ -41,19 +49,36 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         *,
         timeout_ms: int = DEFAULT_TIMEOUT_MS,
         executable_path: str | None = None,
+        login: Credentials | None = None,
     ) -> None:
         self._policy = policy
         self._timeout = timeout_ms
         self._executable = executable_path or os.environ.get("TESTMIND_CHROMIUM_PATH") or None
+        self._login = login
         self._playwright: Playwright | None = None
         self._browser: PwBrowser | None = None
+        self._context: BrowserContext | None = None
 
     def __enter__(self) -> PlaywrightSession:
         from playwright.sync_api import sync_playwright  # noqa: PLC0415 - optional dependency
 
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(executable_path=self._executable or None)
+        # One context for the whole scan, so a login's session cookie carries to every page.
+        self._context = self._browser.new_context()
+        self._context.set_default_timeout(self._timeout)
+        self._context.route("**/*", self._gate)
+        if self._login is not None:
+            self._authenticate(self._login)
         return self
+
+    def _authenticate(self, creds: Credentials) -> None:
+        assert self._context is not None  # noqa: S101 - set in __enter__ before this is called
+        page = self._context.new_page()
+        try:
+            perform_login(_PlaywrightDriver(page), creds)
+        finally:
+            page.close()
 
     def __exit__(
         self,
@@ -61,17 +86,17 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
+        if self._context is not None:
+            self._context.close()
         if self._browser is not None:
             self._browser.close()
         if self._playwright is not None:
             self._playwright.stop()
 
     def visit(self, url: str) -> PageVisit:
-        if self._browser is None:
+        if self._context is None:
             raise RuntimeError("Use PlaywrightSession as a context manager before visiting")
-        context = self._browser.new_context()
-        page = context.new_page()
-        page.set_default_timeout(self._timeout)
+        page = self._context.new_page()
         console: list[str] = []
         failed: list[str] = []
 
@@ -84,7 +109,6 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         page.on("requestfailed", lambda r: _append(failed, _failure(r)))
         page.on("response", lambda r: _record_bad_response(r, url, failed))
         try:
-            page.route("**/*", self._gate)
             started = time.monotonic()
             response = page.goto(url, wait_until="load")
             load_ms = (time.monotonic() - started) * 1000
@@ -105,7 +129,7 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
             visit = PageVisit(url=url, status=None, error=_reason(exc),
                               console_errors=console[:MAX_EVENTS])  # fmt: skip
         finally:
-            context.close()
+            page.close()
         return visit
 
     def _gate(self, route: object) -> None:
@@ -155,3 +179,31 @@ def _safe(call: Callable[[], _T]) -> _T | None:
 def _reason(exc: Exception) -> str:
     text = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
     return text[:200]
+
+
+class _PlaywrightDriver:
+    """Adapts a Playwright page to the `LoginDriver` protocol the login logic uses."""
+
+    def __init__(self, page: Page) -> None:
+        self._page = page
+
+    def goto(self, url: str) -> None:
+        self._page.goto(url, wait_until="load")
+
+    def fill(self, selector: str, value: str) -> None:
+        self._page.locator(selector).first.fill(value)
+
+    def click(self, selector: str) -> None:
+        self._page.locator(selector).first.click()
+
+    def wait_idle(self) -> None:
+        self._page.wait_for_load_state("networkidle")
+
+    def url(self) -> str:
+        return self._page.url
+
+    def has(self, selector: str) -> bool:
+        return self._page.query_selector(selector) is not None
+
+    def body(self) -> str:
+        return _safe(self._page.content) or ""

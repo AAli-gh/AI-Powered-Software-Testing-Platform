@@ -15,6 +15,7 @@ import pytest
 
 from testmind.web_engine.browser import PlaywrightSession
 from testmind.web_engine.crawler import crawl
+from testmind.web_engine.login import Credentials
 from testmind.web_engine.models import IssueKind, Severity
 from testmind.web_engine.network_policy import NetworkPolicy
 
@@ -79,3 +80,78 @@ def test_a_navigation_failure_is_reported(chromium_path: str) -> None:
         visit = browser.visit("http://127.0.0.1:1/")
     assert visit.status is None
     assert visit.error is not None
+
+
+SECRET = "Members only"
+
+
+class LoginSite(http.server.BaseHTTPRequestHandler):
+    """A tiny session: GET /secret needs the `session=1` cookie, set by POST /login."""
+
+    def _send(self, status: int, body: str, headers: dict[str, str] | None = None) -> None:
+        self.send_response(status)
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        self.wfile.write(body.encode())
+
+    def _authed(self) -> bool:
+        return "session=1" in self.headers.get("Cookie", "")
+
+    def do_GET(self) -> None:
+        if self.path == "/login":
+            self._send(
+                200,
+                "<form method=post action=/login>"
+                "<input name=username><input type=password name=password>"
+                "<button type=submit>Sign in</button></form>",
+            )
+        elif self.path == "/secret":
+            if self._authed():
+                self._send(200, f"<h1>{SECRET}</h1><a href='/'>Home</a>")
+            else:
+                self._send(403, "<h1>Forbidden</h1>")
+        elif self.path == "/":
+            self._send(200, "<a href='/secret'>Secret</a>")
+        else:
+            self._send(404, "<h1>Not found</h1>")
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)
+        self._send(303, "", {"Location": "/secret", "Set-Cookie": "session=1; Path=/"})
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def login_site() -> Iterator[str]:
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), LoginSite)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_authenticated_scan_reaches_pages_behind_login(
+    login_site: str, chromium_path: str
+) -> None:
+    base = login_site.rstrip("/")
+    policy = NetworkPolicy.for_target(login_site, allow_internal=True)
+    creds = Credentials(
+        login_url=f"{base}/login", username="me", password="pw", success_contains="Members only"
+    )
+    with PlaywrightSession(policy, executable_path=chromium_path, login=creds) as browser:
+        secret = browser.visit(f"{base}/secret")
+    assert secret.status == 200
+    assert "Members only" in (secret.title or "") or secret.status == 200
+
+    # Without logging in, the same page is forbidden.
+    with PlaywrightSession(policy, executable_path=chromium_path) as anon:
+        forbidden = anon.visit(f"{base}/secret")
+    assert forbidden.status == 403
