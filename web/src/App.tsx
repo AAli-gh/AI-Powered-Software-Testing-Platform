@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createBrowserRouter, RouterProvider, type RouteObject } from "react-router";
 
 import { ApiError } from "./api/client";
+import { AuthorizedTargetsPage } from "./pages/AuthorizedTargetsPage";
 import { Layout } from "./components/Layout";
 import { ExecutionPage } from "./pages/ExecutionPage";
 import { MutationRunPage } from "./pages/MutationRunPage";
@@ -32,6 +33,7 @@ export const routes: RouteObject[] = [
       { path: "github/pull-analyses/:analysisId", element: <PullAnalysisPage /> },
       { path: "web-scans", element: <WebScansPage /> },
       { path: "web-scans/:scanId", element: <WebScanPage /> },
+      { path: "authorized-targets", element: <AuthorizedTargetsPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

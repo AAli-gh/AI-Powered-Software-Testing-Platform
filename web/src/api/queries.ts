@@ -139,6 +139,13 @@ export function useWebScan(scanId: string) {
   });
 }
 
+export function useAuthorizedTargets() {
+  return useQuery({
+    queryKey: ["authorized-targets"],
+    queryFn: () => unwrap(api.GET("/api/v1/authorized-targets")),
+  });
+}
+
 export function usePullAnalysis(analysisId: string) {
   return useQuery({
     queryKey: ["pull-analysis", analysisId],

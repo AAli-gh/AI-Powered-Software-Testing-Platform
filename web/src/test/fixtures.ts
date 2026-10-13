@@ -365,6 +365,24 @@ export function webScanRead(
   };
 }
 
+export const TARGET_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+export function authorizedTarget(
+  overrides: Partial<Schemas["AuthorizedTargetRead"]> = {},
+): Schemas["AuthorizedTargetRead"] {
+  return {
+    id: TARGET_ID,
+    host: "example.com",
+    token: "testmind-site-verification=abc123",
+    verified: false,
+    verified_at: null,
+    last_error: null,
+    created_at: T0,
+    instructions: "Publish a file at https://example.com/.well-known/... with the token.",
+    ...overrides,
+  };
+}
+
 export function suggestion(id: string, title: string): Schemas["IssueSuggestion"] {
   return { id, kind: "regression", title, body: `Body of ${title}`, labels: ["testmind"] };
 }
