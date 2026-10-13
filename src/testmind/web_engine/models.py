@@ -33,6 +33,10 @@ class IssueKind(StrEnum):
     MIXED_CONTENT = "mixed_content"  # an https page loads an http sub-resource
     INSECURE_TRANSPORT = "insecure_transport"  # the page is served over http, or HSTS is absent
     INFO_DISCLOSURE = "info_disclosure"  # a response header reveals server/software versions
+    # Active findings (crafted requests; only ever against an ownership-verified host).
+    REFLECTED_XSS = "reflected_xss"  # a parameter is reflected into the page unescaped
+    SQL_ERROR = "sql_error"  # a parameter makes the server emit a database error
+    OPEN_REDIRECT = "open_redirect"  # a parameter controls a redirect to an external host
 
 
 class PageIssue(_Model):
