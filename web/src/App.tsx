@@ -14,6 +14,8 @@ import { PullAnalysesPage } from "./pages/PullAnalysesPage";
 import { PullAnalysisPage } from "./pages/PullAnalysisPage";
 import { RegressionPage } from "./pages/RegressionPage";
 import { RunPage } from "./pages/RunPage";
+import { WebScanPage } from "./pages/WebScanPage";
+import { WebScansPage } from "./pages/WebScansPage";
 
 export const routes: RouteObject[] = [
   {
@@ -28,6 +30,8 @@ export const routes: RouteObject[] = [
       { path: "mutation-runs/:mutationRunId", element: <MutationRunPage /> },
       { path: "github", element: <PullAnalysesPage /> },
       { path: "github/pull-analyses/:analysisId", element: <PullAnalysisPage /> },
+      { path: "web-scans", element: <WebScansPage /> },
+      { path: "web-scans/:scanId", element: <WebScanPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

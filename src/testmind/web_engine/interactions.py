@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from testmind.web_engine.models import Issue, IssueKind, Severity
+from testmind.web_engine.models import IssueKind, IssueSeverity, PageIssue
 
 # A control whose label matches is not activated automatically: it may change or destroy data.
 DANGER_WORDS = (
@@ -50,38 +50,40 @@ class FormProbe:
     accepted_empty: bool = False  # a required-looking form accepted an empty submission
 
 
-def button_issue(url: str, probe: ButtonProbe) -> Issue | None:
+def button_issue(url: str, probe: ButtonProbe) -> PageIssue | None:
     if probe.skipped_dangerous:
         return None
     if probe.errored is not None:
-        return Issue(
-            kind=IssueKind.JS_ERROR, severity=Severity.MEDIUM, url=url,
+        return PageIssue(
+            kind=IssueKind.JS_ERROR, severity=IssueSeverity.MEDIUM, url=url,
             detail=f"Clicking {probe.label!r} raised an error", evidence=[probe.errored],
         )  # fmt: skip
     if not probe.had_effect:
-        return Issue(
-            kind=IssueKind.DEAD_BUTTON, severity=Severity.MEDIUM, url=url,
+        return PageIssue(
+            kind=IssueKind.DEAD_BUTTON, severity=IssueSeverity.MEDIUM, url=url,
             detail=f"The control {probe.label!r} does nothing when clicked",
             evidence=["no navigation, no network request, no change to the page"],
         )  # fmt: skip
     return None
 
 
-def form_issue(url: str, probe: FormProbe) -> Issue | None:
+def form_issue(url: str, probe: FormProbe) -> PageIssue | None:
     if probe.error is not None:
-        return Issue(
-            kind=IssueKind.FORM_ERROR, severity=Severity.MEDIUM, url=url,
+        return PageIssue(
+            kind=IssueKind.FORM_ERROR, severity=IssueSeverity.MEDIUM, url=url,
             detail=f"The form {probe.name!r} could not be submitted", evidence=[probe.error],
         )  # fmt: skip
     if probe.status is not None and probe.status >= 500:  # noqa: PLR2004
-        return Issue(
-            kind=IssueKind.FORM_ERROR, severity=Severity.HIGH, url=url,
+        return PageIssue(
+            kind=IssueKind.FORM_ERROR, severity=IssueSeverity.HIGH, url=url,
             detail=f"Submitting the form {probe.name!r} returned {probe.status}",
         )  # fmt: skip
     return None
 
 
-def interaction_issues(url: str, buttons: list[ButtonProbe], forms: list[FormProbe]) -> list[Issue]:
+def interaction_issues(
+    url: str, buttons: list[ButtonProbe], forms: list[FormProbe]
+) -> list[PageIssue]:
     issues = [button_issue(url, b) for b in buttons] + [form_issue(url, f) for f in forms]
     return [i for i in issues if i is not None]
 

@@ -1564,7 +1564,7 @@ export interface components {
         /** CodeSummary */
         CodeSummary: {
             /** Issues */
-            issues: components["schemas"]["testmind__analyzers__repository__models__Issue"][];
+            issues: components["schemas"]["Issue"][];
             metrics: components["schemas"]["CodeMetrics"];
         };
         /** Commit */
@@ -2287,7 +2287,7 @@ export interface components {
              * @example TM010
              */
             rule_id: string;
-            severity: components["schemas"]["testmind__analyzers__code__models__Severity"];
+            severity: components["schemas"]["Severity"];
             /**
              * Symbol
              * @description Enclosing function/class qualname, if any
@@ -2608,10 +2608,25 @@ export interface components {
             relative: boolean;
         };
         /**
+         * Issue
+         * @description Something the analyser could not process (the analysis still succeeds).
+         */
+        Issue: {
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
+        };
+        /**
          * IssueKind
          * @enum {string}
          */
         IssueKind: "server_error" | "not_found" | "broken_link" | "redirect_loop" | "dead_button" | "js_error" | "failed_request" | "form_error" | "slow_page";
+        /**
+         * IssueSeverity
+         * @enum {string}
+         */
+        IssueSeverity: "high" | "medium" | "low";
         /** IssueSuggestion */
         IssueSuggestion: {
             /** Body */
@@ -2899,6 +2914,28 @@ export interface components {
             /** Title */
             title?: string | null;
             /** Url */
+            url: string;
+        };
+        /** PageIssue */
+        PageIssue: {
+            /** Detail */
+            detail: string;
+            /**
+             * Evidence
+             * @description Console messages, request lines, or steps to reproduce
+             */
+            evidence?: string[];
+            kind: components["schemas"]["IssueKind"];
+            /**
+             * Screenshot
+             * @description Published path of a screenshot, when one was captured
+             */
+            screenshot?: string | null;
+            severity: components["schemas"]["IssueSeverity"];
+            /**
+             * Url
+             * @description Where the issue was found
+             */
             url: string;
         };
         /** Page[AnalysisRunRead] */
@@ -3679,7 +3716,7 @@ export interface components {
             /** Frameworks */
             frameworks: components["schemas"]["Detection"][];
             /** Issues */
-            issues: components["schemas"]["testmind__analyzers__repository__models__Issue"][];
+            issues: components["schemas"]["Issue"][];
             /** Languages */
             languages: components["schemas"]["LanguageStat"][];
             /** Primary Language */
@@ -3794,7 +3831,7 @@ export interface components {
          * Severity
          * @enum {string}
          */
-        "Severity-Input": "low" | "medium" | "high" | "critical";
+        Severity: "low" | "medium" | "high" | "critical";
         /** SiteScan */
         SiteScan: {
             /**
@@ -3803,7 +3840,7 @@ export interface components {
              */
             denied?: string[];
             /** Issues */
-            issues: components["schemas"]["testmind__web_engine__models__Issue"][];
+            issues: components["schemas"]["PageIssue"][];
             /** Notes */
             notes?: string[];
             /** Pages */
@@ -4255,48 +4292,6 @@ export interface components {
              */
             status: string;
         };
-        /**
-         * Severity
-         * @enum {string}
-         */
-        testmind__analyzers__code__models__Severity: "low" | "medium" | "high" | "critical";
-        /**
-         * Issue
-         * @description Something the analyser could not process (the analysis still succeeds).
-         */
-        testmind__analyzers__repository__models__Issue: {
-            /** Message */
-            message: string;
-            /** Path */
-            path: string;
-        };
-        /** Issue */
-        testmind__web_engine__models__Issue: {
-            /** Detail */
-            detail: string;
-            /**
-             * Evidence
-             * @description Console messages, request lines, or steps to reproduce
-             */
-            evidence?: string[];
-            kind: components["schemas"]["IssueKind"];
-            /**
-             * Screenshot
-             * @description Published path of a screenshot, when one was captured
-             */
-            screenshot?: string | null;
-            severity: components["schemas"]["testmind__web_engine__models__Severity"];
-            /**
-             * Url
-             * @description Where the issue was found
-             */
-            url: string;
-        };
-        /**
-         * Severity
-         * @enum {string}
-         */
-        testmind__web_engine__models__Severity: "high" | "medium" | "low";
     };
     responses: never;
     parameters: never;
@@ -5913,7 +5908,7 @@ export interface operations {
     list_findings_api_v1_runs__run_id__code_findings_get: {
         parameters: {
             query?: {
-                min_severity?: components["schemas"]["Severity-Input"];
+                min_severity?: components["schemas"]["Severity"];
                 category?: components["schemas"]["FindingCategory"] | null;
                 rule_id?: string | null;
                 min_confidence?: number;

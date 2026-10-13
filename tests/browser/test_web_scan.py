@@ -20,7 +20,7 @@ from testmind.services.web_scan_executor import build_web_scan_executor
 from testmind.web_engine.browser import PlaywrightSession
 from testmind.web_engine.crawler import crawl
 from testmind.web_engine.login import Credentials
-from testmind.web_engine.models import IssueKind, Severity
+from testmind.web_engine.models import IssueKind, IssueSeverity
 from testmind.web_engine.network_policy import NetworkPolicy
 
 pytestmark = pytest.mark.browser
@@ -75,7 +75,7 @@ def test_scan_finds_the_sites_defects(site: str, chromium_path: str) -> None:
     assert any("example.com" in d for d in scan.denied)
     assert not any("example.com" in p.url for p in scan.pages)
 
-    high = [i for i in scan.issues if i.severity is Severity.HIGH]
+    high = [i for i in scan.issues if i.severity is IssueSeverity.HIGH]
     assert any(i.kind is IssueKind.SERVER_ERROR for i in high)
     # buttons on the home page are counted
     home = next(p for p in scan.pages if urlsplit(p.url).path == "/")
@@ -93,7 +93,8 @@ def test_exercising_controls_finds_dead_buttons_and_broken_forms(
     assert any("Does nothing" in i.detail for i in dead)  # the #dead button on /
 
     forms = [i for i in scan.issues if i.kind is IssueKind.FORM_ERROR]
-    assert any(i.severity is Severity.HIGH and "500" in i.detail for i in forms)  # signup -> 500
+    # the signup form POSTs to /submit, which answers 500
+    assert any(i.severity is IssueSeverity.HIGH and "500" in i.detail for i in forms)
 
     # Buttons that do something are not reported, and the destructive one is never clicked.
     assert not any("Load price" in i.detail for i in dead)  # #fetcher issued a request

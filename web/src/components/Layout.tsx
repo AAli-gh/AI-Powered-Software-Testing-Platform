@@ -68,6 +68,7 @@ const LINKS = [
   { to: "/", label: "Overview", end: true },
   { to: "/projects", label: "Projects", end: false },
   { to: "/github", label: "Pull requests", end: false },
+  { to: "/web-scans", label: "Websites", end: false },
 ];
 
 export function Layout() {

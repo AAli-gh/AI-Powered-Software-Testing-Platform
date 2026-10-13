@@ -11,7 +11,7 @@ class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class Severity(StrEnum):
+class IssueSeverity(StrEnum):
     HIGH = "high"  # a broken page or a server error: the user hits a wall
     MEDIUM = "medium"  # a dead button, a failed request, a console error
     LOW = "low"  # a smell worth noting (a slow page, a redirect chain)
@@ -29,9 +29,9 @@ class IssueKind(StrEnum):
     SLOW_PAGE = "slow_page"
 
 
-class Issue(_Model):
+class PageIssue(_Model):
     kind: IssueKind
-    severity: Severity
+    severity: IssueSeverity
     url: str = Field(description="Where the issue was found")
     detail: str
     evidence: list[str] = Field(
@@ -56,7 +56,7 @@ class Page(_Model):
 class SiteScan(_Model):
     start_url: str
     pages: list[Page]
-    issues: list[Issue]
+    issues: list[PageIssue]
     denied: list[str] = Field(
         default_factory=list, description="URLs the network policy refused (out of scope, internal)"
     )
@@ -64,7 +64,7 @@ class SiteScan(_Model):
 
     @property
     def by_severity(self) -> dict[str, int]:
-        counts = dict.fromkeys(Severity, 0)
+        counts = dict.fromkeys(IssueSeverity, 0)
         for issue in self.issues:
             counts[issue.severity] += 1
-        return {s.value: counts[s] for s in Severity}
+        return {s.value: counts[s] for s in IssueSeverity}

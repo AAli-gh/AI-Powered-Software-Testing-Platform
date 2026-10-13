@@ -16,7 +16,7 @@ from testmind.web_engine.interactions import (
     interaction_issues,
     is_dangerous,
 )
-from testmind.web_engine.models import IssueKind, Severity
+from testmind.web_engine.models import IssueKind, IssueSeverity
 
 
 @pytest.mark.parametrize(
@@ -43,7 +43,7 @@ def test_a_button_with_no_effect_is_dead() -> None:
     issue = button_issue("https://a.test/", ButtonProbe("Does nothing"))
     assert issue is not None
     assert issue.kind is IssueKind.DEAD_BUTTON
-    assert issue.severity is Severity.MEDIUM
+    assert issue.severity is IssueSeverity.MEDIUM
     assert "Does nothing" in issue.detail
     assert issue.evidence  # says what was observed (nothing)
 
@@ -70,7 +70,7 @@ def test_a_form_that_could_not_be_submitted_is_reported() -> None:
     issue = form_issue("https://a.test/", FormProbe("signup", submitted=False, error="no submit"))
     assert issue is not None
     assert issue.kind is IssueKind.FORM_ERROR
-    assert issue.severity is Severity.MEDIUM
+    assert issue.severity is IssueSeverity.MEDIUM
     assert issue.evidence == ["no submit"]
 
 
@@ -78,7 +78,7 @@ def test_a_form_that_returns_a_server_error_is_high() -> None:
     issue = form_issue("https://a.test/", FormProbe("signup", submitted=True, status=500))
     assert issue is not None
     assert issue.kind is IssueKind.FORM_ERROR
-    assert issue.severity is Severity.HIGH
+    assert issue.severity is IssueSeverity.HIGH
     assert "500" in issue.detail
 
 

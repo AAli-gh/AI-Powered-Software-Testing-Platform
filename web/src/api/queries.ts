@@ -121,6 +121,24 @@ export function useMutationRun(mutationRunId: string) {
   });
 }
 
+export function useWebScans(offset: number, limit: number) {
+  return useQuery({
+    queryKey: ["web-scans", offset, limit],
+    queryFn: () => unwrap(api.GET("/api/v1/web-scans", { params: { query: { offset, limit } } })),
+    refetchInterval: (query) =>
+      query.state.data?.items.some((s) => isActive(s.status)) ? POLL_MS : false,
+  });
+}
+
+export function useWebScan(scanId: string) {
+  return useQuery({
+    queryKey: ["web-scan", scanId],
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/web-scans/{scan_id}", { params: { path: { scan_id: scanId } } })),
+    refetchInterval: whileActive,
+  });
+}
+
 export function usePullAnalysis(analysisId: string) {
   return useQuery({
     queryKey: ["pull-analysis", analysisId],

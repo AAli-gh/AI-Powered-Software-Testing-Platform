@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from testmind.web_engine.crawler import PageVisit, crawl
 from testmind.web_engine.interactions import ButtonProbe, FormProbe, Interactions
-from testmind.web_engine.models import IssueKind, Severity
+from testmind.web_engine.models import IssueKind, IssueSeverity
 from testmind.web_engine.network_policy import NetworkPolicy
 
 
@@ -53,8 +53,8 @@ def test_server_error_and_not_found() -> None:
     )
     scan = crawl("https://a.test/", browser)
     kinds = {i.url: (i.kind, i.severity) for i in scan.issues}
-    assert kinds["https://a.test/boom"] == (IssueKind.SERVER_ERROR, Severity.HIGH)
-    assert kinds["https://a.test/missing"] == (IssueKind.NOT_FOUND, Severity.MEDIUM)
+    assert kinds["https://a.test/boom"] == (IssueKind.SERVER_ERROR, IssueSeverity.HIGH)
+    assert kinds["https://a.test/missing"] == (IssueKind.NOT_FOUND, IssueSeverity.MEDIUM)
     assert "linked from https://a.test/" in next(
         i.detail for i in scan.issues if i.kind is IssueKind.NOT_FOUND
     )
@@ -96,7 +96,7 @@ def test_navigation_failure_is_a_broken_link_and_stops_descent() -> None:
     )
     scan = crawl("https://a.test/", browser)
     [broken] = [i for i in scan.issues if i.kind is IssueKind.BROKEN_LINK]
-    assert broken.severity is Severity.HIGH
+    assert broken.severity is IssueSeverity.HIGH
     assert "linked from https://a.test/" in broken.detail
     assert "https://a.test/never" not in browser.visited  # links of a failed page are not followed
 

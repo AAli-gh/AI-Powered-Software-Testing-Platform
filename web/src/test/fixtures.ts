@@ -10,6 +10,7 @@ export const EXECUTION_ID = "33333333-3333-4333-8333-333333333333";
 export const MUTATION_ID = "44444444-4444-4444-8444-444444444444";
 export const REGRESSION_ID = "55555555-5555-4555-8555-555555555555";
 export const PULL_ID = "66666666-6666-4666-8666-666666666666";
+export const SCAN_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 const idle = { queued: 0, running: 0, succeeded: 0, failed: 0, cancelled: 0 };
 
@@ -282,6 +283,74 @@ export function regressionRead(
       regressed: 2,
       selected_targets: 3,
     },
+    ...overrides,
+  };
+}
+
+export function siteScan(overrides: Partial<Schemas["SiteScan"]> = {}): Schemas["SiteScan"] {
+  return {
+    start_url: "https://example.com/",
+    pages: [
+      {
+        url: "https://example.com/",
+        status: 200,
+        title: "Home",
+        depth: 0,
+        from_url: null,
+        load_ms: 120,
+        links: 4,
+        buttons: 2,
+      },
+      {
+        url: "https://example.com/crash",
+        status: 500,
+        title: null,
+        depth: 1,
+        from_url: "https://example.com/",
+        load_ms: 80,
+        links: 0,
+        buttons: 0,
+      },
+    ],
+    issues: [
+      {
+        kind: "server_error",
+        severity: "high",
+        url: "https://example.com/crash",
+        detail: "The server returned 500",
+        evidence: [],
+        screenshot: null,
+      },
+      {
+        kind: "dead_button",
+        severity: "medium",
+        url: "https://example.com/",
+        detail: "The control 'Does nothing' does nothing when clicked",
+        evidence: ["no navigation, no network request, no change to the page"],
+        screenshot: null,
+      },
+    ],
+    denied: ["https://tracker.example/ (out of scope)"],
+    notes: [],
+    ...overrides,
+  };
+}
+
+export function webScanRead(
+  overrides: Partial<Schemas["WebScanRead"]> = {},
+): Schemas["WebScanRead"] {
+  return {
+    id: SCAN_ID,
+    target_url: "https://example.com/",
+    status: "succeeded",
+    max_pages: 100,
+    max_depth: 5,
+    interact: true,
+    error_message: null,
+    created_at: T0,
+    started_at: T0,
+    finished_at: T1,
+    result: siteScan(),
     ...overrides,
   };
 }

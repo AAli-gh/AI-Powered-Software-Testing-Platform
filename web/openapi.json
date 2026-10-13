@@ -934,7 +934,7 @@
         "properties": {
           "issues": {
             "items": {
-              "$ref": "#/components/schemas/testmind__analyzers__repository__models__Issue"
+              "$ref": "#/components/schemas/Issue"
             },
             "title": "Issues",
             "type": "array"
@@ -2834,7 +2834,7 @@
             "type": "string"
           },
           "severity": {
-            "$ref": "#/components/schemas/testmind__analyzers__code__models__Severity"
+            "$ref": "#/components/schemas/Severity"
           },
           "symbol": {
             "anyOf": [
@@ -3733,6 +3733,26 @@
         "title": "ImportRef",
         "type": "object"
       },
+      "Issue": {
+        "additionalProperties": false,
+        "description": "Something the analyser could not process (the analysis still succeeds).",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "title": "Issue",
+        "type": "object"
+      },
       "IssueKind": {
         "enum": [
           "server_error",
@@ -3746,6 +3766,15 @@
           "slow_page"
         ],
         "title": "IssueKind",
+        "type": "string"
+      },
+      "IssueSeverity": {
+        "enum": [
+          "high",
+          "medium",
+          "low"
+        ],
+        "title": "IssueSeverity",
         "type": "string"
       },
       "IssueSuggestion": {
@@ -4510,6 +4539,54 @@
           "depth"
         ],
         "title": "Page",
+        "type": "object"
+      },
+      "PageIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "evidence": {
+            "description": "Console messages, request lines, or steps to reproduce",
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IssueKind"
+          },
+          "screenshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Published path of a screenshot, when one was captured",
+            "title": "Screenshot"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/IssueSeverity"
+          },
+          "url": {
+            "description": "Where the issue was found",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "url",
+          "detail"
+        ],
+        "title": "PageIssue",
         "type": "object"
       },
       "Page_AnalysisRunRead_": {
@@ -6632,7 +6709,7 @@
           },
           "issues": {
             "items": {
-              "$ref": "#/components/schemas/testmind__analyzers__repository__models__Issue"
+              "$ref": "#/components/schemas/Issue"
             },
             "title": "Issues",
             "type": "array"
@@ -6947,7 +7024,7 @@
         "title": "SelectionCheck",
         "type": "object"
       },
-      "Severity-Input": {
+      "Severity": {
         "enum": [
           "low",
           "medium",
@@ -6970,7 +7047,7 @@
           },
           "issues": {
             "items": {
-              "$ref": "#/components/schemas/testmind__web_engine__models__Issue"
+              "$ref": "#/components/schemas/PageIssue"
             },
             "title": "Issues",
             "type": "array"
@@ -8078,93 +8155,6 @@
         ],
         "title": "WebhookResponse",
         "type": "object"
-      },
-      "testmind__analyzers__code__models__Severity": {
-        "enum": [
-          "low",
-          "medium",
-          "high",
-          "critical"
-        ],
-        "title": "Severity",
-        "type": "string"
-      },
-      "testmind__analyzers__repository__models__Issue": {
-        "additionalProperties": false,
-        "description": "Something the analyser could not process (the analysis still succeeds).",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "message"
-        ],
-        "title": "Issue",
-        "type": "object"
-      },
-      "testmind__web_engine__models__Issue": {
-        "additionalProperties": false,
-        "properties": {
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "evidence": {
-            "description": "Console messages, request lines, or steps to reproduce",
-            "items": {
-              "type": "string"
-            },
-            "title": "Evidence",
-            "type": "array"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/IssueKind"
-          },
-          "screenshot": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Published path of a screenshot, when one was captured",
-            "title": "Screenshot"
-          },
-          "severity": {
-            "$ref": "#/components/schemas/testmind__web_engine__models__Severity"
-          },
-          "url": {
-            "description": "Where the issue was found",
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "severity",
-          "url",
-          "detail"
-        ],
-        "title": "Issue",
-        "type": "object"
-      },
-      "testmind__web_engine__models__Severity": {
-        "enum": [
-          "high",
-          "medium",
-          "low"
-        ],
-        "title": "Severity",
-        "type": "string"
       }
     }
   },
@@ -10600,7 +10590,7 @@
             "name": "min_severity",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Severity-Input",
+              "$ref": "#/components/schemas/Severity",
               "default": "low"
             }
           },

@@ -13,7 +13,7 @@ from typing import Protocol
 
 from testmind.web_engine.frontier import Frontier
 from testmind.web_engine.interactions import Interactions, interaction_issues
-from testmind.web_engine.models import Issue, IssueKind, Page, Severity, SiteScan
+from testmind.web_engine.models import IssueKind, IssueSeverity, Page, PageIssue, SiteScan
 from testmind.web_engine.network_policy import NetworkPolicy
 
 SERVER_ERROR = 500
@@ -54,7 +54,7 @@ def crawl(
     policy = policy or NetworkPolicy.for_target(start_url)
     frontier = Frontier(policy, max_pages=max_pages, max_depth=max_depth)
     pages: list[Page] = []
-    issues: list[Issue] = []
+    issues: list[PageIssue] = []
     if not frontier.add(start_url, 0):
         reason = policy.refusal(start_url) or "the start URL is not crawlable"
         return SiteScan(start_url=start_url, pages=[], issues=[], denied=list(policy.denied),
@@ -86,45 +86,45 @@ def _page(url: str, visit: PageVisit, depth: int, from_url: str | None) -> Page:
     )  # fmt: skip
 
 
-def _issues(url: str, visit: PageVisit, from_url: str | None) -> list[Issue]:
-    found: list[Issue] = []
+def _issues(url: str, visit: PageVisit, from_url: str | None) -> list[PageIssue]:
+    found: list[PageIssue] = []
     if visit.error is not None:
         source = f" (linked from {from_url})" if from_url else ""
-        found.append(Issue(
-            kind=IssueKind.BROKEN_LINK, severity=Severity.HIGH, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.BROKEN_LINK, severity=IssueSeverity.HIGH, url=url,
             detail=f"The page could not be loaded: {visit.error}{source}",
         ))  # fmt: skip
         return found
     if visit.status is not None and visit.status >= SERVER_ERROR:
-        found.append(Issue(
-            kind=IssueKind.SERVER_ERROR, severity=Severity.HIGH, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.SERVER_ERROR, severity=IssueSeverity.HIGH, url=url,
             detail=f"The server returned {visit.status}",
         ))  # fmt: skip
     elif visit.status is not None and visit.status >= CLIENT_ERROR:
         source = f", linked from {from_url}" if from_url else ""
-        found.append(Issue(
-            kind=IssueKind.NOT_FOUND, severity=Severity.MEDIUM, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.NOT_FOUND, severity=IssueSeverity.MEDIUM, url=url,
             detail=f"The server returned {visit.status}{source}",
         ))  # fmt: skip
     if visit.redirects > MAX_REDIRECTS:
-        found.append(Issue(
-            kind=IssueKind.REDIRECT_LOOP, severity=Severity.MEDIUM, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.REDIRECT_LOOP, severity=IssueSeverity.MEDIUM, url=url,
             detail=f"{visit.redirects} redirects before the page loaded",
         ))  # fmt: skip
     for message in visit.console_errors:
-        found.append(Issue(
-            kind=IssueKind.JS_ERROR, severity=Severity.MEDIUM, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.JS_ERROR, severity=IssueSeverity.MEDIUM, url=url,
             detail="Uncaught error in the page", evidence=[message],
         ))  # fmt: skip
     if visit.failed_requests:
-        found.append(Issue(
-            kind=IssueKind.FAILED_REQUEST, severity=Severity.MEDIUM, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.FAILED_REQUEST, severity=IssueSeverity.MEDIUM, url=url,
             detail=f"{len(visit.failed_requests)} request(s) the page made failed",
             evidence=visit.failed_requests[:20],
         ))  # fmt: skip
     if visit.load_ms is not None and visit.load_ms > SLOW_MS:
-        found.append(Issue(
-            kind=IssueKind.SLOW_PAGE, severity=Severity.LOW, url=url,
+        found.append(PageIssue(
+            kind=IssueKind.SLOW_PAGE, severity=IssueSeverity.LOW, url=url,
             detail=f"The page took {visit.load_ms / 1000:.1f}s to load",
         ))  # fmt: skip
     if visit.interactions is not None:
