@@ -15,11 +15,23 @@ from testmind.web_engine.frontier import Frontier
 from testmind.web_engine.interactions import Interactions, interaction_issues
 from testmind.web_engine.models import IssueKind, IssueSeverity, Page, PageIssue, SiteScan
 from testmind.web_engine.network_policy import NetworkPolicy
+from testmind.web_engine.security import security_issues
 
 SERVER_ERROR = 500
 CLIENT_ERROR = 400
 SLOW_MS = 10_000
 MAX_REDIRECTS = 10
+
+# Security findings repeat across pages (every page lacks the same header); report each once.
+SECURITY_KINDS = frozenset(
+    {
+        IssueKind.INSECURE_HEADER,
+        IssueKind.INSECURE_COOKIE,
+        IssueKind.MIXED_CONTENT,
+        IssueKind.INSECURE_TRANSPORT,
+        IssueKind.INFO_DISCLOSURE,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +49,10 @@ class PageVisit:
     redirects: int = 0
     error: str | None = None  # the navigation itself failed (DNS, connection, timeout)
     interactions: Interactions | None = None  # button/form probes, when the scan exercised them
+    headers: dict[str, str] = field(default_factory=dict)  # main response headers (lowercased)
+    set_cookies: list[str] = field(default_factory=list)  # raw Set-Cookie values of the response
+    insecure_requests: list[str] = field(default_factory=list)  # http sub-resources, https page
+    security: bool = False  # whether the browser gathered security facts for this page
 
 
 class Browser(Protocol):
@@ -55,6 +71,7 @@ def crawl(
     frontier = Frontier(policy, max_pages=max_pages, max_depth=max_depth)
     pages: list[Page] = []
     issues: list[PageIssue] = []
+    seen_security: set[tuple[str, str]] = set()
     if not frontier.add(start_url, 0):
         reason = policy.refusal(start_url) or "the start URL is not crawlable"
         return SiteScan(start_url=start_url, pages=[], issues=[], denied=list(policy.denied),
@@ -64,7 +81,13 @@ def crawl(
         url, depth, from_url = item
         visit = browser.visit(url)
         pages.append(_page(url, visit, depth, from_url))
-        issues.extend(_issues(url, visit, from_url))
+        for issue in _issues(url, visit, from_url):
+            if issue.kind in SECURITY_KINDS:
+                key = (issue.kind, issue.detail)  # the same weakness recurs on every page
+                if key in seen_security:
+                    continue
+                seen_security.add(key)
+            issues.append(issue)
         if visit.error is None:
             frontier.add_links(visit.url, visit.links, depth)
 
@@ -130,5 +153,9 @@ def _issues(url: str, visit: PageVisit, from_url: str | None) -> list[PageIssue]
     if visit.interactions is not None:
         found.extend(interaction_issues(
             url, visit.interactions.buttons, visit.interactions.forms
+        ))  # fmt: skip
+    if visit.security:
+        found.extend(security_issues(
+            visit.url, visit.headers, visit.set_cookies, visit.insecure_requests
         ))  # fmt: skip
     return found

@@ -106,6 +106,21 @@ def test_exercising_controls_finds_dead_buttons_and_broken_forms(
     assert js
 
 
+def test_security_checks_find_weak_headers(site: str, chromium_path: str) -> None:
+    policy = NetworkPolicy.for_target(site, allow_internal=True)
+    with PlaywrightSession(policy, executable_path=chromium_path, security=True) as browser:
+        scan = crawl(site, browser, policy=policy, max_pages=3)
+
+    kinds = {i.kind for i in scan.issues}
+    # The local test server speaks HTTP and sets none of the security headers.
+    assert IssueKind.INSECURE_TRANSPORT in kinds
+    assert IssueKind.INSECURE_HEADER in kinds
+    assert any("Content-Security-Policy" in i.detail for i in scan.issues)
+    # Each weakness is reported once, not once per page.
+    headers = [i for i in scan.issues if i.kind is IssueKind.INSECURE_HEADER]
+    assert len(headers) == len({i.detail for i in headers})
+
+
 async def test_web_scan_job_runs_the_crawl_and_stores_the_result(
     site: str,
     chromium_path: str,
@@ -118,7 +133,7 @@ async def test_web_scan_job_runs_the_crawl_and_stores_the_result(
         monkeypatch.setenv("TESTMIND_CHROMIUM_PATH", chromium_path)
     async with session_factory() as session:
         scan = WebScan(target_url=site, status=RunStatus.QUEUED, max_pages=10, max_depth=2,
-                       interact=True, allow_internal=True)  # the test server is local  # fmt: skip
+                       interact=True, security=True, allow_internal=True)  # fmt: skip
         session.add(scan)
         await session.commit()
         scan_id = scan.id
@@ -133,6 +148,7 @@ async def test_web_scan_job_runs_the_crawl_and_stores_the_result(
         kinds = {i["kind"] for i in stored.result["issues"]}
         assert "server_error" in kinds  # /crash.html
         assert "dead_button" in kinds  # #dead, found by exercising controls
+        assert "insecure_transport" in kinds  # the local server speaks HTTP
 
 
 def test_a_navigation_failure_is_reported(chromium_path: str) -> None:

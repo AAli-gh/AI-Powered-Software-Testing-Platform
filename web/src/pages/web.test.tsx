@@ -32,6 +32,7 @@ describe("Websites", () => {
 
     await userEvent.type(screen.getByLabelText("URL"), "https://example.com/");
     await userEvent.click(screen.getByLabelText(/Exercise controls/));
+    await userEvent.click(screen.getByLabelText(/Passive security checks/));
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
 
     await waitFor(() => {
@@ -43,6 +44,7 @@ describe("Websites", () => {
       max_pages: 100,
       max_depth: 5,
       interact: true,
+      security: true,
     });
     expect(await screen.findByText(/The scan is queued/)).toBeInTheDocument();
   });
@@ -71,6 +73,8 @@ describe("Websites", () => {
 
     expect(screen.getByText("server error")).toBeInTheDocument();
     expect(screen.getByText("dead button")).toBeInTheDocument();
+    expect(screen.getByText("insecure header")).toBeInTheDocument();
+    expect(screen.getByText("No Content-Security-Policy response header")).toBeInTheDocument();
     // The high-severity issue is sorted first.
     const rows = screen.getAllByRole("row");
     expect(rows[1]).toHaveTextContent("server error");

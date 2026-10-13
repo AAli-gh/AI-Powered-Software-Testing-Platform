@@ -128,6 +128,28 @@ def test_interaction_probes_become_issues() -> None:
     assert all(i.url == "https://a.test/" for i in scan.issues)
 
 
+def test_security_findings_are_derived_and_deduplicated() -> None:
+    # Both pages lack the same headers; each weakness should be reported once, not per page.
+    browser = FakeBrowser(
+        {
+            "https://a.test/": visit("https://a.test/", links=["/next"], security=True, headers={}),
+            "https://a.test/next": visit("https://a.test/next", security=True, headers={}),
+        }
+    )
+    scan = crawl("https://a.test/", browser)
+    header_issues = [i for i in scan.issues if i.kind is IssueKind.INSECURE_HEADER]
+    details = [i.detail for i in header_issues]
+    assert len(details) == len(set(details))  # no duplicates across the two pages
+    assert any("Content-Security-Policy" in d for d in details)
+    assert any(i.kind is IssueKind.INSECURE_TRANSPORT for i in scan.issues)  # no HSTS
+
+
+def test_security_is_not_checked_unless_the_visit_gathered_it() -> None:
+    browser = FakeBrowser({"https://a.test/": visit("https://a.test/", headers={})})
+    scan = crawl("https://a.test/", browser)
+    assert not any(i.kind is IssueKind.INSECURE_HEADER for i in scan.issues)
+
+
 def test_an_out_of_scope_or_internal_start_url_is_refused() -> None:
     scan = crawl("http://169.254.169.254/latest/meta-data/",
                  FakeBrowser({}),

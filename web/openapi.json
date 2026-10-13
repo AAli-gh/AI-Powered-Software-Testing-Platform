@@ -3763,7 +3763,12 @@
           "js_error",
           "failed_request",
           "form_error",
-          "slow_page"
+          "slow_page",
+          "insecure_header",
+          "insecure_cookie",
+          "mixed_content",
+          "insecure_transport",
+          "info_disclosure"
         ],
         "title": "IssueKind",
         "type": "string"
@@ -8009,6 +8014,12 @@
             "title": "Max Pages",
             "type": "integer"
           },
+          "security": {
+            "default": false,
+            "description": "Passive security checks (headers, cookies, mixed content)",
+            "title": "Security",
+            "type": "boolean"
+          },
           "target_url": {
             "examples": [
               "https://example.com/"
@@ -8082,6 +8093,10 @@
               }
             ]
           },
+          "security": {
+            "title": "Security",
+            "type": "boolean"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -8109,6 +8124,7 @@
           "max_pages",
           "max_depth",
           "interact",
+          "security",
           "error_message",
           "created_at",
           "started_at",

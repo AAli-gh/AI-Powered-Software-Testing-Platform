@@ -47,13 +47,17 @@ if TYPE_CHECKING:
 
 
 def playwright_session(
-    policy: NetworkPolicy, *, interact: bool = False, login: Credentials | None = None
+    policy: NetworkPolicy,
+    *,
+    interact: bool = False,
+    security: bool = False,
+    login: Credentials | None = None,
 ) -> PlaywrightSession:
     """The production browser factory: a real headless Chromium bound to `policy`.
 
     `TESTMIND_CHROMIUM_PATH` selects the browser binary when it is not the sandbox default.
     """
-    return PlaywrightSession(policy, interact=interact, login=login)
+    return PlaywrightSession(policy, interact=interact, security=security, login=login)
 
 
 DEFAULT_TIMEOUT_MS = 15_000
@@ -74,12 +78,14 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         executable_path: str | None = None,
         login: Credentials | None = None,
         interact: bool = False,
+        security: bool = False,
     ) -> None:
         self._policy = policy
         self._timeout = timeout_ms
         self._executable = executable_path or os.environ.get("TESTMIND_CHROMIUM_PATH") or None
         self._login = login
         self._interact = interact
+        self._security = security
         self._playwright: Playwright | None = None
         self._browser: PwBrowser | None = None
         self._context: BrowserContext | None = None
@@ -124,15 +130,26 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         page = self._context.new_page()
         console: list[str] = []
         failed: list[str] = []
+        http_resources: list[str] = []
 
         def on_console(message: ConsoleMessage) -> None:
             if message.type == "error":
                 _append(console, message.text)
 
+        def on_response(response: Response) -> None:
+            _record_bad_response(response, url, failed)
+            # An http sub-resource (not the main document) is mixed content on an https page.
+            if (
+                self._security
+                and response.url != url
+                and response.url.lower().startswith("http://")
+            ):
+                _append(http_resources, response.url)
+
         page.on("pageerror", lambda e: _append(console, str(e)))
         page.on("console", on_console)
         page.on("requestfailed", lambda r: _append(failed, _failure(r)))
-        page.on("response", lambda r: _record_bad_response(r, url, failed))
+        page.on("response", on_response)
         try:
             started = time.monotonic()
             response = page.goto(url, wait_until="load")
@@ -145,11 +162,15 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
                 "button, [role=button], input[type=submit], input[type=button]",
                 "els => els.length")) or 0  # fmt: skip
             interactions = self._probe(url) if self._interact else None
+            headers, cookies = _security_facts(response) if self._security else ({}, [])
+            mixed = http_resources[:MAX_EVENTS] if final_url.lower().startswith("https://") else []
             visit = PageVisit(
                 url=final_url, status=response.status if response else None, title=title,
                 load_ms=round(load_ms, 1), links=list(links)[:MAX_LINKS], buttons=int(buttons),
                 console_errors=console[:MAX_EVENTS], failed_requests=failed[:MAX_EVENTS],
                 redirects=_redirect_count(response), interactions=interactions,
+                headers=headers, set_cookies=cookies, insecure_requests=mixed,
+                security=self._security,
             )  # fmt: skip
         except Exception as exc:
             visit = PageVisit(url=url, status=None, error=_reason(exc),
@@ -249,6 +270,24 @@ def _record_bad_response(response: Response, main_url: str, failed: list[str]) -
     # A sub-request (not the main document) that the server answered with an error.
     if response.url != main_url and response.status >= 500:  # noqa: PLR2004
         _append(failed, f"{response.request.method} {response.url} — {response.status}")
+
+
+def _security_facts(response: Response | None) -> tuple[dict[str, str], list[str]]:
+    """The main response's headers (lowercased) and its raw Set-Cookie values.
+
+    `headers_array` is used so that several Set-Cookie headers are not merged into one.
+    """
+    if response is None:
+        return {}, []
+    headers: dict[str, str] = {}
+    cookies: list[str] = []
+    for entry in _safe(response.headers_array) or []:
+        name = entry["name"].lower()
+        if name == "set-cookie":
+            cookies.append(entry["value"])
+        else:
+            headers[name] = entry["value"]
+    return headers, cookies[:MAX_EVENTS]
 
 
 def _redirect_count(response: Response | None) -> int:

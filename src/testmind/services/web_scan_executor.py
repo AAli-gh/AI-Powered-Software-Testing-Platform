@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -22,12 +23,22 @@ from testmind.web_engine.network_policy import NetworkPolicy
 logger = get_logger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class _ScanSpec:
+    target: str
+    allow_internal: bool
+    interact: bool
+    security: bool
+    max_pages: int
+    max_depth: int
+
+
 class BrowserFactory(Protocol):
     """Opens a browser bound to a network policy. The production factory is
     `testmind.web_engine.browser.playwright_session`; tests pass a fake."""
 
     def __call__(
-        self, policy: NetworkPolicy, *, interact: bool
+        self, policy: NetworkPolicy, *, interact: bool, security: bool
     ) -> AbstractContextManager[Browser]: ...
 
 
@@ -49,15 +60,19 @@ class WebScanExecutor:
                 return None
             if scan.status is not RunStatus.QUEUED:
                 return scan.status
-            target, allow_internal, interact = scan.target_url, scan.allow_internal, scan.interact
-            max_pages, max_depth = scan.max_pages, scan.max_depth
+            spec = _ScanSpec(
+                target=scan.target_url,
+                allow_internal=scan.allow_internal,
+                interact=scan.interact,
+                security=scan.security,
+                max_pages=scan.max_pages,
+                max_depth=scan.max_depth,
+            )
             apply_transition(scan, RunStatus.RUNNING)
             await session.commit()
 
         try:
-            result = await asyncio.to_thread(
-                self._scan, target, allow_internal, interact, max_pages, max_depth
-            )
+            result = await asyncio.to_thread(self._scan, spec)
         except AppError as exc:
             return await self._done(scan_id, RunStatus.FAILED, str(exc))
         except Exception:
@@ -68,12 +83,14 @@ class WebScanExecutor:
             scan_id, RunStatus.SUCCEEDED, None, {"result": result.model_dump(mode="json")}
         )
 
-    def _scan(
-        self, target: str, allow_internal: bool, interact: bool, max_pages: int, max_depth: int
-    ) -> SiteScan:
-        policy = NetworkPolicy.for_target(target, allow_internal=allow_internal)
-        with self._browser_factory(policy, interact=interact) as browser:
-            return crawl(target, browser, policy=policy, max_pages=max_pages, max_depth=max_depth)
+    def _scan(self, spec: _ScanSpec) -> SiteScan:
+        policy = NetworkPolicy.for_target(spec.target, allow_internal=spec.allow_internal)
+        browser_cm = self._browser_factory(policy, interact=spec.interact, security=spec.security)
+        with browser_cm as browser:
+            return crawl(
+                spec.target, browser, policy=policy, max_pages=spec.max_pages,
+                max_depth=spec.max_depth,
+            )  # fmt: skip
 
     async def _done(
         self,
@@ -98,8 +115,10 @@ def _production_browser_factory() -> BrowserFactory:
     # Imported lazily: Playwright is only needed in the worker, never in the API process.
     from testmind.web_engine.browser import playwright_session  # noqa: PLC0415
 
-    def factory(policy: NetworkPolicy, *, interact: bool) -> AbstractContextManager[Browser]:
-        return playwright_session(policy, interact=interact)
+    def factory(
+        policy: NetworkPolicy, *, interact: bool, security: bool
+    ) -> AbstractContextManager[Browser]:
+        return playwright_session(policy, interact=interact, security=security)
 
     return factory
 

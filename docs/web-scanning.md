@@ -29,10 +29,21 @@ derives issues from the facts each page reports:
 | `dead_button` | medium | a control that does nothing when clicked (`interact`) |
 | `form_error` | medium / high | a form that could not submit, or returned 5xx (`interact`) |
 | `slow_page` | low | the page took longer than the slow-page threshold |
+| `insecure_transport` | medium | the page is served over HTTP, or HTTPS without HSTS (`security`) |
+| `insecure_header` | medium / low | a missing or weak security header: CSP, nosniff, clickjacking, Referrer-Policy (`security`) |
+| `insecure_cookie` | medium / low | a cookie set without Secure / HttpOnly, or SameSite=None without Secure (`security`) |
+| `mixed_content` | high | an HTTPS page loaded an HTTP sub-resource (`security`) |
+| `info_disclosure` | low | a `Server` / `X-Powered-By` header reveals a software version (`security`) |
 
 With `interact=true`, the scan also clicks each **safe** button and submits each form, on its
 own fresh page so one click never affects the next. Destructive controls (delete, pay, log out,
 …) are recognised by their label and never clicked.
+
+With `security=true`, the scan reads each page's response headers, the cookies it set, and
+whether an https page pulled in http sub-resources, and reports weak protections (see the
+`insecure_*`, `mixed_content` and `info_disclosure` rows above). These are **passive** checks —
+nothing is attacked, no payload is sent; the scan only inspects responses the normal crawl
+already received. A weakness that recurs on every page (a missing header, say) is reported once.
 
 The scan's own intelligence is deterministic: the issues above come from measured facts, not a
 language model. External AI is never required for a scan.
@@ -55,7 +66,7 @@ authorized-target profile (ownership verified), which is a later sub-phase.
 ## The API
 
 ```
-POST /api/v1/web-scans         {"target_url": "...", "max_pages": 100, "max_depth": 5, "interact": false}
+POST /api/v1/web-scans         {"target_url": "...", "max_pages": 100, "max_depth": 5, "interact": false, "security": false}
 GET  /api/v1/web-scans         paged list, newest first
 GET  /api/v1/web-scans/{id}    status and, once finished, the full SiteScan
 ```

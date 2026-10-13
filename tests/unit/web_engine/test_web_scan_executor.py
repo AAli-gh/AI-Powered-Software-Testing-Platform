@@ -18,7 +18,7 @@ from testmind.web_engine.network_policy import NetworkPolicy
 
 def test_production_factory_builds_a_playwright_session() -> None:
     factory = _production_browser_factory()
-    session = factory(NetworkPolicy.for_target("https://a.test/"), interact=True)
+    session = factory(NetworkPolicy.for_target("https://a.test/"), interact=True, security=True)
     assert isinstance(session, PlaywrightSession)  # not entered: no browser launched
 
 

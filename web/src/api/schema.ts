@@ -2621,7 +2621,7 @@ export interface components {
          * IssueKind
          * @enum {string}
          */
-        IssueKind: "server_error" | "not_found" | "broken_link" | "redirect_loop" | "dead_button" | "js_error" | "failed_request" | "form_error" | "slow_page";
+        IssueKind: "server_error" | "not_found" | "broken_link" | "redirect_loop" | "dead_button" | "js_error" | "failed_request" | "form_error" | "slow_page" | "insecure_header" | "insecure_cookie" | "mixed_content" | "insecure_transport" | "info_disclosure";
         /**
          * IssueSeverity
          * @enum {string}
@@ -4243,6 +4243,12 @@ export interface components {
              */
             max_pages: number;
             /**
+             * Security
+             * @description Passive security checks (headers, cookies, mixed content)
+             * @default false
+             */
+            security: boolean;
+            /**
              * Target Url
              * @example https://example.com/
              */
@@ -4271,6 +4277,8 @@ export interface components {
             /** Max Pages */
             max_pages: number;
             result: components["schemas"]["SiteScan"] | null;
+            /** Security */
+            security: boolean;
             /** Started At */
             started_at: string | null;
             status: components["schemas"]["RunStatus"];

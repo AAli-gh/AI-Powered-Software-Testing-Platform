@@ -25,6 +25,9 @@ class WebScanCreate(BaseModel):
     interact: Annotated[
         bool, Field(description="Click safe buttons and submit forms to find dead controls")
     ] = False
+    security: Annotated[
+        bool, Field(description="Passive security checks (headers, cookies, mixed content)")
+    ] = False
 
 
 class WebScanRead(BaseModel):
@@ -36,6 +39,7 @@ class WebScanRead(BaseModel):
     max_pages: int
     max_depth: int
     interact: bool
+    security: bool
     error_message: str | None
     created_at: datetime
     started_at: datetime | None

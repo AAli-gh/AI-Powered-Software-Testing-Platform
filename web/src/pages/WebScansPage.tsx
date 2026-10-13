@@ -17,11 +17,12 @@ function StartScan() {
   const [maxPages, setMaxPages] = useState(100);
   const [maxDepth, setMaxDepth] = useState(5);
   const [interact, setInteract] = useState(false);
+  const [security, setSecurity] = useState(false);
   const start = useMutation({
     mutationFn: () =>
       unwrap(
         api.POST("/api/v1/web-scans", {
-          body: { target_url: url, max_pages: maxPages, max_depth: maxDepth, interact },
+          body: { target_url: url, max_pages: maxPages, max_depth: maxDepth, interact, security },
         }),
       ),
     onSuccess: async (scan) => {
@@ -86,6 +87,16 @@ function StartScan() {
             }}
           />
           Exercise controls (click safe buttons, submit forms) to find dead buttons
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={security}
+            onChange={(e) => {
+              setSecurity(e.target.checked);
+            }}
+          />
+          Passive security checks (response headers, cookies, mixed content) — no attacks
         </label>
         <div className="form-row">
           <button className="primary" type="submit" disabled={start.isPending}>

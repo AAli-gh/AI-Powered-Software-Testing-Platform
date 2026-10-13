@@ -27,6 +27,12 @@ class IssueKind(StrEnum):
     FAILED_REQUEST = "failed_request"  # a network request the page made that failed
     FORM_ERROR = "form_error"  # a form that could not be submitted or errored on the server
     SLOW_PAGE = "slow_page"
+    # Passive security findings (no attack is performed; these read the response only).
+    INSECURE_HEADER = "insecure_header"  # a missing or weak security response header
+    INSECURE_COOKIE = "insecure_cookie"  # a cookie set without Secure / HttpOnly / SameSite
+    MIXED_CONTENT = "mixed_content"  # an https page loads an http sub-resource
+    INSECURE_TRANSPORT = "insecure_transport"  # the page is served over http, or HSTS is absent
+    INFO_DISCLOSURE = "info_disclosure"  # a response header reveals server/software versions
 
 
 class PageIssue(_Model):

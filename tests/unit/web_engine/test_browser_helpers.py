@@ -4,7 +4,7 @@ imported only when a session is entered)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -55,6 +55,28 @@ def test_failure_and_bad_response() -> None:
     b._record_bad_response(resp("https://a/ok", 200), main, failed)  # not an error
     b._record_bad_response(resp(main, 500), main, failed)  # the document itself, skipped
     assert failed == ["GET https://a/api — 503"]
+
+
+class FakeResponseHeaders:
+    def __init__(self, entries: list[dict[str, str]]) -> None:
+        self._entries = entries
+
+    def headers_array(self) -> list[dict[str, str]]:
+        return self._entries
+
+
+def test_security_facts_split_headers_from_cookies() -> None:
+    assert b._security_facts(None) == ({}, [])
+    response = FakeResponseHeaders(
+        [
+            {"name": "Content-Type", "value": "text/html"},
+            {"name": "Set-Cookie", "value": "a=1; Path=/"},
+            {"name": "Set-Cookie", "value": "b=2; Secure"},
+        ]
+    )
+    headers, cookies = b._security_facts(cast(Any, response))
+    assert headers == {"content-type": "text/html"}  # lowercased, cookies excluded
+    assert cookies == ["a=1; Path=/", "b=2; Secure"]
 
 
 def test_redirect_count_follows_the_chain() -> None:

@@ -40,6 +40,7 @@ class WebScanService:
                 max_pages=request.max_pages,
                 max_depth=request.max_depth,
                 interact=request.interact,
+                security=request.security,
                 allow_internal=False,
             )
         )
