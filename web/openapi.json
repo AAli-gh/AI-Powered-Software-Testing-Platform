@@ -591,6 +591,92 @@
         "title": "Attempt",
         "type": "object"
       },
+      "AuthorizedTargetCreate": {
+        "additionalProperties": false,
+        "description": "Register a host you own. A verification token is issued in return.",
+        "properties": {
+          "host": {
+            "examples": [
+              "example.com"
+            ],
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Host",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "title": "AuthorizedTargetCreate",
+        "type": "object"
+      },
+      "AuthorizedTargetRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instructions": {
+            "readOnly": true,
+            "title": "Instructions",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          }
+        },
+        "required": [
+          "id",
+          "host",
+          "token",
+          "verified",
+          "verified_at",
+          "last_error",
+          "created_at",
+          "instructions"
+        ],
+        "title": "AuthorizedTargetRead",
+        "type": "object"
+      },
       "Blame": {
         "enum": [
           "code",
@@ -8231,6 +8317,178 @@
         "summary": "Get Api Suggestion",
         "tags": [
           "API testing"
+        ]
+      }
+    },
+    "/api/v1/authorized-targets": {
+      "get": {
+        "operationId": "list_targets_api_v1_authorized_targets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuthorizedTargetRead"
+                  },
+                  "title": "Response List Targets Api V1 Authorized Targets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Targets",
+        "tags": [
+          "Authorized targets"
+        ]
+      },
+      "post": {
+        "description": "Register a host you own; a verification token is returned to publish on the site.",
+        "operationId": "register_target_api_v1_authorized_targets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizedTargetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedTargetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a public host"
+          }
+        },
+        "summary": "Register Target",
+        "tags": [
+          "Authorized targets"
+        ]
+      }
+    },
+    "/api/v1/authorized-targets/{target_id}": {
+      "get": {
+        "operationId": "get_target_api_v1_authorized_targets__target_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedTargetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Target not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Target",
+        "tags": [
+          "Authorized targets"
+        ]
+      }
+    },
+    "/api/v1/authorized-targets/{target_id}/verify": {
+      "post": {
+        "description": "Fetch the well-known file and confirm the token. Safe to call repeatedly.",
+        "operationId": "verify_target_api_v1_authorized_targets__target_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedTargetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Target not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Target",
+        "tags": [
+          "Authorized targets"
         ]
       }
     },

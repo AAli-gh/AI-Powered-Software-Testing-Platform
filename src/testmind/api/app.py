@@ -11,6 +11,7 @@ from testmind.api.errors import install_exception_handlers
 from testmind.api.middleware import RequestContextMiddleware
 from testmind.api.routes import (
     api_testing,
+    authorized_targets,
     code,
     executions,
     failures,
@@ -29,6 +30,7 @@ from testmind.api.security import RateLimitMiddleware, TokenAuthMiddleware
 from testmind.core.config import Settings, get_settings
 from testmind.core.logging import configure_logging
 from testmind.db.session import create_engine, create_session_factory
+from testmind.services.authorized_target_service import TargetProber, build_prober
 from testmind.services.dispatcher import TaskDispatcher
 from testmind.services.github_service import ClientFactory
 from testmind.workers.celery_app import create_celery_app
@@ -42,11 +44,13 @@ def create_app(
     *,
     dispatcher: TaskDispatcher | None = None,
     github_clients: ClientFactory | None = None,
+    target_prober: TargetProber | None = None,
 ) -> FastAPI:
     """Application factory (`uvicorn --factory testmind.api.app:create_app`).
 
-    `dispatcher` and `github_clients` may be injected by tests; by default runs are sent to
-    Celery and GitHub is reached at TESTMIND_GITHUB_API_URL.
+    `dispatcher`, `github_clients` and `target_prober` may be injected by tests; by default runs
+    are sent to Celery, GitHub is reached at TESTMIND_GITHUB_API_URL, and ownership verification
+    fetches the target site over the network.
     """
     settings = settings or get_settings()
     configure_logging(settings.log_level, json=settings.log_json)
@@ -64,6 +68,7 @@ def create_app(
         app.state.redis = redis
         app.state.dispatcher = dispatcher or CeleryTaskDispatcher(create_celery_app(settings))
         app.state.github_clients = github_clients
+        app.state.target_prober = target_prober or build_prober()
         try:
             yield
         finally:
@@ -95,4 +100,5 @@ def create_app(
     app.include_router(github.router)
     app.include_router(api_testing.router)
     app.include_router(web_scans.router)
+    app.include_router(authorized_targets.router)
     return app

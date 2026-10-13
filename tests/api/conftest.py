@@ -18,11 +18,23 @@ def dispatcher() -> RecordingDispatcher:
 
 
 @pytest.fixture
+def prober_responses() -> dict[str, str]:
+    """URL → body the fake ownership prober returns; tests fill this for /authorized-targets."""
+    return {}
+
+
+@pytest.fixture
 async def app(
-    engine: AsyncEngine, settings: Settings, dispatcher: RecordingDispatcher
+    engine: AsyncEngine,
+    settings: Settings,
+    dispatcher: RecordingDispatcher,
+    prober_responses: dict[str, str],
 ) -> AsyncIterator[FastAPI]:
     # `engine` is requested so every API test starts from migrated, empty tables.
-    application = create_app(settings, dispatcher=dispatcher)
+    def prober(url: str) -> str | None:
+        return prober_responses.get(url)
+
+    application = create_app(settings, dispatcher=dispatcher, target_prober=prober)
     async with application.router.lifespan_context(application):
         yield application
 

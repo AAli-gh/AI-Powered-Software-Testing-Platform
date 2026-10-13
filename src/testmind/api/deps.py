@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from testmind.core.config import Settings
 from testmind.services.api_testing_service import ApiTestingService
+from testmind.services.authorized_target_service import AuthorizedTargetService
 from testmind.services.execution_service import ExecutionService
 from testmind.services.failure_analysis_service import FailureAnalysisService
 from testmind.services.generation_service import GenerationService
@@ -128,3 +129,12 @@ def get_web_scan_service(request: Request, session: SessionDep) -> WebScanServic
 
 
 WebScanServiceDep = Annotated[WebScanService, Depends(get_web_scan_service)]
+
+
+def get_authorized_target_service(request: Request, session: SessionDep) -> AuthorizedTargetService:
+    return AuthorizedTargetService(session, request.app.state.target_prober)
+
+
+AuthorizedTargetServiceDep = Annotated[
+    AuthorizedTargetService, Depends(get_authorized_target_service)
+]

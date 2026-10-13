@@ -21,6 +21,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/authorized-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Targets */
+        get: operations["list_targets_api_v1_authorized_targets_get"];
+        put?: never;
+        /**
+         * Register Target
+         * @description Register a host you own; a verification token is returned to publish on the site.
+         */
+        post: operations["register_target_api_v1_authorized_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/authorized-targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Target */
+        get: operations["get_target_api_v1_authorized_targets__target_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/authorized-targets/{target_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Target
+         * @description Fetch the well-known file and confirm the token. Safe to call repeatedly.
+         */
+        post: operations["verify_target_api_v1_authorized_targets__target_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-rules": {
         parameters: {
             query?: never;
@@ -1431,6 +1489,42 @@ export interface components {
             iteration: number;
             /** Outcome */
             outcome: string;
+        };
+        /**
+         * AuthorizedTargetCreate
+         * @description Register a host you own. A verification token is issued in return.
+         */
+        AuthorizedTargetCreate: {
+            /**
+             * Host
+             * @example example.com
+             */
+            host: string;
+        };
+        /** AuthorizedTargetRead */
+        AuthorizedTargetRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Host */
+            host: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Instructions */
+            readonly instructions: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Token */
+            token: string;
+            /** Verified */
+            verified: boolean;
+            /** Verified At */
+            verified_at: string | null;
         };
         /**
          * Blame
@@ -4330,6 +4424,139 @@ export interface operations {
                 };
             };
             /** @description Not found, or no API coverage (with reason) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_targets_api_v1_authorized_targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizedTargetRead"][];
+                };
+            };
+        };
+    };
+    register_target_api_v1_authorized_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizedTargetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizedTargetRead"];
+                };
+            };
+            /** @description Not a public host */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_target_api_v1_authorized_targets__target_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizedTargetRead"];
+                };
+            };
+            /** @description Target not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_target_api_v1_authorized_targets__target_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizedTargetRead"];
+                };
+            };
+            /** @description Target not found */
             404: {
                 headers: {
                     [name: string]: unknown;

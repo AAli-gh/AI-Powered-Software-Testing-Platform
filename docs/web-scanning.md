@@ -60,8 +60,25 @@ images, redirects) — passes the `NetworkPolicy` (`web_engine/network_policy.py
 
 The API refuses an internal or non-http target up front with `422 invalid_target`, and the
 browser itself aborts any out-of-scope request as a second line of defence. Public scans run
-with internal hosts **out of scope**; reaching your own internal sites is the job of the
-authorized-target profile (ownership verified), which is a later sub-phase.
+with internal hosts **out of scope**.
+
+## Authorized targets (for active checks)
+
+The passive scan above only reads responses. **Active** checks — which send crafted requests —
+must never run against a site the user does not own, so a host has to be proven owned first:
+
+```
+POST /api/v1/authorized-targets            {"host": "example.com"}   -> a verification token
+GET  /api/v1/authorized-targets            list, with each host's status
+POST /api/v1/authorized-targets/{id}/verify  fetch the well-known file and confirm the token
+```
+
+Registering a host returns a random token. The owner publishes it at
+`https://<host>/.well-known/testmind-site-verification.txt` (http is accepted as a fallback),
+then calls verify; the platform fetches that path — through the same network policy, so it can
+never be pointed at an internal host — and marks the host verified only when the token is
+present. Verification can be rechecked and can lapse. `is_authorized(host)` gates the active
+checks (a later sub-phase); nothing active runs against an unverified host.
 
 ## The API
 

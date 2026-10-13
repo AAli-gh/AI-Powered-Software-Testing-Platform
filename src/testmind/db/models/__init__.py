@@ -2,6 +2,7 @@
 
 from testmind.db.models.analysis_run import AnalysisRun
 from testmind.db.models.api_test_suggestion import ApiTestSuggestion
+from testmind.db.models.authorized_target import AuthorizedTarget
 from testmind.db.models.code_analysis import CodeAnalysis
 from testmind.db.models.failure_analysis import FailureAnalysis
 from testmind.db.models.github import GitHubImport, GitHubPullAnalysis
@@ -16,6 +17,7 @@ from testmind.db.models.web_scan import WebScan
 __all__ = [
     "AnalysisRun",
     "ApiTestSuggestion",
+    "AuthorizedTarget",
     "CodeAnalysis",
     "FailureAnalysis",
     "GitHubImport",
