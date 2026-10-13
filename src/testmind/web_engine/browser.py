@@ -45,6 +45,17 @@ if TYPE_CHECKING:
         Response,
     )
 
+
+def playwright_session(
+    policy: NetworkPolicy, *, interact: bool = False, login: Credentials | None = None
+) -> PlaywrightSession:
+    """The production browser factory: a real headless Chromium bound to `policy`.
+
+    `TESTMIND_CHROMIUM_PATH` selects the browser binary when it is not the sandbox default.
+    """
+    return PlaywrightSession(policy, interact=interact, login=login)
+
+
 DEFAULT_TIMEOUT_MS = 15_000
 MAX_LINKS = 500
 MAX_EVENTS = 50  # console errors / failed requests kept per page

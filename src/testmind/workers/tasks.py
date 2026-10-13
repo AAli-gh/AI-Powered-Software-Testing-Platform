@@ -23,6 +23,7 @@ from testmind.services.github_service import client_factory
 from testmind.services.mutation_executor import MutationExecutor, SuggestionExecutor
 from testmind.services.regression_executor import RegressionExecutor
 from testmind.services.run_executor import RunExecutor
+from testmind.services.web_scan_executor import build_web_scan_executor
 from testmind.test_engine.runner import TestSuiteRunner
 
 EXECUTE_ANALYSIS_RUN = "testmind.analysis_run.execute"
@@ -35,6 +36,7 @@ SUGGEST_MUTANT_TESTS = "testmind.mutant_suggestions.execute"
 SUGGEST_API_TESTS = "testmind.api_suggestions.execute"
 ANALYZE_PULL_REQUEST = "testmind.github_pull_analysis.execute"
 IMPORT_GITHUB_REPOSITORY = "testmind.github_import.execute"
+SCAN_WEBSITE = "testmind.web_scan.execute"
 
 
 def register_tasks(app: Celery, settings: Settings) -> None:
@@ -88,6 +90,11 @@ def register_tasks(app: Celery, settings: Settings) -> None:
     @app.task(name=GENERATE_TESTS, shared=False)
     def generate_tests(generation_id: str) -> str | None:
         status = asyncio.run(_generate_tests(settings, uuid.UUID(generation_id)))
+        return status.value if status else None
+
+    @app.task(name=SCAN_WEBSITE, shared=False)
+    def scan_website(scan_id: str) -> str | None:
+        status = asyncio.run(_scan_website(settings, uuid.UUID(scan_id)))
         return status.value if status else None
 
 
@@ -254,6 +261,15 @@ async def _suggest_api_tests(settings: Settings, suggestion_id: uuid.UUID) -> Ru
             imports_root=settings.github_imports_root,
         )
         return await executor.execute(suggestion_id)
+    finally:
+        await engine.dispose()
+
+
+async def _scan_website(settings: Settings, scan_id: uuid.UUID) -> RunStatus | None:
+    engine = create_engine(settings, pooled=False)
+    try:
+        executor = build_web_scan_executor(create_session_factory(engine))
+        return await executor.execute(scan_id)
     finally:
         await engine.dispose()
 

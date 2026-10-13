@@ -19,6 +19,7 @@ from testmind.services.overview_service import OverviewService
 from testmind.services.project_service import ProjectService
 from testmind.services.regression_service import RegressionService
 from testmind.services.run_service import RunService
+from testmind.services.web_scan_service import WebScanService
 
 
 def get_settings(request: Request) -> Settings:
@@ -120,3 +121,10 @@ def get_overview_service(session: SessionDep) -> OverviewService:
 
 
 OverviewServiceDep = Annotated[OverviewService, Depends(get_overview_service)]
+
+
+def get_web_scan_service(request: Request, session: SessionDep) -> WebScanService:
+    return WebScanService(session, request.app.state.dispatcher)
+
+
+WebScanServiceDep = Annotated[WebScanService, Depends(get_web_scan_service)]

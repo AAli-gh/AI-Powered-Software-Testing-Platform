@@ -35,6 +35,12 @@ class InvalidSourceError(AppError):
     code = "invalid_source"
 
 
+class InvalidTargetError(AppError):
+    """The target URL for a web scan is unusable (bad scheme, internal/loopback host, ...)."""
+
+    code = "invalid_target"
+
+
 class DispatchError(AppError):
     """A background job could not be handed to the task queue."""
 

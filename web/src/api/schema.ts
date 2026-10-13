@@ -1134,6 +1134,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/web-scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Web Scans */
+        get: operations["list_web_scans_api_v1_web_scans_get"];
+        put?: never;
+        /**
+         * Create Web Scan
+         * @description Queue a crawl of a public website. Internal and loopback hosts are refused.
+         */
+        post: operations["create_web_scan_api_v1_web_scans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/web-scans/{scan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Web Scan */
+        get: operations["get_web_scan_api_v1_web_scans__scan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1526,7 +1564,7 @@ export interface components {
         /** CodeSummary */
         CodeSummary: {
             /** Issues */
-            issues: components["schemas"]["Issue"][];
+            issues: components["schemas"]["testmind__analyzers__repository__models__Issue"][];
             metrics: components["schemas"]["CodeMetrics"];
         };
         /** Commit */
@@ -2249,7 +2287,7 @@ export interface components {
              * @example TM010
              */
             rule_id: string;
-            severity: components["schemas"]["Severity"];
+            severity: components["schemas"]["testmind__analyzers__code__models__Severity"];
             /**
              * Symbol
              * @description Enclosing function/class qualname, if any
@@ -2570,15 +2608,10 @@ export interface components {
             relative: boolean;
         };
         /**
-         * Issue
-         * @description Something the analyser could not process (the analysis still succeeds).
+         * IssueKind
+         * @enum {string}
          */
-        Issue: {
-            /** Message */
-            message: string;
-            /** Path */
-            path: string;
-        };
+        IssueKind: "server_error" | "not_found" | "broken_link" | "redirect_loop" | "dead_button" | "js_error" | "failed_request" | "form_error" | "slow_page";
         /** IssueSuggestion */
         IssueSuggestion: {
             /** Body */
@@ -2834,6 +2867,40 @@ export interface components {
          * @enum {string}
          */
         Outcome: "passed" | "failed" | "error" | "skipped" | "xfailed";
+        /** Page */
+        Page: {
+            /**
+             * Buttons
+             * @default 0
+             */
+            buttons: number;
+            /**
+             * Depth
+             * @description Clicks from the start page
+             */
+            depth: number;
+            /**
+             * From Url
+             * @description The page a link to this one came from
+             */
+            from_url?: string | null;
+            /**
+             * Links
+             * @default 0
+             */
+            links: number;
+            /** Load Ms */
+            load_ms?: number | null;
+            /**
+             * Status
+             * @description HTTP status of the main response, if one was seen
+             */
+            status: number | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+        };
         /** Page[AnalysisRunRead] */
         Page_AnalysisRunRead_: {
             /** Items */
@@ -3102,6 +3169,17 @@ export interface components {
         Page_UnmatchedRequest_: {
             /** Items */
             items: components["schemas"]["UnmatchedRequest"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** Page[WebScanRead] */
+        Page_WebScanRead_: {
+            /** Items */
+            items: components["schemas"]["WebScanRead"][];
             /** Limit */
             limit: number;
             /** Offset */
@@ -3601,7 +3679,7 @@ export interface components {
             /** Frameworks */
             frameworks: components["schemas"]["Detection"][];
             /** Issues */
-            issues: components["schemas"]["Issue"][];
+            issues: components["schemas"]["testmind__analyzers__repository__models__Issue"][];
             /** Languages */
             languages: components["schemas"]["LanguageStat"][];
             /** Primary Language */
@@ -3716,7 +3794,23 @@ export interface components {
          * Severity
          * @enum {string}
          */
-        Severity: "low" | "medium" | "high" | "critical";
+        "Severity-Input": "low" | "medium" | "high" | "critical";
+        /** SiteScan */
+        SiteScan: {
+            /**
+             * Denied
+             * @description URLs the network policy refused (out of scope, internal)
+             */
+            denied?: string[];
+            /** Issues */
+            issues: components["schemas"]["testmind__web_engine__models__Issue"][];
+            /** Notes */
+            notes?: string[];
+            /** Pages */
+            pages: components["schemas"]["Page"][];
+            /** Start Url */
+            start_url: string;
+        };
         /**
          * Source
          * @enum {string}
@@ -4090,6 +4184,62 @@ export interface components {
          * @enum {string}
          */
         Verdict: "regressions" | "clean" | "inconclusive";
+        /**
+         * WebScanCreate
+         * @description Start a scan of a public website.
+         */
+        WebScanCreate: {
+            /**
+             * Interact
+             * @description Click safe buttons and submit forms to find dead controls
+             * @default false
+             */
+            interact: boolean;
+            /**
+             * Max Depth
+             * @default 5
+             */
+            max_depth: number;
+            /**
+             * Max Pages
+             * @default 100
+             */
+            max_pages: number;
+            /**
+             * Target Url
+             * @example https://example.com/
+             */
+            target_url: string;
+        };
+        /** WebScanRead */
+        WebScanRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Message */
+            error_message: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Interact */
+            interact: boolean;
+            /** Max Depth */
+            max_depth: number;
+            /** Max Pages */
+            max_pages: number;
+            result: components["schemas"]["SiteScan"] | null;
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["RunStatus"];
+            /** Target Url */
+            target_url: string;
+        };
         /** WebhookResponse */
         WebhookResponse: {
             /**
@@ -4105,6 +4255,48 @@ export interface components {
              */
             status: string;
         };
+        /**
+         * Severity
+         * @enum {string}
+         */
+        testmind__analyzers__code__models__Severity: "low" | "medium" | "high" | "critical";
+        /**
+         * Issue
+         * @description Something the analyser could not process (the analysis still succeeds).
+         */
+        testmind__analyzers__repository__models__Issue: {
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
+        };
+        /** Issue */
+        testmind__web_engine__models__Issue: {
+            /** Detail */
+            detail: string;
+            /**
+             * Evidence
+             * @description Console messages, request lines, or steps to reproduce
+             */
+            evidence?: string[];
+            kind: components["schemas"]["IssueKind"];
+            /**
+             * Screenshot
+             * @description Published path of a screenshot, when one was captured
+             */
+            screenshot?: string | null;
+            severity: components["schemas"]["testmind__web_engine__models__Severity"];
+            /**
+             * Url
+             * @description Where the issue was found
+             */
+            url: string;
+        };
+        /**
+         * Severity
+         * @enum {string}
+         */
+        testmind__web_engine__models__Severity: "high" | "medium" | "low";
     };
     responses: never;
     parameters: never;
@@ -5721,7 +5913,7 @@ export interface operations {
     list_findings_api_v1_runs__run_id__code_findings_get: {
         parameters: {
             query?: {
-                min_severity?: components["schemas"]["Severity"];
+                min_severity?: components["schemas"]["Severity-Input"];
                 category?: components["schemas"]["FindingCategory"] | null;
                 rule_id?: string | null;
                 min_confidence?: number;
@@ -7165,6 +7357,120 @@ export interface operations {
                 };
             };
             /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_web_scans_api_v1_web_scans_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_WebScanRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_web_scan_api_v1_web_scans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebScanCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebScanRead"];
+                };
+            };
+            /** @description The target URL cannot be scanned */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The queue is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_web_scan_api_v1_web_scans__scan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebScanRead"];
+                };
+            };
+            /** @description Scan not found */
             404: {
                 headers: {
                     [name: string]: unknown;

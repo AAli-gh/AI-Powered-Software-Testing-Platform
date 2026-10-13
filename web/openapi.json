@@ -934,7 +934,7 @@
         "properties": {
           "issues": {
             "items": {
-              "$ref": "#/components/schemas/Issue"
+              "$ref": "#/components/schemas/testmind__analyzers__repository__models__Issue"
             },
             "title": "Issues",
             "type": "array"
@@ -2834,7 +2834,7 @@
             "type": "string"
           },
           "severity": {
-            "$ref": "#/components/schemas/Severity"
+            "$ref": "#/components/schemas/testmind__analyzers__code__models__Severity"
           },
           "symbol": {
             "anyOf": [
@@ -3733,25 +3733,20 @@
         "title": "ImportRef",
         "type": "object"
       },
-      "Issue": {
-        "additionalProperties": false,
-        "description": "Something the analyser could not process (the analysis still succeeds).",
-        "properties": {
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "message"
+      "IssueKind": {
+        "enum": [
+          "server_error",
+          "not_found",
+          "broken_link",
+          "redirect_loop",
+          "dead_button",
+          "js_error",
+          "failed_request",
+          "form_error",
+          "slow_page"
         ],
-        "title": "Issue",
-        "type": "object"
+        "title": "IssueKind",
+        "type": "string"
       },
       "IssueSuggestion": {
         "additionalProperties": false,
@@ -4439,6 +4434,83 @@
         ],
         "title": "Outcome",
         "type": "string"
+      },
+      "Page": {
+        "additionalProperties": false,
+        "properties": {
+          "buttons": {
+            "default": 0,
+            "title": "Buttons",
+            "type": "integer"
+          },
+          "depth": {
+            "description": "Clicks from the start page",
+            "title": "Depth",
+            "type": "integer"
+          },
+          "from_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page a link to this one came from",
+            "title": "From Url"
+          },
+          "links": {
+            "default": 0,
+            "title": "Links",
+            "type": "integer"
+          },
+          "load_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Ms"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HTTP status of the main response, if one was seen",
+            "title": "Status"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "status",
+          "depth"
+        ],
+        "title": "Page",
+        "type": "object"
       },
       "Page_AnalysisRunRead_": {
         "properties": {
@@ -5213,6 +5285,37 @@
           "offset"
         ],
         "title": "Page[UnmatchedRequest]",
+        "type": "object"
+      },
+      "Page_WebScanRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WebScanRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[WebScanRead]",
         "type": "object"
       },
       "Parameter": {
@@ -6529,7 +6632,7 @@
           },
           "issues": {
             "items": {
-              "$ref": "#/components/schemas/Issue"
+              "$ref": "#/components/schemas/testmind__analyzers__repository__models__Issue"
             },
             "title": "Issues",
             "type": "array"
@@ -6844,7 +6947,7 @@
         "title": "SelectionCheck",
         "type": "object"
       },
-      "Severity": {
+      "Severity-Input": {
         "enum": [
           "low",
           "medium",
@@ -6853,6 +6956,51 @@
         ],
         "title": "Severity",
         "type": "string"
+      },
+      "SiteScan": {
+        "additionalProperties": false,
+        "properties": {
+          "denied": {
+            "description": "URLs the network policy refused (out of scope, internal)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Denied",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/testmind__web_engine__models__Issue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/Page"
+            },
+            "title": "Pages",
+            "type": "array"
+          },
+          "start_url": {
+            "title": "Start Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_url",
+          "pages",
+          "issues"
+        ],
+        "title": "SiteScan",
+        "type": "object"
       },
       "Source": {
         "enum": [
@@ -7760,6 +7908,139 @@
         "title": "Verdict",
         "type": "string"
       },
+      "WebScanCreate": {
+        "additionalProperties": false,
+        "description": "Start a scan of a public website.",
+        "properties": {
+          "interact": {
+            "default": false,
+            "description": "Click safe buttons and submit forms to find dead controls",
+            "title": "Interact",
+            "type": "boolean"
+          },
+          "max_depth": {
+            "default": 5,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Max Depth",
+            "type": "integer"
+          },
+          "max_pages": {
+            "default": 100,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Max Pages",
+            "type": "integer"
+          },
+          "target_url": {
+            "examples": [
+              "https://example.com/"
+            ],
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Target Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_url"
+        ],
+        "title": "WebScanCreate",
+        "type": "object"
+      },
+      "WebScanRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "interact": {
+            "title": "Interact",
+            "type": "boolean"
+          },
+          "max_depth": {
+            "title": "Max Depth",
+            "type": "integer"
+          },
+          "max_pages": {
+            "title": "Max Pages",
+            "type": "integer"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SiteScan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "target_url": {
+            "title": "Target Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_url",
+          "status",
+          "max_pages",
+          "max_depth",
+          "interact",
+          "error_message",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "result"
+        ],
+        "title": "WebScanRead",
+        "type": "object"
+      },
       "WebhookResponse": {
         "properties": {
           "id": {
@@ -7797,6 +8078,93 @@
         ],
         "title": "WebhookResponse",
         "type": "object"
+      },
+      "testmind__analyzers__code__models__Severity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "testmind__analyzers__repository__models__Issue": {
+        "additionalProperties": false,
+        "description": "Something the analyser could not process (the analysis still succeeds).",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "title": "Issue",
+        "type": "object"
+      },
+      "testmind__web_engine__models__Issue": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "evidence": {
+            "description": "Console messages, request lines, or steps to reproduce",
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IssueKind"
+          },
+          "screenshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Published path of a screenshot, when one was captured",
+            "title": "Screenshot"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/testmind__web_engine__models__Severity"
+          },
+          "url": {
+            "description": "Where the issue was found",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "url",
+          "detail"
+        ],
+        "title": "Issue",
+        "type": "object"
+      },
+      "testmind__web_engine__models__Severity": {
+        "enum": [
+          "high",
+          "medium",
+          "low"
+        ],
+        "title": "Severity",
+        "type": "string"
       }
     }
   },
@@ -10232,7 +10600,7 @@
             "name": "min_severity",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Severity",
+              "$ref": "#/components/schemas/Severity-Input",
               "default": "low"
             }
           },
@@ -12833,6 +13201,165 @@
         "summary": "Get Suggestion",
         "tags": [
           "mutation testing"
+        ]
+      }
+    },
+    "/api/v1/web-scans": {
+      "get": {
+        "operationId": "list_web_scans_api_v1_web_scans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WebScanRead_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Web Scans",
+        "tags": [
+          "Web scanning"
+        ]
+      },
+      "post": {
+        "description": "Queue a crawl of a public website. Internal and loopback hosts are refused.",
+        "operationId": "create_web_scan_api_v1_web_scans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebScanCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebScanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The target URL cannot be scanned"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The queue is unavailable"
+          }
+        },
+        "summary": "Create Web Scan",
+        "tags": [
+          "Web scanning"
+        ]
+      }
+    },
+    "/api/v1/web-scans/{scan_id}": {
+      "get": {
+        "operationId": "get_web_scan_api_v1_web_scans__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebScanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Scan not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Web Scan",
+        "tags": [
+          "Web scanning"
         ]
       }
     },

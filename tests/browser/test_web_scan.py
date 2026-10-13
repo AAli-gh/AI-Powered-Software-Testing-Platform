@@ -12,7 +12,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from testmind.db.models import WebScan
+from testmind.domain.enums import RunStatus
+from testmind.services.web_scan_executor import build_web_scan_executor
 from testmind.web_engine.browser import PlaywrightSession
 from testmind.web_engine.crawler import crawl
 from testmind.web_engine.login import Credentials
@@ -99,6 +103,35 @@ def test_exercising_controls_finds_dead_buttons_and_broken_forms(
     # The button whose click throws is reported as a JS error, not a dead button.
     js = [i for i in scan.issues if i.kind is IssueKind.JS_ERROR and "Break" in i.detail]
     assert js
+
+
+async def test_web_scan_job_runs_the_crawl_and_stores_the_result(
+    site: str,
+    chromium_path: str,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The full backend job: a queued WebScan row, run by the worker's executor with a real
+    browser (the production factory), finishes SUCCEEDED with the SiteScan stored."""
+    if chromium_path:
+        monkeypatch.setenv("TESTMIND_CHROMIUM_PATH", chromium_path)
+    async with session_factory() as session:
+        scan = WebScan(target_url=site, status=RunStatus.QUEUED, max_pages=10, max_depth=2,
+                       interact=True, allow_internal=True)  # the test server is local  # fmt: skip
+        session.add(scan)
+        await session.commit()
+        scan_id = scan.id
+
+    executor = build_web_scan_executor(session_factory)
+    assert await executor.execute(scan_id) is RunStatus.SUCCEEDED
+
+    async with session_factory() as session:
+        stored = await session.get(WebScan, scan_id)
+        assert stored is not None
+        assert stored.result is not None
+        kinds = {i["kind"] for i in stored.result["issues"]}
+        assert "server_error" in kinds  # /crash.html
+        assert "dead_button" in kinds  # #dead, found by exercising controls
 
 
 def test_a_navigation_failure_is_reported(chromium_path: str) -> None:

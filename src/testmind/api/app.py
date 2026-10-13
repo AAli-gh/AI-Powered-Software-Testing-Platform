@@ -23,6 +23,7 @@ from testmind.api.routes import (
     projects,
     regressions,
     runs,
+    web_scans,
 )
 from testmind.api.security import RateLimitMiddleware, TokenAuthMiddleware
 from testmind.core.config import Settings, get_settings
@@ -93,4 +94,5 @@ def create_app(
     app.include_router(mutations.router)
     app.include_router(github.router)
     app.include_router(api_testing.router)
+    app.include_router(web_scans.router)
     return app

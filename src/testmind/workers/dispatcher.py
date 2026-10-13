@@ -14,6 +14,7 @@ from testmind.workers.tasks import (
     GENERATE_TESTS,
     IMPORT_GITHUB_REPOSITORY,
     RUN_MUTATIONS,
+    SCAN_WEBSITE,
     SUGGEST_API_TESTS,
     SUGGEST_MUTANT_TESTS,
 )
@@ -58,3 +59,6 @@ class CeleryTaskDispatcher:
         await asyncio.to_thread(
             self._app.send_task, IMPORT_GITHUB_REPOSITORY, args=[str(import_id)]
         )
+
+    async def dispatch_web_scan(self, scan_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._app.send_task, SCAN_WEBSITE, args=[str(scan_id)])

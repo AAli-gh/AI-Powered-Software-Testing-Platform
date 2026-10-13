@@ -21,6 +21,7 @@ from testmind.db.models import (
     Regression,
     TestExecution,
     TestGeneration,
+    WebScan,
 )
 from testmind.domain.enums import RunStatus
 from testmind.domain.run_lifecycle import ensure_transition
@@ -46,6 +47,7 @@ def apply_transition(
         | ApiTestSuggestion
         | GitHubPullAnalysis
         | GitHubImport
+        | WebScan
     ),
     target: RunStatus,
     *,

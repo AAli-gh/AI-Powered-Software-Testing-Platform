@@ -11,6 +11,7 @@ from testmind.db.models.regression import Regression
 from testmind.db.models.repository_analysis import RepositoryAnalysis
 from testmind.db.models.test_execution import TestExecution
 from testmind.db.models.test_generation import TestGeneration
+from testmind.db.models.web_scan import WebScan
 
 __all__ = [
     "AnalysisRun",
@@ -26,4 +27,5 @@ __all__ = [
     "RepositoryAnalysis",
     "TestExecution",
     "TestGeneration",
+    "WebScan",
 ]

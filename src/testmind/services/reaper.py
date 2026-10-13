@@ -26,6 +26,7 @@ from testmind.db.models import (
     Regression,
     TestExecution,
     TestGeneration,
+    WebScan,
 )
 from testmind.domain.enums import RunStatus
 from testmind.services.run_service import apply_transition
@@ -47,6 +48,7 @@ JobT = TypeVar(
     ApiTestSuggestion,
     GitHubPullAnalysis,
     GitHubImport,
+    WebScan,
 )
 
 
@@ -66,6 +68,7 @@ async def reap_orphaned_jobs(
             + await _reap(session, ApiTestSuggestion, cutoff)
             + await _reap(session, GitHubPullAnalysis, cutoff)
             + await _reap(session, GitHubImport, cutoff)
+            + await _reap(session, WebScan, cutoff)
         )
         await session.commit()
     return reaped
