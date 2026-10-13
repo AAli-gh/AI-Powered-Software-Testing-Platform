@@ -34,6 +34,9 @@ derives issues from the facts each page reports:
 | `insecure_cookie` | medium / low | a cookie set without Secure / HttpOnly, or SameSite=None without Secure (`security`) |
 | `mixed_content` | high | an HTTPS page loaded an HTTP sub-resource (`security`) |
 | `info_disclosure` | low | a `Server` / `X-Powered-By` header reveals a software version (`security`) |
+| `reflected_xss` | high | a parameter is reflected into the page unescaped (`active`) |
+| `sql_error` | high | a single quote in a parameter triggers a database error (`active`) |
+| `open_redirect` | medium | a parameter controls a redirect to an external host (`active`) |
 
 With `interact=true`, the scan also clicks each **safe** button and submits each form, on its
 own fresh page so one click never affects the next. Destructive controls (delete, pay, log out,
@@ -77,8 +80,18 @@ Registering a host returns a random token. The owner publishes it at
 `https://<host>/.well-known/testmind-site-verification.txt` (http is accepted as a fallback),
 then calls verify; the platform fetches that path — through the same network policy, so it can
 never be pointed at an internal host — and marks the host verified only when the token is
-present. Verification can be rechecked and can lapse. `is_authorized(host)` gates the active
-checks (a later sub-phase); nothing active runs against an unverified host.
+present. Verification can be rechecked and can lapse.
+
+## Active checks
+
+A scan with `active: true` (on `POST /api/v1/web-scans`) adds crafted-request checks over the
+parameters of the pages the crawl reached — reflected XSS, SQL-error and open-redirect (the
+`reflected_xss`, `sql_error` and `open_redirect` rows above). They are non-destructive: GET
+only, a unique harmless marker or a single quote, read-only, and bounded (at most a few hundred
+requests per scan). The API **refuses** `active: true` with `409` unless the target host is a
+verified authorized target, and the worker re-checks ownership at run time (a host may have
+lapsed since the scan was queued), so nothing active ever runs against a host you have not
+proven you own. The network policy is still the final gate on every request.
 
 ## The API
 

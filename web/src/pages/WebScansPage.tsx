@@ -18,11 +18,19 @@ function StartScan() {
   const [maxDepth, setMaxDepth] = useState(5);
   const [interact, setInteract] = useState(false);
   const [security, setSecurity] = useState(false);
+  const [active, setActive] = useState(false);
   const start = useMutation({
     mutationFn: () =>
       unwrap(
         api.POST("/api/v1/web-scans", {
-          body: { target_url: url, max_pages: maxPages, max_depth: maxDepth, interact, security },
+          body: {
+            target_url: url,
+            max_pages: maxPages,
+            max_depth: maxDepth,
+            interact,
+            security,
+            active,
+          },
         }),
       ),
     onSuccess: async (scan) => {
@@ -97,6 +105,17 @@ function StartScan() {
             }}
           />
           Passive security checks (response headers, cookies, mixed content) — no attacks
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => {
+              setActive(e.target.checked);
+            }}
+          />
+          Active checks (crafted requests) — only on a host you have verified as an authorized
+          target
         </label>
         <div className="form-row">
           <button className="primary" type="submit" disabled={start.isPending}>

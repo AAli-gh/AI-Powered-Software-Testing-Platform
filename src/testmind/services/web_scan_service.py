@@ -7,14 +7,21 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from testmind.core.errors import DispatchError, InvalidTargetError, NotFoundError
+from testmind.core.errors import (
+    ConflictError,
+    DispatchError,
+    InvalidTargetError,
+    NotFoundError,
+)
 from testmind.core.logging import get_logger
 from testmind.db.models import WebScan
 from testmind.domain.enums import RunStatus
+from testmind.repositories.authorized_target_repository import AuthorizedTargetRepository
 from testmind.repositories.web_scan_repository import WebScanRepository
 from testmind.schemas.web_scan import WebScanCreate
 from testmind.services.dispatcher import TaskDispatcher
 from testmind.services.run_service import DISPATCH_FAILED_MESSAGE, apply_transition
+from testmind.web_engine import ownership
 from testmind.web_engine.network_policy import NetworkPolicy
 
 logger = get_logger(__name__)
@@ -25,6 +32,7 @@ class WebScanService:
         self._session = session
         self._dispatcher = dispatcher
         self._scans = WebScanRepository(session)
+        self._targets = AuthorizedTargetRepository(session)
 
     async def create(self, request: WebScanCreate) -> WebScan:
         # Public scans never reach internal hosts; the policy is also the final gate in the
@@ -33,6 +41,10 @@ class WebScanService:
         refusal = policy.refusal(request.target_url)
         if refusal is not None:
             raise InvalidTargetError(f"The target URL cannot be scanned: {refusal}")
+        if request.active and not await self._host_is_authorized(request.target_url):
+            raise ConflictError(
+                "Active checks require the target host to be a verified authorized target"
+            )
         scan = await self._scans.add(
             WebScan(
                 target_url=request.target_url,
@@ -41,6 +53,7 @@ class WebScanService:
                 max_depth=request.max_depth,
                 interact=request.interact,
                 security=request.security,
+                active=request.active,
                 allow_internal=False,
             )
         )
@@ -64,3 +77,8 @@ class WebScanService:
 
     async def page(self, *, limit: int, offset: int) -> tuple[Sequence[WebScan], int]:
         return await self._scans.page(limit=limit, offset=offset)
+
+    async def _host_is_authorized(self, target_url: str) -> bool:
+        host = ownership.normalize_host(target_url)
+        target = await self._targets.by_host(host)
+        return target is not None and target.verified

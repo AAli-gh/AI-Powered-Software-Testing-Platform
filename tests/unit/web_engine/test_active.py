@@ -8,12 +8,14 @@ from urllib.parse import parse_qs, urlsplit
 
 from testmind.web_engine.active import (
     MAX_PARAMS,
+    MAX_TOTAL_PROBES,
     REDIRECT_MARKER_HOST,
     Probe,
     Probed,
     active_issues,
     classify,
     plan,
+    scan_active,
     sql_error_signature,
     xss_marker,
 )
@@ -116,3 +118,44 @@ def test_active_issues_collects_only_the_findings() -> None:
     ]
     kinds = {i.kind for i in active_issues(results)}
     assert kinds == {IssueKind.REFLECTED_XSS, IssueKind.OPEN_REDIRECT}
+
+
+def test_scan_active_sends_probes_and_dedupes_per_parameter() -> None:
+    sent: list[str] = []
+
+    def prober(url: str) -> Probed:
+        sent.append(url)
+        # Any 'q' value reflects its marker unescaped; everything else is clean.
+        marker = parse_qs(urlsplit(url).query).get("q", [""])[0]
+        return Probed(status=200, body=f"echo {marker}")
+
+    urls = ["https://a.test/s?q=1", "https://a.test/s?q=2"]  # same path and parameter
+    issues = scan_active(urls, prober, allows=lambda _u: True)
+    assert [i.kind for i in issues] == [IssueKind.REFLECTED_XSS]  # reported once for q on /s
+    assert sent  # requests were actually sent
+
+
+def test_scan_active_skips_urls_the_policy_refuses() -> None:
+    def prober(url: str) -> Probed:
+        raise AssertionError("must not be called for a refused URL")
+
+    issues = scan_active(["https://evil.test/s?q=1"], prober, allows=lambda _u: False)
+    assert issues == []
+
+
+def test_scan_active_respects_the_total_probe_cap() -> None:
+    sent: list[str] = []
+
+    def prober(url: str) -> Probed:
+        sent.append(url)
+        return Probed(status=200, body="clean")
+
+    # Many distinct single-parameter URLs; each plans one xss + one sql probe.
+    urls = [f"https://a.test/p{i}?q=1" for i in range(MAX_TOTAL_PROBES)]
+    scan_active(urls, prober, allows=lambda _u: True)
+    assert len(sent) == MAX_TOTAL_PROBES  # stops at the cap
+
+
+def test_scan_active_ignores_a_prober_that_returns_none() -> None:
+    issues = scan_active(["https://a.test/s?q=1"], lambda _u: None, allows=lambda _u: True)
+    assert issues == []

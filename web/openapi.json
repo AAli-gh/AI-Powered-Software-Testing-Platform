@@ -3854,7 +3854,10 @@
           "insecure_cookie",
           "mixed_content",
           "insecure_transport",
-          "info_disclosure"
+          "info_disclosure",
+          "reflected_xss",
+          "sql_error",
+          "open_redirect"
         ],
         "title": "IssueKind",
         "type": "string"
@@ -8080,6 +8083,12 @@
         "additionalProperties": false,
         "description": "Start a scan of a public website.",
         "properties": {
+          "active": {
+            "default": false,
+            "description": "Active checks (crafted requests). Only for an ownership-verified host.",
+            "title": "Active",
+            "type": "boolean"
+          },
           "interact": {
             "default": false,
             "description": "Click safe buttons and submit forms to find dead controls",
@@ -8124,6 +8133,10 @@
       },
       "WebScanRead": {
         "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -8211,6 +8224,7 @@
           "max_depth",
           "interact",
           "security",
+          "active",
           "error_message",
           "created_at",
           "started_at",

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from testmind.db.models import AuthorizedTarget
 from tests.doubles import RecordingDispatcher
 
 
@@ -47,3 +50,28 @@ async def test_an_internal_target_is_rejected(client: httpx.AsyncClient) -> None
 async def test_an_unknown_scan_is_404(client: httpx.AsyncClient) -> None:
     response = await client.get(f"/api/v1/web-scans/{uuid.uuid4()}")
     assert response.status_code == 404
+
+
+async def test_active_without_a_verified_target_is_refused(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/web-scans", json={"target_url": "https://example.com/", "active": True}
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
+
+
+async def test_active_is_allowed_for_a_verified_target(
+    client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        session.add(
+            AuthorizedTarget(
+                host="example.com", token="t", verified=True, verified_at=datetime.now(UTC)
+            )
+        )
+        await session.commit()
+    response = await client.post(
+        "/api/v1/web-scans", json={"target_url": "https://example.com/shop", "active": True}
+    )
+    assert response.status_code == 202
+    assert response.json()["active"] is True

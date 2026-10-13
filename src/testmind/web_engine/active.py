@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import re
 import secrets
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from testmind.web_engine.models import IssueKind, IssueSeverity, PageIssue
 
 MAX_PARAMS = 10  # query parameters probed on one URL
+MAX_TOTAL_PROBES = 300  # crafted requests sent in one scan, across all pages
 REDIRECT_MARKER_HOST = "testmind-redirect.example"
 REDIRECT_STATUS_MIN = 300
 REDIRECT_STATUS_MAX = 400
@@ -145,3 +147,40 @@ def _is_external_redirect(response: Probed) -> bool:
 def active_issues(results: list[tuple[Probe, Probed]]) -> list[PageIssue]:
     found = [classify(probe, response) for probe, response in results]
     return [issue for issue in found if issue is not None]
+
+
+# Sends one crafted request and returns what the checks read, or None if it could not be sent.
+ActiveProber = Callable[[str], "Probed | None"]
+
+
+def scan_active(
+    urls: Iterable[str], prober: ActiveProber, *, allows: Callable[[str], bool]
+) -> list[PageIssue]:
+    """Probe each URL's parameters and collect the findings, bounded by MAX_TOTAL_PROBES.
+
+    `allows` is the network policy's gate: a probe whose URL it refuses is never sent. Each kind
+    of finding on a given parameter of a given path is reported once, so one weak parameter does
+    not flood the report across pages.
+    """
+    issues: list[PageIssue] = []
+    seen: set[tuple[str, str, str]] = set()
+    sent = 0
+    for url in urls:
+        for probe in plan(url):
+            if sent >= MAX_TOTAL_PROBES:
+                return issues
+            if not allows(probe.url):
+                continue
+            sent += 1
+            response = prober(probe.url)
+            if response is None:
+                continue
+            issue = classify(probe, response)
+            if issue is None:
+                continue
+            key = (issue.kind, probe.param, urlsplit(probe.url).path)
+            if key in seen:
+                continue
+            seen.add(key)
+            issues.append(issue)
+    return issues

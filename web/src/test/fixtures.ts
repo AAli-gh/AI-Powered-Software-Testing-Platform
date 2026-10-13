@@ -355,6 +355,7 @@ export function webScanRead(
     max_depth: 5,
     interact: true,
     security: true,
+    active: false,
     error_message: null,
     created_at: T0,
     started_at: T0,

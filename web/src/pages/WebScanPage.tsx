@@ -158,6 +158,7 @@ export function WebScanPage() {
                 ["Max depth", formatInteger(scan.max_depth)],
                 ["Controls exercised", scan.interact ? "yes" : "no"],
                 ["Security checks", scan.security ? "yes" : "no"],
+                ["Active checks", scan.active ? "yes" : "no"],
                 ["Finished", formatDateTime(scan.finished_at)],
               ]}
             />

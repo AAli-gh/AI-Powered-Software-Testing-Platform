@@ -33,6 +33,7 @@ describe("Websites", () => {
     await userEvent.type(screen.getByLabelText("URL"), "https://example.com/");
     await userEvent.click(screen.getByLabelText(/Exercise controls/));
     await userEvent.click(screen.getByLabelText(/Passive security checks/));
+    await userEvent.click(screen.getByLabelText(/Active checks/));
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
 
     await waitFor(() => {
@@ -45,6 +46,7 @@ describe("Websites", () => {
       max_depth: 5,
       interact: true,
       security: true,
+      active: true,
     });
     expect(await screen.findByText(/The scan is queued/)).toBeInTheDocument();
   });

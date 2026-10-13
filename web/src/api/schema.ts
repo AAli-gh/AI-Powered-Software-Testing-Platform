@@ -2715,7 +2715,7 @@ export interface components {
          * IssueKind
          * @enum {string}
          */
-        IssueKind: "server_error" | "not_found" | "broken_link" | "redirect_loop" | "dead_button" | "js_error" | "failed_request" | "form_error" | "slow_page" | "insecure_header" | "insecure_cookie" | "mixed_content" | "insecure_transport" | "info_disclosure";
+        IssueKind: "server_error" | "not_found" | "broken_link" | "redirect_loop" | "dead_button" | "js_error" | "failed_request" | "form_error" | "slow_page" | "insecure_header" | "insecure_cookie" | "mixed_content" | "insecure_transport" | "info_disclosure" | "reflected_xss" | "sql_error" | "open_redirect";
         /**
          * IssueSeverity
          * @enum {string}
@@ -4321,6 +4321,12 @@ export interface components {
          */
         WebScanCreate: {
             /**
+             * Active
+             * @description Active checks (crafted requests). Only for an ownership-verified host.
+             * @default false
+             */
+            active: boolean;
+            /**
              * Interact
              * @description Click safe buttons and submit forms to find dead controls
              * @default false
@@ -4350,6 +4356,8 @@ export interface components {
         };
         /** WebScanRead */
         WebScanRead: {
+            /** Active */
+            active: boolean;
             /**
              * Created At
              * Format: date-time

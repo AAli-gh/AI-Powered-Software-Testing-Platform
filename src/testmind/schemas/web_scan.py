@@ -28,6 +28,10 @@ class WebScanCreate(BaseModel):
     security: Annotated[
         bool, Field(description="Passive security checks (headers, cookies, mixed content)")
     ] = False
+    active: Annotated[
+        bool,
+        Field(description="Active checks (crafted requests). Only for an ownership-verified host."),
+    ] = False
 
 
 class WebScanRead(BaseModel):
@@ -40,6 +44,7 @@ class WebScanRead(BaseModel):
     max_depth: int
     interact: bool
     security: bool
+    active: bool
     error_message: str | None
     created_at: datetime
     started_at: datetime | None
