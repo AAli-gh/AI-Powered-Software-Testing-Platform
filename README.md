@@ -215,12 +215,32 @@ Everything listed here is implemented and tested.
     ([ADR-0012](docs/adr/0012-github-app-with-tarball-snapshots.md));
   - tested against a local fake of the GitHub API that verifies the App JWT and the
     installation tokens. **Not yet exercised against github.com.**
+- **Website scanning** ([details](docs/web-scanning.md)): crawl a live site with a real headless
+  browser and report the problems a visitor would hit — no source code needed.
+  - **Crawl** in scope: follows in-scope links to a page and depth budget, reporting server
+    errors, broken links, 4xx pages, redirect loops, JavaScript errors, failed requests and slow
+    pages; optional **login** so the crawl runs authenticated.
+  - **Controls** (`interact`): clicks each *safe* button and submits each form on its own fresh
+    page to find **dead buttons** and **broken forms**; destructive controls (delete, pay, log
+    out, …) are recognised by label and never clicked.
+  - **Passive security** (`security`): weak or missing CSP / HSTS / nosniff / clickjacking /
+    Referrer-Policy headers, insecure cookies, mixed content, and version disclosure — read from
+    the responses only, nothing attacked.
+  - **Active security** (`active`): reflected-XSS, SQL-error and open-redirect probes — GET only,
+    a harmless marker or a single quote, read-only and bounded. Allowed **only** against a host
+    whose ownership is verified (a well-known-file token), refused with `409` otherwise and
+    re-checked at run time.
+  - **One network policy** gates every request at the frontier, in the browser and in the active
+    prober, blocking SSRF to loopback, link-local and metadata hosts
+    ([ADR-0017](docs/adr/0017-web-scanner-threat-model.md)). Pure logic is unit-tested; the real
+    browser is tested against a deliberately-buggy local site.
 - **Dashboard** ([details](docs/dashboard.md)): a React + TypeScript single-page application
   over the API.
   - Pages: the platform overview; project trends (tests, code and API coverage, mutation
-    score); runs; test executions; regressions; mutation runs; pull request analyses.
+    score); runs; test executions; regressions; mutation runs; pull request analyses; website
+    scans and their issues; authorized targets.
   - Actions: register a project, analyse it, run its tests, compare commits, create GitHub
-    issues from suggestions.
+    issues from suggestions, start a website scan, verify a host you own.
   - Types are generated from the API's OpenAPI schema and checked in CI, so the dashboard
     cannot drift from the API.
   - Served by an unprivileged nginx on the same origin as the API, with a strict CSP.
@@ -595,6 +615,7 @@ Still open:
 - [Regression analysis](docs/regression.md): safe git access, AST diff, test selection, comparison
 - [Mutation testing](docs/mutation.md): operators, targeting, the in-sandbox driver, scores, AI tests for survivors
 - [API and browser testing](docs/api-testing.md): endpoint discovery, runtime capture, API coverage, probes, AI API tests, Playwright
+- [Website scanning](docs/web-scanning.md): crawl, controls, passive and active security, ownership, the network policy ([ADR-0017](docs/adr/0017-web-scanner-threat-model.md))
 - [GitHub integration](docs/github.md): the App, webhooks, pull request analysis, issues, imports
 - [Dashboard](docs/dashboard.md): pages, architecture, charts, security, tests
 - [API](docs/api.md): endpoints, error model, pagination

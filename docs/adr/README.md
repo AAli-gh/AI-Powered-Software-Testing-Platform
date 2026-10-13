@@ -20,3 +20,4 @@ Short records of significant decisions: the context, the decision and its conseq
 | [0014](0014-policy-enforcing-docker-proxy.md) | The containerised worker reaches Docker only through a policy-enforcing proxy | Accepted |
 | [0015](0015-prometheus-metrics-state-read-at-scrape.md) | Prometheus metrics, with the platform's state read at scrape time | Accepted |
 | [0016](0016-spectrum-based-fault-localisation.md) | Localise faults with the program spectrum, with rules fixed before measuring | Accepted |
+| [0017](0017-web-scanner-threat-model.md) | The web scanner's threat model — one network gate, ownership before active checks | Accepted |
