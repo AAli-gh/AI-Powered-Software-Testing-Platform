@@ -13,6 +13,8 @@ function Result({ result }: { result: Schemas["SiteScan"] }) {
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
   );
   const high = issues.filter((i) => i.severity === "high").length;
+  const issueUrls = new Set(issues.map((i) => i.url));
+  const shots = result.pages.filter((p) => p.screenshot && issueUrls.has(p.url));
   return (
     <div className="stack">
       <div className="grid grid-tiles">
@@ -67,6 +69,23 @@ function Result({ result }: { result: Schemas["SiteScan"] }) {
           </div>
         )}
       </Card>
+
+      {shots.length > 0 && (
+        <Card title="Screenshots of pages with issues">
+          <div className="grid grid-2">
+            {shots.map((p) => (
+              <figure key={p.url} style={{ margin: 0 }}>
+                <img
+                  src={p.screenshot ?? ""}
+                  alt={`Screenshot of ${p.url}`}
+                  style={{ maxWidth: "100%", borderRadius: 6, border: "1px solid var(--border)" }}
+                />
+                <figcaption className="mono truncate muted">{p.url}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card title="Pages crawled">
         <div className="table-wrap">
@@ -159,6 +178,7 @@ export function WebScanPage() {
                 ["Controls exercised", scan.interact ? "yes" : "no"],
                 ["Security checks", scan.security ? "yes" : "no"],
                 ["Active checks", scan.active ? "yes" : "no"],
+                ["Screenshots", scan.screenshots ? "yes" : "no"],
                 ["Finished", formatDateTime(scan.finished_at)],
               ]}
             />

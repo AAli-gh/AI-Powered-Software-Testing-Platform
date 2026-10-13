@@ -19,6 +19,7 @@ function StartScan() {
   const [interact, setInteract] = useState(false);
   const [security, setSecurity] = useState(false);
   const [active, setActive] = useState(false);
+  const [screenshots, setScreenshots] = useState(false);
   const start = useMutation({
     mutationFn: () =>
       unwrap(
@@ -30,6 +31,7 @@ function StartScan() {
             interact,
             security,
             active,
+            screenshots,
           },
         }),
       ),
@@ -116,6 +118,16 @@ function StartScan() {
           />
           Active checks (crafted requests) — only on a host you have verified as an authorized
           target
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={screenshots}
+            onChange={(e) => {
+              setScreenshots(e.target.checked);
+            }}
+          />
+          Capture a screenshot of each page (shown with its issues)
         </label>
         <div className="form-row">
           <button className="primary" type="submit" disabled={start.isPending}>

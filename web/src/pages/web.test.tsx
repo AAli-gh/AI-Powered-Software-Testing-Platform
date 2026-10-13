@@ -34,6 +34,7 @@ describe("Websites", () => {
     await userEvent.click(screen.getByLabelText(/Exercise controls/));
     await userEvent.click(screen.getByLabelText(/Passive security checks/));
     await userEvent.click(screen.getByLabelText(/Active checks/));
+    await userEvent.click(screen.getByLabelText(/Capture a screenshot/));
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
 
     await waitFor(() => {
@@ -47,6 +48,7 @@ describe("Websites", () => {
       interact: true,
       security: true,
       active: true,
+      screenshots: true,
     });
     expect(await screen.findByText(/The scan is queued/)).toBeInTheDocument();
   });
@@ -82,9 +84,13 @@ describe("Websites", () => {
     expect(rows[1]).toHaveTextContent("server error");
 
     expect(screen.getByText("Pages crawled")).toBeInTheDocument();
-    // The crash URL appears in both the issues and the pages tables.
+    // The crash URL appears in the issues table, the pages table, and the screenshot caption.
     expect(screen.getAllByText("https://example.com/crash").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/Refused as out of scope/)).toBeInTheDocument();
+
+    // The crash page has a screenshot and an issue, so it appears in the screenshots card.
+    const shot = screen.getByAltText("Screenshot of https://example.com/crash");
+    expect(shot).toHaveAttribute("src", "data:image/jpeg;base64,AAAA");
   });
 
   it("explains a scan that is still running, and one that failed", async () => {

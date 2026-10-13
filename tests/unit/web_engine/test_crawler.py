@@ -150,6 +150,13 @@ def test_security_is_not_checked_unless_the_visit_gathered_it() -> None:
     assert not any(i.kind is IssueKind.INSECURE_HEADER for i in scan.issues)
 
 
+def test_a_pages_screenshot_is_carried_onto_the_report() -> None:
+    shot = "data:image/jpeg;base64,AAAA"
+    browser = FakeBrowser({"https://a.test/": visit("https://a.test/", screenshot=shot)})
+    scan = crawl("https://a.test/", browser)
+    assert scan.pages[0].screenshot == shot
+
+
 def test_an_out_of_scope_or_internal_start_url_is_refused() -> None:
     scan = crawl("http://169.254.169.254/latest/meta-data/",
                  FakeBrowser({}),

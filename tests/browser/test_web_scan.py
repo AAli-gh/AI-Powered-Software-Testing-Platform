@@ -151,6 +151,16 @@ async def test_web_scan_job_runs_the_crawl_and_stores_the_result(
         assert "insecure_transport" in kinds  # the local server speaks HTTP
 
 
+def test_screenshots_are_captured_as_data_urls(site: str, chromium_path: str) -> None:
+    policy = NetworkPolicy.for_target(site, allow_internal=True)
+    with PlaywrightSession(policy, executable_path=chromium_path, screenshots=True) as browser:
+        scan = crawl(site, browser, policy=policy, max_pages=3)
+
+    shots = [p.screenshot for p in scan.pages if p.screenshot]
+    assert shots  # at least one page was captured
+    assert all(s.startswith("data:image/jpeg;base64,") for s in shots)
+
+
 def test_a_navigation_failure_is_reported(chromium_path: str) -> None:
     # Port 1 on the loopback host refuses the connection: the visit is an error, not a crash.
     policy = NetworkPolicy.for_target("http://127.0.0.1:1/", allow_internal=True)

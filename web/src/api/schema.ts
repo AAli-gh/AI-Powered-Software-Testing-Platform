@@ -3001,6 +3001,11 @@ export interface components {
             /** Load Ms */
             load_ms?: number | null;
             /**
+             * Screenshot
+             * @description A JPEG data: URL of the page, when the scan captured one
+             */
+            screenshot?: string | null;
+            /**
              * Status
              * @description HTTP status of the main response, if one was seen
              */
@@ -4343,6 +4348,12 @@ export interface components {
              */
             max_pages: number;
             /**
+             * Screenshots
+             * @description Capture a screenshot of each page (stored inline in the result)
+             * @default false
+             */
+            screenshots: boolean;
+            /**
              * Security
              * @description Passive security checks (headers, cookies, mixed content)
              * @default false
@@ -4379,6 +4390,8 @@ export interface components {
             /** Max Pages */
             max_pages: number;
             result: components["schemas"]["SiteScan"] | null;
+            /** Screenshots */
+            screenshots: boolean;
             /** Security */
             security: boolean;
             /** Started At */

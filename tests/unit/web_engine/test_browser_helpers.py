@@ -65,6 +65,31 @@ class FakeResponseHeaders:
         return self._entries
 
 
+class FakePage:
+    def __init__(self, png: bytes | None = b"\xff\xd8jpeg") -> None:
+        self._png = png
+
+    def screenshot(self, **kwargs: object) -> bytes:
+        if self._png is None:
+            raise RuntimeError("capture failed")
+        return self._png
+
+
+def test_capture_returns_a_data_url_and_honours_the_cap() -> None:
+    session = b.PlaywrightSession(NetworkPolicy.for_target("https://a.test/"), screenshots=True)
+    shot = session._capture(cast(Any, FakePage()))
+    assert shot is not None
+    assert shot.startswith("data:image/jpeg;base64,")
+
+    session._shots_left = 0  # at the cap: nothing more captured
+    assert session._capture(cast(Any, FakePage())) is None
+
+
+def test_capture_swallows_a_failed_screenshot() -> None:
+    session = b.PlaywrightSession(NetworkPolicy.for_target("https://a.test/"), screenshots=True)
+    assert session._capture(cast(Any, FakePage(png=None))) is None
+
+
 def test_security_facts_split_headers_from_cookies() -> None:
     assert b._security_facts(None) == ({}, [])
     response = FakeResponseHeaders(

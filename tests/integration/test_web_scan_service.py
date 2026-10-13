@@ -56,7 +56,7 @@ class FakeSession(AbstractContextManager[Browser]):
 
 def browser_factory(browser: Browser) -> BrowserFactory:
     def factory(
-        policy: NetworkPolicy, *, interact: bool, security: bool
+        policy: NetworkPolicy, *, interact: bool, security: bool, screenshots: bool
     ) -> AbstractContextManager[Browser]:
         return FakeSession(browser)
 
@@ -160,7 +160,7 @@ async def test_executor_reports_a_known_failure(
     scan_id = await _queue(session_factory)
 
     def factory(
-        policy: NetworkPolicy, *, interact: bool, security: bool
+        policy: NetworkPolicy, *, interact: bool, security: bool, screenshots: bool
     ) -> AbstractContextManager[Browser]:
         return Boom(InvalidTargetError("the browser refused the target"))
 
@@ -179,7 +179,7 @@ async def test_executor_reraises_an_unexpected_error_but_marks_failed(
     scan_id = await _queue(session_factory)
 
     def factory(
-        policy: NetworkPolicy, *, interact: bool, security: bool
+        policy: NetworkPolicy, *, interact: bool, security: bool, screenshots: bool
     ) -> AbstractContextManager[Browser]:
         return Boom(RuntimeError("driver crashed"))
 

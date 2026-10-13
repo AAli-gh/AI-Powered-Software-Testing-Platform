@@ -53,6 +53,7 @@ class PageVisit:
     set_cookies: list[str] = field(default_factory=list)  # raw Set-Cookie values of the response
     insecure_requests: list[str] = field(default_factory=list)  # http sub-resources, https page
     security: bool = False  # whether the browser gathered security facts for this page
+    screenshot: str | None = None  # a JPEG data: URL of the page, when one was captured
 
 
 class Browser(Protocol):
@@ -106,6 +107,7 @@ def _page(url: str, visit: PageVisit, depth: int, from_url: str | None) -> Page:
     return Page(
         url=url, status=visit.status, title=visit.title, depth=depth, from_url=from_url,
         load_ms=visit.load_ms, links=len(visit.links), buttons=visit.buttons,
+        screenshot=visit.screenshot,
     )  # fmt: skip
 
 

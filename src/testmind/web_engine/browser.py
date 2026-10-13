@@ -15,13 +15,14 @@ browser binary is found automatically inside the sandbox image, or by `executabl
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
 import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from types import TracebackType
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from testmind.web_engine.crawler import PageVisit
 from testmind.web_engine.interactions import (
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
         Playwright,
         Request,
         Response,
+        ViewportSize,
     )
 
 
@@ -51,13 +53,16 @@ def playwright_session(
     *,
     interact: bool = False,
     security: bool = False,
+    screenshots: bool = False,
     login: Credentials | None = None,
 ) -> PlaywrightSession:
     """The production browser factory: a real headless Chromium bound to `policy`.
 
     `TESTMIND_CHROMIUM_PATH` selects the browser binary when it is not the sandbox default.
     """
-    return PlaywrightSession(policy, interact=interact, security=security, login=login)
+    return PlaywrightSession(
+        policy, interact=interact, security=security, screenshots=screenshots, login=login
+    )
 
 
 DEFAULT_TIMEOUT_MS = 15_000
@@ -67,6 +72,9 @@ MAX_PROBE = 25  # buttons / forms exercised per page
 BUTTON_SELECTOR = "button, [role=button], input[type=submit], input[type=button]"
 PROBE_TIMEOUT_MS = 4_000  # a click or submit should take effect quickly
 SETTLE_MS = 400  # time allowed for a click's effect (navigation, request, DOM change) to show
+MAX_SHOTS = 25  # pages a scan captures a screenshot of (bounds the stored result's size)
+SHOT_VIEWPORT = {"width": 1280, "height": 800}
+SHOT_QUALITY = 40  # JPEG quality: small enough to embed as a data URL, legible enough as evidence
 
 
 class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
@@ -79,6 +87,7 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         login: Credentials | None = None,
         interact: bool = False,
         security: bool = False,
+        screenshots: bool = False,
     ) -> None:
         self._policy = policy
         self._timeout = timeout_ms
@@ -86,6 +95,8 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         self._login = login
         self._interact = interact
         self._security = security
+        self._screenshots = screenshots
+        self._shots_left = MAX_SHOTS
         self._playwright: Playwright | None = None
         self._browser: PwBrowser | None = None
         self._context: BrowserContext | None = None
@@ -96,7 +107,9 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(executable_path=self._executable or None)
         # One context for the whole scan, so a login's session cookie carries to every page.
-        self._context = self._browser.new_context()
+        self._context = self._browser.new_context(
+            viewport=cast("ViewportSize", SHOT_VIEWPORT) if self._screenshots else None
+        )
         self._context.set_default_timeout(self._timeout)
         self._context.route("**/*", self._gate)
         if self._login is not None:
@@ -162,6 +175,7 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
                 "button, [role=button], input[type=submit], input[type=button]",
                 "els => els.length")) or 0  # fmt: skip
             interactions = self._probe(url) if self._interact else None
+            shot = self._capture(page) if self._screenshots else None
             headers, cookies = _security_facts(response) if self._security else ({}, [])
             mixed = http_resources[:MAX_EVENTS] if final_url.lower().startswith("https://") else []
             visit = PageVisit(
@@ -170,7 +184,7 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
                 console_errors=console[:MAX_EVENTS], failed_requests=failed[:MAX_EVENTS],
                 redirects=_redirect_count(response), interactions=interactions,
                 headers=headers, set_cookies=cookies, insecure_requests=mixed,
-                security=self._security,
+                security=self._security, screenshot=shot,
             )  # fmt: skip
         except Exception as exc:
             visit = PageVisit(url=url, status=None, error=_reason(exc),
@@ -186,6 +200,16 @@ class PlaywrightSession(AbstractContextManager["PlaywrightSession"]):
         else:
             self._policy.record(request.url, self._policy.refusal(request.url) or "out of scope")
             route.abort()  # type: ignore[attr-defined]
+
+    def _capture(self, page: Page) -> str | None:
+        # A bounded JPEG of the viewport as a data: URL, for the dashboard to show inline.
+        if self._shots_left <= 0:
+            return None
+        png = _safe(lambda: page.screenshot(type="jpeg", quality=SHOT_QUALITY))
+        if png is None:
+            return None
+        self._shots_left -= 1
+        return "data:image/jpeg;base64," + base64.b64encode(png).decode("ascii")
 
     def _probe(self, url: str) -> Interactions:
         # Each control is exercised on its own fresh page, so a click that navigates away or

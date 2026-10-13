@@ -61,6 +61,9 @@ class Page(_Model):
     load_ms: float | None = None
     links: int = 0
     buttons: int = 0
+    screenshot: str | None = Field(
+        default=None, description="A JPEG data: URL of the page, when the scan captured one"
+    )
 
 
 class SiteScan(_Model):

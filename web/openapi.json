@@ -4599,6 +4599,18 @@
             ],
             "title": "Load Ms"
           },
+          "screenshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A JPEG data: URL of the page, when the scan captured one",
+            "title": "Screenshot"
+          },
           "status": {
             "anyOf": [
               {
@@ -8109,6 +8121,12 @@
             "title": "Max Pages",
             "type": "integer"
           },
+          "screenshots": {
+            "default": false,
+            "description": "Capture a screenshot of each page (stored inline in the result)",
+            "title": "Screenshots",
+            "type": "boolean"
+          },
           "security": {
             "default": false,
             "description": "Passive security checks (headers, cookies, mixed content)",
@@ -8192,6 +8210,10 @@
               }
             ]
           },
+          "screenshots": {
+            "title": "Screenshots",
+            "type": "boolean"
+          },
           "security": {
             "title": "Security",
             "type": "boolean"
@@ -8225,6 +8247,7 @@
           "interact",
           "security",
           "active",
+          "screenshots",
           "error_message",
           "created_at",
           "started_at",

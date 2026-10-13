@@ -31,6 +31,8 @@ class WebScan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     security: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Active checks (crafted requests). Only allowed against an ownership-verified host.
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Capture a screenshot of each page (stored inline in the result as a data: URL).
+    screenshots: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Whether internal/loopback hosts are in scope. False for public scans; the authorized-target
     # profile (ownership verified) is what may set it true later.
     allow_internal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

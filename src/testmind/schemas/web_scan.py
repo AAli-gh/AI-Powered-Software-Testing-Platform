@@ -32,6 +32,9 @@ class WebScanCreate(BaseModel):
         bool,
         Field(description="Active checks (crafted requests). Only for an ownership-verified host."),
     ] = False
+    screenshots: Annotated[
+        bool, Field(description="Capture a screenshot of each page (stored inline in the result)")
+    ] = False
 
 
 class WebScanRead(BaseModel):
@@ -45,6 +48,7 @@ class WebScanRead(BaseModel):
     interact: bool
     security: bool
     active: bool
+    screenshots: bool
     error_message: str | None
     created_at: datetime
     started_at: datetime | None

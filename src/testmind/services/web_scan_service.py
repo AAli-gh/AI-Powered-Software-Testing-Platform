@@ -54,6 +54,7 @@ class WebScanService:
                 interact=request.interact,
                 security=request.security,
                 active=request.active,
+                screenshots=request.screenshots,
                 allow_internal=False,
             )
         )

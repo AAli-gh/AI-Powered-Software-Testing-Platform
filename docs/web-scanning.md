@@ -48,6 +48,10 @@ whether an https page pulled in http sub-resources, and reports weak protections
 nothing is attacked, no payload is sent; the scan only inspects responses the normal crawl
 already received. A weakness that recurs on every page (a missing header, say) is reported once.
 
+With `screenshots=true`, the scan captures a small JPEG of each page (bounded in count and
+size) and stores it inline on the page as a `data:` URL, so the dashboard can show the pages
+that have issues as visual evidence.
+
 The scan's own intelligence is deterministic: the issues above come from measured facts, not a
 language model. External AI is never required for a scan.
 

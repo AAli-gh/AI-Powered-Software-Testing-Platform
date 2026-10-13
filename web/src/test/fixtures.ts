@@ -310,6 +310,7 @@ export function siteScan(overrides: Partial<Schemas["SiteScan"]> = {}): Schemas[
         load_ms: 80,
         links: 0,
         buttons: 0,
+        screenshot: "data:image/jpeg;base64,AAAA",
       },
     ],
     issues: [
@@ -356,6 +357,7 @@ export function webScanRead(
     interact: true,
     security: true,
     active: false,
+    screenshots: true,
     error_message: null,
     created_at: T0,
     started_at: T0,

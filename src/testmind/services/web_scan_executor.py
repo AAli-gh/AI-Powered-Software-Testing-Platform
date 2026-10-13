@@ -33,6 +33,7 @@ class _ScanSpec:
     interact: bool
     security: bool
     active: bool  # already AND-ed with a run-time authorization recheck
+    screenshots: bool
     max_pages: int
     max_depth: int
 
@@ -42,7 +43,7 @@ class BrowserFactory(Protocol):
     `testmind.web_engine.browser.playwright_session`; tests pass a fake."""
 
     def __call__(
-        self, policy: NetworkPolicy, *, interact: bool, security: bool
+        self, policy: NetworkPolicy, *, interact: bool, security: bool, screenshots: bool
     ) -> AbstractContextManager[Browser]: ...
 
 
@@ -74,6 +75,7 @@ class WebScanExecutor:
                 interact=scan.interact,
                 security=scan.security,
                 active=run_active,
+                screenshots=scan.screenshots,
                 max_pages=scan.max_pages,
                 max_depth=scan.max_depth,
             )
@@ -94,7 +96,9 @@ class WebScanExecutor:
 
     def _scan(self, spec: _ScanSpec) -> SiteScan:
         policy = NetworkPolicy.for_target(spec.target, allow_internal=spec.allow_internal)
-        browser_cm = self._browser_factory(policy, interact=spec.interact, security=spec.security)
+        browser_cm = self._browser_factory(
+            policy, interact=spec.interact, security=spec.security, screenshots=spec.screenshots
+        )
         with browser_cm as browser:
             scan = crawl(
                 spec.target, browser, policy=policy, max_pages=spec.max_pages,
@@ -137,9 +141,11 @@ def _production_browser_factory() -> BrowserFactory:
     from testmind.web_engine.browser import playwright_session  # noqa: PLC0415
 
     def factory(
-        policy: NetworkPolicy, *, interact: bool, security: bool
+        policy: NetworkPolicy, *, interact: bool, security: bool, screenshots: bool
     ) -> AbstractContextManager[Browser]:
-        return playwright_session(policy, interact=interact, security=security)
+        return playwright_session(
+            policy, interact=interact, security=security, screenshots=screenshots
+        )
 
     return factory
 
