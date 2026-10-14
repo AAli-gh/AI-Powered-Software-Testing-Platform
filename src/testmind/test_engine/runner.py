@@ -29,6 +29,8 @@ from testmind.failure_engine import (
     parse_failures_json,
 )
 from testmind.fault_localization.failures import localize_failures
+from testmind.fault_localization.formulas import ochiai
+from testmind.fault_localization.ranking import Scorer
 from testmind.fault_localization.spectrum import Spectrum
 from testmind.sandbox.docker_sandbox import DEFAULT_TMPFS, PytestJob
 from testmind.sandbox.models import (
@@ -88,10 +90,12 @@ class TestSuiteRunner:
         images: ImageBuilder,
         *,
         coverage_threshold: float = DEFAULT_THRESHOLD,
+        scorer: Scorer = ochiai,
     ) -> None:
         self._sandbox = sandbox
         self._images = images
         self._threshold = coverage_threshold
+        self._scorer = scorer
 
     def run(
         self,
@@ -178,7 +182,9 @@ class TestSuiteRunner:
         failures = _failures(result, report, profile, code, coverage)
         spectrum = Spectrum.build(impact, code) if impact is not None and code else None
         if spectrum is not None and code is not None:
-            failures = localize_failures(failures, spectrum, report.tests, code)
+            failures = localize_failures(
+                failures, spectrum, report.tests, code, scorer=self._scorer
+            )
         api = _api(result, code, probes, report.tests)
         return SuiteResult(report, coverage, failures, impact, api, spectrum)
 

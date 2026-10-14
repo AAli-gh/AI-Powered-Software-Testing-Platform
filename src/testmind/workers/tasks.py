@@ -9,6 +9,7 @@ from testmind.ai_engine.llm.factory import create_provider
 from testmind.core.config import Settings
 from testmind.db.session import create_engine, create_session_factory
 from testmind.domain.enums import RunStatus
+from testmind.fault_localization.config import select_scorer
 from testmind.github.pull_analysis import PullAnalyzer
 from testmind.mutation_engine.engine import MutationEngine
 from testmind.regression.engine import RegressionEngine
@@ -185,6 +186,7 @@ def build_runner(settings: Settings) -> TestSuiteRunner:
         build_sandbox(settings),
         build_image_builder(settings),
         coverage_threshold=settings.coverage_threshold,
+        scorer=select_scorer(settings.fault_localization_ranker, settings.fault_localization_model),
     )
 
 

@@ -105,6 +105,15 @@ class Settings(BaseSettings):
     # --- AI failure analysis: failure groups explained per request (the rest are skipped).
     failure_analysis_max_groups: int = Field(default=10, ge=1, le=100)
 
+    # --- Fault localisation ranker. `ochiai` (the default) is the deterministic rule the
+    # evaluation measures; `learned` opts into the trained model, which reorders only the
+    # non-traceback suspects. On the corpus measured so far the learned ranker matches the rule
+    # without beating it (docs/fault-localization.md), so it stays off by default.
+    # `fault_localization_model` points at a trained model.json; unset, the learned ranker uses
+    # the built-in default model. The setting is ignored while the ranker is `ochiai`.
+    fault_localization_ranker: Literal["ochiai", "learned"] = "ochiai"
+    fault_localization_model: Path | None = None
+
     # --- Mutation testing.
     mutation_max_mutants: int = Field(default=200, ge=1, le=5000)
     mutation_mutant_timeout_seconds: float = Field(default=60.0, gt=0, le=600)

@@ -87,8 +87,21 @@ a pluggable **scorer** (`ranking.localize(..., scorer=…)`); the default is Och
 formulas, failing/passing ratios, a "only failing tests ran it" flag, test support, and a
 traceback flag). `fault_localization/training.py` fits it from labelled examples.
 
-The learned ranker is **off by default and is not wired into any suite run.** It earns its
-place only if it is measurably better, and on the evidence gathered so far it is not:
+The learned ranker is **off by default.** It is wired behind a configuration switch — not
+enabled anywhere automatically — so it can be turned on deliberately for a comparison without
+becoming the default:
+
+```bash
+TESTMIND_FAULT_LOCALIZATION_RANKER=learned   # default: ochiai (the deterministic rule)
+TESTMIND_FAULT_LOCALIZATION_MODEL=/path/to/model.json   # optional; unset uses the built-in model
+```
+
+`core/config.py` reads the two settings; `fault_localization/config.py:select_scorer` resolves
+them once into the scorer that both suite runs (`test_engine/runner.py`) and the on-demand
+`suspects` endpoint use. A configured model path that cannot be read fails loudly rather than
+silently falling back. The switch exists so the learned path can be exercised and re-measured;
+it earns the default only if it is measurably better, and on the evidence gathered so far it is
+not:
 
 - `benchmarks/fault_localization/` injects real single-line bugs into a small bundled corpus
   (`corpus/calc`, `corpus/textutil`, `corpus/pricing`), runs each mutant under pytest with

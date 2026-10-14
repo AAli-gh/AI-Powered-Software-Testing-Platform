@@ -8,11 +8,14 @@ import pytest
 from testmind.analyzers.code import CodeAnalyzer, CodeProfile
 from testmind.analyzers.repository import RepositoryProfile
 from testmind.analyzers.repository.models import Dependency, PythonRequirement
+from testmind.core.config import Settings
+from testmind.fault_localization.formulas import ochiai
 from testmind.sandbox.docker_sandbox import PytestJob
 from testmind.sandbox.models import Outcome, SandboxResult, SandboxUnavailableError, TestCaseResult
 from testmind.sandbox.runner_image import DependencyInstallError, RunnerImage
 from testmind.test_engine.models import ExecutionOutcome, TestRunReport
 from testmind.test_engine.runner import TestSuiteRunner
+from testmind.workers.tasks import build_runner
 from tests.unit.analyzers.helpers import analyze
 
 
@@ -370,3 +373,12 @@ def test_contexts_and_selection_are_passed_to_the_sandbox(tmp_path: Path) -> Non
         Sandbox(result(case("t", Outcome.PASSED), coverage_json=COVERAGE_JSON)), Images()
     )
     assert plain.run(tmp_path, profile, code=code).impact is None
+
+
+def test_build_runner_wires_the_configured_fault_localisation_scorer(settings: Settings) -> None:
+    """`build_runner` turns the ranker setting into the runner's scorer: the deterministic
+    Ochiai function by default, the learned scorer when `learned` is configured."""
+    assert build_runner(settings)._scorer is ochiai
+
+    learned = settings.model_copy(update={"fault_localization_ranker": "learned"})
+    assert build_runner(learned)._scorer is not ochiai

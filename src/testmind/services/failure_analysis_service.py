@@ -15,6 +15,7 @@ from testmind.db.models import FailureAnalysis, TestExecution
 from testmind.domain.enums import RunStatus
 from testmind.failure_engine import FailureReport
 from testmind.fault_localization import Localization, Spectrum, localize
+from testmind.fault_localization.config import select_scorer
 from testmind.repositories.execution_repository import ExecutionRepository
 from testmind.repositories.failure_analysis_repository import FailureAnalysisRepository
 from testmind.sandbox.models import Outcome
@@ -61,7 +62,12 @@ class FailureAnalysisService:
         failed = {t.nodeid for t in report.tests if t.outcome in {Outcome.FAILED, Outcome.ERROR}}
         passing = {t.nodeid for t in report.tests if t.outcome is Outcome.PASSED}
         chosen = [t for t in tests if t in failed] if tests else sorted(failed)
-        result = localize(Spectrum.from_json(execution.spectrum), chosen, passing, limit=limit)
+        scorer = select_scorer(
+            self._settings.fault_localization_ranker, self._settings.fault_localization_model
+        )
+        result = localize(
+            Spectrum.from_json(execution.spectrum), chosen, passing, limit=limit, scorer=scorer
+        )
         ignored = sorted(set(tests) - failed)
         if ignored:
             note = f"Not failing tests of this execution, ignored: {', '.join(ignored[:10])}"

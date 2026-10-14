@@ -12,14 +12,20 @@ from collections import defaultdict
 from testmind.analyzers.code.models import CodeProfile, FunctionInfo
 from testmind.coverage_engine.impact import TestImpact
 from testmind.failure_engine.models import FailureGroup, FailureReport, Frame, FrameLocation
-from testmind.fault_localization.ranking import localize
+from testmind.fault_localization.formulas import ochiai
+from testmind.fault_localization.ranking import Scorer, localize
 from testmind.fault_localization.spectrum import Spectrum
 from testmind.sandbox.models import Outcome
 from testmind.test_engine.models import TestCaseReport
 
 
 def localize_failures(
-    failures: FailureReport, spectrum: Spectrum, tests: list[TestCaseReport], code: CodeProfile
+    failures: FailureReport,
+    spectrum: Spectrum,
+    tests: list[TestCaseReport],
+    code: CodeProfile,
+    *,
+    scorer: Scorer = ochiai,
 ) -> FailureReport:
     passing = {t.nodeid for t in tests if t.outcome is Outcome.PASSED}
     functions = _functions_by_path(code)
@@ -31,6 +37,7 @@ def localize_failures(
                     {t.nodeid for t in group.tests},
                     passing,
                     traceback=_traceback(group, functions),
+                    scorer=scorer,
                 )
             }
         )
