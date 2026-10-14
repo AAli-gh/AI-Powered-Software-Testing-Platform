@@ -15,7 +15,7 @@ is reported as low confidence, not hidden behind an arbitrary order.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 from testmind.fault_localization.formulas import ochiai
 from testmind.fault_localization.models import Confidence, Localization, Suspect
@@ -23,6 +23,11 @@ from testmind.fault_localization.spectrum import Spectrum
 
 DEFAULT_LIMIT = 10
 MEDIUM_TIE = 3  # at most this many functions sharing the top score: medium confidence
+
+# How the non-traceback suspects are ordered: (failed, passed, total_failed, total_passed) →
+# a sort value, highest first. The default is Ochiai, so the ranking is unchanged; the learned
+# ranker passes a model-based scorer instead (learned.py).
+Scorer = Callable[[int, int, int, int], float]
 
 
 def localize(
@@ -32,6 +37,7 @@ def localize(
     *,
     traceback: Sequence[tuple[str, int]] = (),
     limit: int = DEFAULT_LIMIT,
+    scorer: Scorer = ochiai,
 ) -> Localization:
     """`failing` and `passing` are test ids as TestMind reports them; `traceback` lists the
     ('path::qualname', first line) of the failure's production frames, innermost first.
@@ -52,19 +58,24 @@ def localize(
         )  # fmt: skip
 
     total_failed = max(len(failed_ids), 1)
-    scored: dict[str, tuple[float, int, int, int]] = {}  # key -> (score, failed, passed, line)
+    total_passed = len(passed_ids)
+    # key -> (rank_value, display_ochiai, failed, passed, line)
+    scored: dict[str, tuple[float, float, int, int, int]] = {}
     for key, (line, tests) in spectrum.functions.items():
         failed = len(tests & failed_ids)
         if failed == 0:
             continue
         passed = len(tests & passed_ids)
-        scored[key] = (ochiai(failed, passed, total_failed, len(passed_ids)), failed, passed, line)
+        display = ochiai(failed, passed, total_failed, total_passed)
+        rank_value = scorer(failed, passed, total_failed, total_passed)
+        scored[key] = (rank_value, display, failed, passed, line)
     unrecorded = [key for key in frames if key not in scored]
     for key in unrecorded:
         entry = spectrum.functions.get(key)
         passed = len(entry[1] & passed_ids) if entry else 0
-        score = ochiai(total_failed, passed, total_failed, len(passed_ids))
-        scored[key] = (score, total_failed, passed, frames[key])
+        display = ochiai(total_failed, passed, total_failed, total_passed)
+        rank_value = scorer(total_failed, passed, total_failed, total_passed)
+        scored[key] = (rank_value, display, total_failed, passed, frames[key])
     if unrecorded:
         notes.append(
             f"{len(unrecorded)} function(s) of the traceback had no coverage for the failing "
@@ -101,9 +112,9 @@ def localize(
 
 
 def _suspect(
-    key: str, values: tuple[float, int, int, int], rank: int, *, in_traceback: bool
+    key: str, values: tuple[float, float, int, int, int], rank: int, *, in_traceback: bool
 ) -> Suspect:
-    score, failed, passed, line = values
+    _rank_value, score, failed, passed, line = values
     path, _, qualname = key.partition("::")
     return Suspect(
         path=path, qualname=qualname, line=line, rank=rank, score=round(score, 4),
