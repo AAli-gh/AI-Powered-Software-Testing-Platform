@@ -320,7 +320,7 @@ export function siteScan(overrides: Partial<Schemas["SiteScan"]> = {}): Schemas[
         url: "https://example.com/crash",
         detail: "The server returned 500",
         evidence: [],
-        screenshot: null,
+        screenshot: "data:image/jpeg;base64,AAAA",
       },
       {
         kind: "dead_button",

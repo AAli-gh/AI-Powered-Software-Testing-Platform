@@ -8,6 +8,11 @@ import { isActive } from "../lib/status";
 
 const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
+// A DOM id for a page's screenshot figure, so an issue can link straight to its evidence.
+function shotId(url: string): string {
+  return `shot-${encodeURIComponent(url)}`;
+}
+
 function Result({ result }: { result: Schemas["SiteScan"] }) {
   const issues = [...result.issues].sort(
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
@@ -15,6 +20,7 @@ function Result({ result }: { result: Schemas["SiteScan"] }) {
   const high = issues.filter((i) => i.severity === "high").length;
   const issueUrls = new Set(issues.map((i) => i.url));
   const shots = result.pages.filter((p) => p.screenshot && issueUrls.has(p.url));
+  const shotUrls = new Set(shots.map((p) => p.url));
   return (
     <div className="stack">
       <div className="grid grid-tiles">
@@ -61,6 +67,11 @@ function Result({ result }: { result: Schemas["SiteScan"] }) {
                           </ul>
                         </details>
                       )}
+                      {(issue.screenshot || shotUrls.has(issue.url)) && (
+                        <a className="muted" href={`#${shotId(issue.url)}`}>
+                          View screenshot
+                        </a>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -74,7 +85,7 @@ function Result({ result }: { result: Schemas["SiteScan"] }) {
         <Card title="Screenshots of pages with issues">
           <div className="grid grid-2">
             {shots.map((p) => (
-              <figure key={p.url} style={{ margin: 0 }}>
+              <figure key={p.url} id={shotId(p.url)} style={{ margin: 0 }}>
                 <img
                   src={p.screenshot ?? ""}
                   alt={`Screenshot of ${p.url}`}

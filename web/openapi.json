@@ -4674,7 +4674,7 @@
                 "type": "null"
               }
             ],
-            "description": "Published path of a screenshot, when one was captured",
+            "description": "A JPEG data: URL of the page the issue was found on, when the scan captured one \u2014 visual evidence of where the issue is",
             "title": "Screenshot"
           },
           "severity": {

@@ -48,7 +48,9 @@ class PageIssue(_Model):
         default_factory=list, description="Console messages, request lines, or steps to reproduce"
     )
     screenshot: str | None = Field(
-        default=None, description="Published path of a screenshot, when one was captured"
+        default=None,
+        description="A JPEG data: URL of the page the issue was found on, when the scan "
+        "captured one — visual evidence of where the issue is",
     )
 
 

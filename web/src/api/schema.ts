@@ -3027,7 +3027,7 @@ export interface components {
             kind: components["schemas"]["IssueKind"];
             /**
              * Screenshot
-             * @description Published path of a screenshot, when one was captured
+             * @description A JPEG data: URL of the page the issue was found on, when the scan captured one — visual evidence of where the issue is
              */
             screenshot?: string | null;
             severity: components["schemas"]["IssueSeverity"];

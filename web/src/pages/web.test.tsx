@@ -91,6 +91,17 @@ describe("Websites", () => {
     // The crash page has a screenshot and an issue, so it appears in the screenshots card.
     const shot = screen.getByAltText("Screenshot of https://example.com/crash");
     expect(shot).toHaveAttribute("src", "data:image/jpeg;base64,AAAA");
+
+    // The crash issue carries that screenshot, so its row links to the figure as evidence.
+    const link = screen.getByRole("link", { name: "View screenshot" });
+    expect(link).toHaveAttribute(
+      "href",
+      `#shot-${encodeURIComponent("https://example.com/crash")}`,
+    );
+    expect(shot.closest("figure")).toHaveAttribute(
+      "id",
+      `shot-${encodeURIComponent("https://example.com/crash")}`,
+    );
   });
 
   it("explains a scan that is still running, and one that failed", async () => {

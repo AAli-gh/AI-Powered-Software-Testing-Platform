@@ -157,6 +157,22 @@ def test_a_pages_screenshot_is_carried_onto_the_report() -> None:
     assert scan.pages[0].screenshot == shot
 
 
+def test_a_pages_screenshot_is_stamped_onto_its_issues_as_evidence() -> None:
+    shot = "data:image/jpeg;base64,BBBB"
+    browser = FakeBrowser(
+        {"https://a.test/": visit("https://a.test/", status=500, screenshot=shot)}
+    )
+    scan = crawl("https://a.test/", browser)
+    issue = next(i for i in scan.issues if i.kind is IssueKind.SERVER_ERROR)
+    assert issue.screenshot == shot
+
+
+def test_issues_have_no_screenshot_when_the_page_was_not_captured() -> None:
+    browser = FakeBrowser({"https://a.test/": visit("https://a.test/", status=500)})
+    scan = crawl("https://a.test/", browser)
+    assert all(i.screenshot is None for i in scan.issues)
+
+
 def test_an_out_of_scope_or_internal_start_url_is_refused() -> None:
     scan = crawl("http://169.254.169.254/latest/meta-data/",
                  FakeBrowser({}),

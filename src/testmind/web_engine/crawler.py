@@ -82,7 +82,13 @@ def crawl(
         url, depth, from_url = item
         visit = browser.visit(url)
         pages.append(_page(url, visit, depth, from_url))
-        for issue in _issues(url, visit, from_url):
+        for found in _issues(url, visit, from_url):
+            # Stamp the page's screenshot onto its issues as visual evidence.
+            issue = (
+                found.model_copy(update={"screenshot": visit.screenshot})
+                if visit.screenshot is not None and found.screenshot is None
+                else found
+            )
             if issue.kind in SECURITY_KINDS:
                 key = (issue.kind, issue.detail)  # the same weakness recurs on every page
                 if key in seen_security:

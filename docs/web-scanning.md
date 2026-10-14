@@ -49,8 +49,10 @@ nothing is attacked, no payload is sent; the scan only inspects responses the no
 already received. A weakness that recurs on every page (a missing header, say) is reported once.
 
 With `screenshots=true`, the scan captures a small JPEG of each page (bounded in count and
-size) and stores it inline on the page as a `data:` URL, so the dashboard can show the pages
-that have issues as visual evidence.
+size) and stores it inline on the page as a `data:` URL. Each issue found on a captured page
+also carries that screenshot on its own `screenshot` field, so the evidence is attached to the
+issue, not only joinable by URL: the dashboard links every issue to the screenshot of the page
+it was found on, as visual evidence of where it is.
 
 The scan's own intelligence is deterministic: the issues above come from measured facts, not a
 language model. External AI is never required for a scan.
