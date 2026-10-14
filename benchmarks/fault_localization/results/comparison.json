@@ -1,0 +1,66 @@
+{
+  "projects": [
+    "calc",
+    "pricing",
+    "textutil"
+  ],
+  "rule": {
+    "examples": 18,
+    "top1": 18,
+    "top5": 18,
+    "mrr": 1.0
+  },
+  "learned": {
+    "examples": 18,
+    "top1": 18,
+    "top5": 18,
+    "mrr": 1.0
+  },
+  "per_project": [
+    {
+      "project": "calc",
+      "rule": {
+        "examples": 6,
+        "top1": 6,
+        "top5": 6,
+        "mrr": 1.0
+      },
+      "learned": {
+        "examples": 6,
+        "top1": 6,
+        "top5": 6,
+        "mrr": 1.0
+      }
+    },
+    {
+      "project": "pricing",
+      "rule": {
+        "examples": 7,
+        "top1": 7,
+        "top5": 7,
+        "mrr": 1.0
+      },
+      "learned": {
+        "examples": 7,
+        "top1": 7,
+        "top5": 7,
+        "mrr": 1.0
+      }
+    },
+    {
+      "project": "textutil",
+      "rule": {
+        "examples": 5,
+        "top1": 5,
+        "top5": 5,
+        "mrr": 1.0
+      },
+      "learned": {
+        "examples": 5,
+        "top1": 5,
+        "top5": 5,
+        "mrr": 1.0
+      }
+    }
+  ]
+}

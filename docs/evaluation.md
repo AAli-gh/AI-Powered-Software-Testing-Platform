@@ -114,6 +114,13 @@ coverage.
 The spectrum ranking also covers the 26 reproduced bugs whose tests fall beyond the failure
 plugin's 500-failure cap, which the failure-group analysis cannot reach.
 
+**A learned ranker was tried and did not beat the rule.** A logistic-regression model over
+per-function features was trained on injected bugs and evaluated leave-one-project-out against
+the deterministic Ochiai rule; both reached top-1 on all 18 bugs of that corpus, so the model
+ties the rule and does not improve it. This is a null result, and the deterministic rule
+remains the default. The experiment and the honest caveat (small corpus, single-line bugs) are
+in [fault-localization.md](fault-localization.md#a-learned-ranker-evaluated-not-adopted).
+
 ## Why 70 bugs were not reproduced
 
 | Reason | Bugs | Whose limitation |

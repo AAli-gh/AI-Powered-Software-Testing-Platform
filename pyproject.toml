@@ -82,6 +82,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004", "S105", "S106"]
 "migrations/versions/**" = ["E501"]
+# The fault-localisation corpus is sample projects (with deliberately plain tests), not library
+# code; it is treated like examples/ — parsed by the generator, never imported by TestMind.
+"benchmarks/fault_localization/corpus/**" = ["ALL"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -94,6 +97,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
 python_version = "3.11"
 strict = true
 files = ["src", "tests", "migrations", "scripts", "benchmarks"]
+exclude = ["benchmarks/fault_localization/corpus/"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 

@@ -77,6 +77,43 @@ Two tests fail on their assertions, so the traceback blames nothing. Three tests
 spectrum ranks `apply_discount` first, with high confidence: both failing tests executed it,
 and only one of the passing tests did.
 
+## A learned ranker (evaluated, not adopted)
+
+The ranking above is a fixed rule. A fair question is whether a model trained on past bugs
+would rank better. TestMind can answer that without guessing, so the ranking's own code takes
+a pluggable **scorer** (`ranking.localize(..., scorer=…)`); the default is Ochiai, and
+`fault_localization/learned.py` offers a learned alternative: a plain logistic-regression model
+(pure Python, no external library) over eight per-function features (the three spectrum
+formulas, failing/passing ratios, a "only failing tests ran it" flag, test support, and a
+traceback flag). `fault_localization/training.py` fits it from labelled examples.
+
+The learned ranker is **off by default and is not wired into any suite run.** It earns its
+place only if it is measurably better, and on the evidence gathered so far it is not:
+
+- `benchmarks/fault_localization/` injects real single-line bugs into a small bundled corpus
+  (`corpus/calc`, `corpus/textutil`, `corpus/pricing`), runs each mutant under pytest with
+  coverage contexts, and records the real spectrum, failing/passing tests and known faulty
+  function. This produced **18 labelled bugs** — reproducible anywhere, no Docker, no network
+  (`uv run python -m benchmarks.fault_localization generate`).
+- Evaluated **leave-one-project-out** (train on two projects, score the third), so the model is
+  never tested on a project it trained on
+  (`uv run python -m benchmarks.fault_localization evaluate`):
+
+  | ranker | top-1 | top-5 | MRR |
+  |---|---|---|---|
+  | deterministic Ochiai rule | 18 / 18 | 18 / 18 | 1.00 |
+  | learned (logistic regression) | 18 / 18 | 18 / 18 | 1.00 |
+
+This is a **null result, reported as one.** On these bugs the deterministic rule already puts
+the faulty function first every time, so there is no headroom for the model to win — it ties,
+it does not improve. The honest conclusion is that the deterministic rule stays the default;
+the learned path exists so the comparison can be re-run on a larger, harder corpus later, where
+a difference could actually show. The corpus is deliberately small and its bugs are
+single-line operator swaps, so the ceiling says as much about the corpus as about either
+ranker. The pure comparison logic is unit-tested in
+`tests/unit/benchmarks/test_fault_localization_evaluate.py`; the ranker engine itself in
+`tests/unit/fault_localization/`.
+
 ## Limits
 
 - **Only executed code can be ranked.** A missing check is found, at best, in the function

@@ -1,0 +1,23 @@
+{
+  "weights": [
+    -3.0022154089651444e-15,
+    2.4861349337240726e-15,
+    -2.4396579376595153e-14,
+    0.0,
+    -4.841362099135136e-15,
+    1.2430674668620363e-15,
+    -3.891896124350766e-15,
+    0.0
+  ],
+  "bias": 5.464917011730413,
+  "feature_names": [
+    "ochiai",
+    "dstar_norm",
+    "tarantula",
+    "failed_ratio",
+    "passed_ratio",
+    "only_failing",
+    "support",
+    "in_traceback"
+  ]
+}
